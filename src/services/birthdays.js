@@ -1,7 +1,7 @@
 import fs from "fs";
+import { loadConfig } from "../utils/utils";
 
-const config = JSON.parse(fs.readFileSync("../config.json", "utf8"));
-
+const config =loadConfig();
 
 const BIRTHDAY_FILE = "../birthdays.json";
 
