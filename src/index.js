@@ -11,10 +11,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
-
-import config from "./config.json" assert { type: "json" };
+import { readFileSync } from "fs";
 import { loadBirthdays, sendBirthdayGreeting, updateBirthdayList } from "./services/birthdays.js";
 
+const config = JSON.parse(readFileSync("./config.json", "utf8"));
 // Fix __dirname for ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

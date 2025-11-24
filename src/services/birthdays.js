@@ -1,5 +1,7 @@
 import fs from "fs";
-import config from "../config.json" assert { type: "json" };
+
+const config = JSON.parse(fs.readFileSync("../config.json", "utf8"));
+
 
 const BIRTHDAY_FILE = "../birthdays.json";
 
