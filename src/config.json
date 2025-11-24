@@ -4,7 +4,6 @@
   "guildId": "YOUR_GUILD_ID",
   "birthdayListChannelId": "CHANNEL_ID_OF_THE_LIST",
   "birthdayListMessageId": "MESSAGE_ID_OF_THE_LIST",
-  "birthdayMessage": "🎂 Today we celebrate {names}! 🎉 Everyone say hi to {mentions}!",
   "commands": {
     "refreshbirthdays": {
       "enabled": true
