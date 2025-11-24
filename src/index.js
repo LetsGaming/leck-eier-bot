@@ -128,7 +128,7 @@ client.on("interactionCreate", async interaction => {
 
   client.once("clientReady", async () => {
     console.log(`Bot logged in as ${client.user.tag}`);
-    await updateBirthdayListFromMessage(client);
+    await updateBirthdayListFromMessage(client, config.birthdayChannelId, config.birthdayListMessageId);
   });
 
   await client.login(config.token);
