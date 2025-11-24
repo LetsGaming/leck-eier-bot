@@ -126,7 +126,7 @@ export function getTodaysBirthdaysFromFileAsArray() {
 }
 
 // send greetings according to template
-export async function sendBirthdayMessagesUsingTemplate(client, channelId, template, birthdaysArray, pingEveryone = false) {
+export async function sendBirthdayMessages(client, channelId, birthdaysArray, pingEveryone = true) {
   const channel = await client.channels.fetch(channelId);
 
   for (const b of birthdaysArray) {
@@ -163,6 +163,7 @@ export async function sendBirthdayMessagesUsingTemplate(client, channelId, templ
 
     const everyoneMention = pingEveryone ? "@everyone" : "";
 
+    const template = getCurrentTemplate();
     const message = template
       .replace(/{userMention}/g, userMention)
       .replace(/{everyoneMention}/g, everyoneMention)

@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
 
-import { loadBirthdays, sendBirthdayGreeting, updateBirthdayList } from "./services/birthdays.js";
+import { loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
 import { loadConfig } from "./utils/utils.js";
 
 const config = loadConfig();
@@ -80,11 +80,11 @@ cron.schedule("0 0 * * *", async () => {
   const mm = String(today.getMonth() + 1).padStart(2, "0");
 
   const dateStr = `${dd}.${mm}`;
-  const birthdays = loadBirthdays();
+  const birthdays = loadBirthdaysFile();
 
   if (birthdays[dateStr]) {
     for (const p of birthdays[dateStr]) {
-      await sendBirthdayGreeting(client, p.mention, dateStr);
+      await sendBirthdayMessages(client, config.birthdayChannelId, [p]);
     }
   }
 });
@@ -93,7 +93,7 @@ cron.schedule("0 0 * * *", async () => {
 client.on("messageUpdate", async (oldMsg, newMsg) => {
   if (newMsg.id === config.birthdayListMessageId) {
     console.log("Birthday list updated (edit detected)");
-    await updateBirthdayList(client);
+    await updateBirthdayListFromMessage(client, newMsg.channelId, newMsg.id);
   }
 });
 
