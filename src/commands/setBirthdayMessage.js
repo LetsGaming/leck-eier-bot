@@ -1,5 +1,5 @@
 // src/commands/setBirthdayMessage.js
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import { setCurrentTemplate } from "../services/birthdays.js";
 
 export const data = new SlashCommandBuilder()
@@ -23,7 +23,7 @@ export async function execute(interaction) {
   if (!newTemplate.includes("{userMention}") || !newTemplate.includes("{userNick}")) {
     return interaction.reply({
       content: "❌ Template must include at least {userMention} and {userNick}. Optionally include {everyoneMention}.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 

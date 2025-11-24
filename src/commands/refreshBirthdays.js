@@ -22,6 +22,6 @@ export async function execute(interaction) {
 
   return interaction.reply({
     content: "✅ Birthday list refreshed.",
-    fklags: MessageFlags.Ephemeral
+    flags: MessageFlags.Ephemeral
   });
 }
