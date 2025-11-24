@@ -1,5 +1,5 @@
 import fs from "fs";
-import { loadConfig } from "../utils/utils";
+import { loadConfig } from "../utils/utils.js";
 
 const config =loadConfig();
 
