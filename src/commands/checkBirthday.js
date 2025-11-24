@@ -1,6 +1,6 @@
 // src/commands/checkBirthday.js
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
-import { getTodaysBirthdaysFromFileAsArray, getCurrentTemplate, sendBirthdayMessagesUsingTemplate } from "../services/birthdays.js";
+import { getTodaysBirthdaysFromFileAsArray, getCurrentTemplate, sendBirthdayMessages } from "../services/birthdays.js";
 
 export const data = new SlashCommandBuilder()
   .setName("checkbirthday")
@@ -31,5 +31,5 @@ export async function execute(interaction) {
   const templateUsesEveryone = template.includes("{everyoneMention}");
   const shouldPingEveryone = templateUsesEveryone; // command does not override; template controls
 
-  await sendBirthdayMessagesUsingTemplate(interaction.client, interaction.channelId, template, birthdays, shouldPingEveryone);
+  await sendBirthdayMessages(interaction.client, interaction.channelId, birthdays, shouldPingEveryone);
 }

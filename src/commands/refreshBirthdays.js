@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags  } from "discord.js";
-import { updateBirthdayList } from "../services/birthdays.js";
+import { updateBirthdayListFromMessage } from "../services/birthdays.js";
+import { loadConfig } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("refreshbirthdays")
@@ -15,7 +16,9 @@ export async function execute(interaction) {
     });
   }
 
-  await updateBirthdayList(interaction.client);
+  const config = loadConfig();
+
+  await updateBirthdayListFromMessage(interaction.client, config.birthdayChannelId, config.birthdayListMessageId);
 
   return interaction.reply({
     content: "✅ Birthday list refreshed.",
