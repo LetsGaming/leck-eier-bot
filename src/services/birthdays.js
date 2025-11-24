@@ -2,7 +2,6 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { loadConfig } from "../utils/loadConfig.js"; // optional if you use it elsewhere
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
