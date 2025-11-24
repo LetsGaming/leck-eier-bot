@@ -18,7 +18,7 @@ export async function execute(interaction) {
 
   const config = loadConfig();
 
-  await updateBirthdayListFromMessage(interaction.client, config.birthdayChannelId, config.birthdayListMessageId);
+  await updateBirthdayListFromMessage(interaction.client, config.birthdayListChannelId, config.birthdayListMessageId);
 
   return interaction.reply({
     content: "✅ Birthday list refreshed.",

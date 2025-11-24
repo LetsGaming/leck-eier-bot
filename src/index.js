@@ -84,7 +84,7 @@ cron.schedule("0 0 * * *", async () => {
 
   if (birthdays[dateStr]) {
     for (const p of birthdays[dateStr]) {
-      await sendBirthdayMessages(client, config.birthdayChannelId, [p]);
+      await sendBirthdayMessages(client, config.birthdayListChannelId, [p]);
     }
   }
 });
@@ -128,7 +128,7 @@ client.on("interactionCreate", async interaction => {
 
   client.once("clientReady", async () => {
     console.log(`Bot logged in as ${client.user.tag}`);
-    await updateBirthdayListFromMessage(client, config.birthdayChannelId, config.birthdayListMessageId);
+    await updateBirthdayListFromMessage(client, config.birthdayListChannelId, config.birthdayListMessageId);
   });
 
   await client.login(config.token);
