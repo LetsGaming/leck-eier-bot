@@ -4,7 +4,7 @@ import { setCurrentTemplate } from "../services/birthdays.js";
 
 export const data = new SlashCommandBuilder()
   .setName("setbirthdaymessage")
-  .setDescription("Set the template used for birthday messages. Use placeholders {userMention}, {everyoneMention}, {userNick}")
+  .setDescription("Set the template used for birthday messages.")
   .addStringOption(opt => opt
     .setName("template")
     .setDescription("New template. Placeholders: {userMention}, {everyoneMention}, {userNick}")
