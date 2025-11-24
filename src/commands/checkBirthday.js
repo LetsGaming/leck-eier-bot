@@ -1,5 +1,5 @@
 // src/commands/checkBirthday.js
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import { getTodaysBirthdaysFromFileAsArray, getCurrentTemplate, sendBirthdayMessages } from "../services/birthdays.js";
 
 export const data = new SlashCommandBuilder()
@@ -10,13 +10,13 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   // admin check double safety
   if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: "❌ Only administrators can use this command.", ephemeral: true });
+    return interaction.reply({ content: "❌ Only administrators can use this command.", flags: MessageFlags.Ephemeral });
   }
 
   const birthdays = getTodaysBirthdaysFromFileAsArray();
 
   if (!birthdays || birthdays.length === 0) {
-    return interaction.reply({ content: "🎂 No birthdays today!", ephemeral: true });
+    return interaction.reply({ content: "🎂 No birthdays today!", flags: MessageFlags.Ephemeral });
   }
 
   // fetch template and determine if template contains {everyoneMention}
@@ -24,7 +24,7 @@ export async function execute(interaction) {
   const pingEveryone = template.includes("{everyoneMention}") && template.includes("@everyone");
 
   // reply first so command response is acknowledged
-  await interaction.reply({ content: `🎉 Found ${birthdays.length} birthday(s) today. Sending congratulations...`, ephemeral: true });
+  await interaction.reply({ content: `🎉 Found ${birthdays.length} birthday(s) today. Sending congratulations...`, flags: MessageFlags.Ephemeral });
 
   // send messages according to template; template controls whether @everyone gets used
   // we treat presence of literal "@everyone" in template as opt-in (user may include it manually)

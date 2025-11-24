@@ -14,7 +14,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: "❌ Only administrators can use this command.", ephemeral: true });
+    return interaction.reply({ content: "❌ Only administrators can use this command.", flags: MessageFlags.Ephemeral });
   }
 
   const newTemplate = interaction.options.getString("template", true);
@@ -29,5 +29,5 @@ export async function execute(interaction) {
 
   setCurrentTemplate(newTemplate);
 
-  return interaction.reply({ content: "✅ Birthday template updated.", ephemeral: true });
+  return interaction.reply({ content: "✅ Birthday template updated.", flags: MessageFlags.Ephemeral });
 }
