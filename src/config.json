@@ -1,0 +1,13 @@
+{
+  "token": "YOUR_BOT_TOKEN",
+  "clientId": "YOUR_APPLICATION_ID",
+  "guildId": "YOUR_GUILD_ID",
+  "birthdayListChannelId": "CHANNEL_ID_OF_THE_LIST",
+  "birthdayListMessageId": "MESSAGE_ID_OF_THE_LIST",
+
+  "commands": {
+    "refreshbirthdays": {
+      "enabled": true
+    }
+  }
+}
