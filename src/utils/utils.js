@@ -18,3 +18,19 @@ export function loadConfig() {
     throw err;
   }
 }
+
+export function getBirthdayMessage(birthdays) {
+  const config = loadConfig();
+
+  const mentions = birthdays.map(b => `<@${b.userId}>`).join(", ");
+  const names = birthdays.map(b => b.name).join(", ");
+
+  let message = config.birthdayMessage || 
+    "🎉 Happy birthday {mentions}! ({names}) 🎂";
+
+  message = message
+    .replace("{mentions}", mentions)
+    .replace("{names}", names);
+
+  return message;
+}

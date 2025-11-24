@@ -6,11 +6,11 @@ import {
   Routes,
   MessageFlags
 } from "discord.js";
-
 import path from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
+
 import { loadBirthdays, sendBirthdayGreeting, updateBirthdayList } from "./services/birthdays.js";
 import { loadConfig } from "./utils/utils.js";
 
@@ -126,7 +126,7 @@ client.on("interactionCreate", async interaction => {
   await loadCommands();
   await registerGlobalCommands();
 
-  client.once("ready", async () => {
+  client.once("clientReady", async () => {
     console.log(`Bot logged in as ${client.user.tag}`);
     await updateBirthdayList(client);
   });
