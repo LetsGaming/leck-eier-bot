@@ -82,10 +82,14 @@ cron.schedule("0 0 * * *", async () => {
   const dateStr = `${dd}.${mm}`;
   const birthdays = loadBirthdaysFile();
 
-  if (birthdays[dateStr]) {
-    for (const p of birthdays[dateStr]) {
-      await sendBirthdayMessages(client, config.birthdayListChannelId, [p]);
-    }
+  const birthdaysToday = birthdays[dateStr] || [];
+
+  if (birthdaysToday && birthdaysToday.length > 0) {
+    await sendBirthdayMessages(
+      client,
+      config.birthdayListChannelId,
+      birthdaysToday
+    );
   }
 });
 
