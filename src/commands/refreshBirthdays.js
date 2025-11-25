@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags  } from "discord.js";
 import { updateBirthdayListFromMessage } from "../services/birthdays.js";
-import { loadConfig } from "../utils/utils.js";
+import { isAdmin, loadConfig } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("refreshbirthdays")
@@ -9,7 +9,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   // Extra server-side safety check
-  if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
+  if (!isAdmin(interaction)) {
     return interaction.reply({
       content: "❌ Only administrators can use this command.",
       flags: MessageFlags.Ephemeral

@@ -13,7 +13,7 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
-  if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
+  if (!isAdmin(interaction)) {
     return interaction.reply({ content: "❌ Only administrators can use this command.", flags: MessageFlags.Ephemeral });
   }
 

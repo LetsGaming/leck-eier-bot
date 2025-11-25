@@ -1,6 +1,7 @@
 // src/commands/checkBirthday.js
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import { getTodaysBirthdaysFromFileAsArray, getCurrentTemplate, sendBirthdayMessages } from "../services/birthdays.js";
+import { isAdmin } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("checkbirthday")
@@ -9,7 +10,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   // admin check double safety
-  if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
+  if (!isAdmin(interaction)) {
     return interaction.reply({ content: "❌ Only administrators can use this command.", flags: MessageFlags.Ephemeral });
   }
 
