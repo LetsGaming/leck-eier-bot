@@ -3,7 +3,7 @@ import { buildBirthdayMessage } from "../services/birthdays.js";
 import { isAdmin } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
-  .setName("testBirthdayMessage")
+  .setName("testbirthdaymessage")
   .setDescription("Test how the birthday message will look like.")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
