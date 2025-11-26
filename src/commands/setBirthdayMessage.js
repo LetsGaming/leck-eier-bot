@@ -1,5 +1,5 @@
 // src/commands/setBirthdayMessage.js
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { setCurrentTemplate } from "../services/birthdays.js";
 import { isAdmin } from "../utils/utils.js";
 
@@ -11,7 +11,6 @@ export const data = new SlashCommandBuilder()
     .setDescription("New template. Placeholders: {userMention}, {everyoneMention}, {userNick}")
     .setRequired(true)
   )
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
   if (!isAdmin(interaction)) {

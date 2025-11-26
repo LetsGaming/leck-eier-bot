@@ -1,12 +1,11 @@
 // src/commands/checkBirthday.js
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { getTodaysBirthdaysFromFileAsArray, getCurrentTemplate, sendBirthdayMessages } from "../services/birthdays.js";
 import { isAdmin } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("checkbirthday")
   .setDescription("Manually checks today's birthdays and mentions them.")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
   // admin check double safety

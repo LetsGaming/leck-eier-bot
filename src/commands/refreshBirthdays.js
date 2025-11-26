@@ -1,11 +1,10 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags  } from "discord.js";
+import { SlashCommandBuilder, MessageFlags  } from "discord.js";
 import { updateBirthdayListFromMessage } from "../services/birthdays.js";
 import { isAdmin, loadConfig } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("refreshbirthdays")
   .setDescription("Re-scan and update the birthday list")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
   // Extra server-side safety check

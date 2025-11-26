@@ -1,11 +1,10 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags  } from "discord.js";
+import { SlashCommandBuilder, MessageFlags  } from "discord.js";
 import { buildBirthdayMessage } from "../services/birthdays.js";
 import { isAdmin } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("testbirthdaymessage")
   .setDescription("Test how the birthday message will look like.")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
   // Extra server-side safety check
