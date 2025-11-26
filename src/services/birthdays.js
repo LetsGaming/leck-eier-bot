@@ -41,63 +41,64 @@ function saveSettingsFile(obj) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(obj, null, 2), "utf8");
 }
 
-// --- parsing logic ---
-// This regex finds each "ღ: DD.MM: ..." block (non-greedy until endline or separator)
-const blockRegex = /ღ:\s*(\d{2}\.\d{2})\s*:\s*([^\n⎯]+)/g;
-
-// For splitting multiple people on same block: comma separated
-// For extracting single person: supports <@123456>, <@!123456>, or plain @Name (unicode allowed)
-const personRegex = /^\s*(<@!?\d+>|@[^,—–-]+?)(?:\s*[—–-]\s*(.+?))?\s*$/u;
-
 /**
  * Parses the whole birthday message text and returns an object:
  * { "DD.MM": [ { mention: "<@123>", userId: "123" | null, name: "human name" | null }, ... ] }
  */
-export function parseBirthdayMessage(text) {
+export async function parseBirthdayMessage(raw, guild) {
   const result = {};
-  let m;
-  while ((m = blockRegex.exec(text)) !== null) {
-    const date = m[1]; // DD.MM
-    const rest = m[2].trim();
 
-    // split by comma but keep commas inside names (unlikely) - simple split
-    const people = rest.split(",").map(s => s.trim()).filter(Boolean);
+  const lines = raw.split(/\r?\n/);
+  const dateRegex = /(\d{2}\.\d{2})\s*:/;
+  const mentionRegex = /<@!?(\d+)>/g;
 
-    for (const p of people) {
-      const pm = p.match(personRegex);
-      if (!pm) {
-        // fallback: try to capture any mention-like token and trailing text
-        const fallback = p.match(/(<@!?\d+>)|(@\S+)/);
-        if (fallback) {
-          const mention = fallback[0];
-          const name = p.replace(mention, "").replace(/^[^\w\u00C0-\u017F]+/, "").trim() || null;
-          result[date] = result[date] || [];
-          result[date].push({ mention, userId: extractIdFromMention(mention), name });
-        }
-        continue;
-      }
+  /** Collect all user IDs to batch-resolve later */
+  const allUserIds = new Set();
 
-      const mention = pm[1].trim();
-      let name = pm[2] ? pm[2].trim() : null;
+  const temp = {}; // temporary store before we resolve usernames
 
-      // if plain @Name mention (not a real discord mention), keep as-is for display,
-      // but userId only if real <@...>
-      const userId = extractIdFromMention(mention);
+  for (const line of lines) {
+    const dateMatch = line.match(dateRegex);
+    if (!dateMatch) continue;
 
-      // Normalize empty names to null
-      if (name === "") name = null;
+    const date = dateMatch[1];
+    temp[date] ??= [];
 
-      result[date] = result[date] || [];
-      result[date].push({ mention, userId, name });
+    let m;
+    while ((m = mentionRegex.exec(line)) !== null) {
+      const userId = m[1];
+      allUserIds.add(userId);
+
+      temp[date].push({
+        mention: `<@${userId}>`,
+        userId,
+        name: null // fill later
+      });
     }
   }
 
-  return result;
-}
+  // ------------------------------
+  // BATCH FETCH (guild members)
+  // ------------------------------
+  let fetchedMembers;
+  try {
+    fetchedMembers = await guild.members.fetch({ user: [...allUserIds] });
+  } catch {
+    fetchedMembers = new Map();
+  }
 
-function extractIdFromMention(mention) {
-  const m = mention.match(/^<@!?(\d+)>$/);
-  return m ? m[1] : null;
+  // Fill the final result using fetched names
+  for (const [date, entries] of Object.entries(temp)) {
+    result[date] = entries.map(entry => {
+      const member = fetchedMembers.get(entry.userId);
+      return {
+        ...entry,
+        name: member?.displayName ?? member?.user?.username ?? null
+      };
+    });
+  }
+
+  return result;
 }
 
 // --- helpers used by commands ---
