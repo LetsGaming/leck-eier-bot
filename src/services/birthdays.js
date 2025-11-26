@@ -7,9 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // storage files
-const BIRTHDAY_FILE = path.resolve(__dirname, "../birthdays.json");
 const SETTINGS_DIR = path.resolve(__dirname, "../data");
 const SETTINGS_FILE = path.join(SETTINGS_DIR, "settings.json");
+const BIRTHDAY_FILE = path.resolve(SETTINGS_DIR, "birthdays.json");
 
 // ensure data folder exists
 if (!fs.existsSync(SETTINGS_DIR)) fs.mkdirSync(SETTINGS_DIR, { recursive: true });
@@ -89,7 +89,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function resolveParsedBirthdaysWithDiscord(client, parsed) {
+export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId) {
   const out = {};
   const allIds = new Set();
 
@@ -99,37 +99,44 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed) {
     }
   }
 
-  const fetched = new Map();
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) throw new Error(`Guild ${guildId} not found`);
+
+  const fetchedMembers = new Map();
 
   for (const id of allIds) {
+    let member = null;
+
     try {
-      const user = await client.users.fetch(id);
-      fetched.set(id, user);
+      // Fetch the member — includes user info
+      member = await guild.members.fetch(id);
     } catch {
-      fetched.set(id, null);
+      // Member not found in this guild (left, kicked, or invalid)
+      member = null;
     }
 
-    // small pause to avoid Discord API global rate limiting
-    await sleep(120);
+    fetchedMembers.set(id, member);
+
+    await sleep(120); // protect from rate-limits
   }
 
   for (const [date, entries] of Object.entries(parsed)) {
     out[date] = [];
 
     for (const entry of entries) {
-      let finalName = entry.name;
+      const member = fetchedMembers.get(entry.userId);
+      let name = entry.name;
 
-      if (entry.userId) {
-        const user = fetched.get(entry.userId);
-        if (user) {
-          const best = user.globalName || user.username || null;
-          if (best) finalName = best;
-        }
+      if (member) {
+        name = member.displayName
+          || member.user.globalName
+          || member.user.username;
       }
 
       out[date].push({
         ...entry,
-        name: finalName
+        name,
+        discordMember: member
       });
     }
   }
