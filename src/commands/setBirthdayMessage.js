@@ -1,6 +1,7 @@
 // src/commands/setBirthdayMessage.js
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import { setCurrentTemplate } from "../services/birthdays.js";
+import { isAdmin } from "../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("setbirthdaymessage")

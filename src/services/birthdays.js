@@ -171,23 +171,25 @@ export function getTodaysBirthdaysFromFileAsArray() {
   }));
 }
 
-// send greeting messages
+// 1) Build the finished birthday message (no sending)
+export function buildBirthdayMessage(b, pingEveryone = true) {
+  const userMention = b.mention || (b.userId ? `<@${b.userId}>` : null);
+  const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
+  const everyoneMention = pingEveryone ? "@everyone" : "";
+  const template = getCurrentTemplate();
+
+  return template
+    .replace(/{userMention}/g, userMention)
+    .replace(/{everyoneMention}/g, everyoneMention)
+    .replace(/{userNick}/g, userNick);
+}
+
+// 2) Sends the built messages for all birthdays
 export async function sendBirthdayMessages(client, channelId, birthdaysArray, pingEveryone = true) {
   const channel = await client.channels.fetch(channelId);
 
   for (const b of birthdaysArray) {
-    let userMention = b.mention || (b.userId ? `<@${b.userId}>` : null);
-    if (!userMention && b.userId) userMention = `<@${b.userId}>`;
-
-    const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
-    const everyoneMention = pingEveryone ? "@everyone" : "";
-    const template = getCurrentTemplate();
-
-    const message = template
-      .replace(/{userMention}/g, userMention)
-      .replace(/{everyoneMention}/g, everyoneMention)
-      .replace(/{userNick}/g, userNick);
-
+    const message = buildBirthdayMessage(b, pingEveryone);
     await channel.send(message);
   }
 }
