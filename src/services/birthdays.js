@@ -105,7 +105,7 @@ export async function parseBirthdayMessage(raw, guild) {
 export async function updateBirthdayListFromMessage(client, channelId, messageId) {
   const channel = await client.channels.fetch(channelId);
   const message = await channel.messages.fetch(messageId);
-  const parsed = parseBirthdayMessage(message.content);
+  const parsed = parseBirthdayMessage(message.content, channel.guild);
   saveBirthdaysFile(parsed);
   return parsed;
 }
