@@ -150,7 +150,7 @@ export async function updateBirthdayListFromMessage(client, channelId, messageId
   const message = await channel.messages.fetch(messageId);
 
   const parsed = parseBirthdayMessage(message.content);
-  const resolved = await resolveParsedBirthdaysWithDiscord(client, parsed);
+  const resolved = await resolveParsedBirthdaysWithDiscord(client, parsed, channel.guild.id);
 
   saveBirthdaysFile(resolved);
   return resolved;
