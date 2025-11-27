@@ -11,8 +11,9 @@ import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
 
-import { loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
+import { deleteBirthdayMessages, loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
 import { loadConfig } from "./utils/utils.js";
+import { createErrorEmbed } from "./utils/embedUtils.js";
 
 const config = loadConfig();
 
@@ -75,6 +76,8 @@ async function registerGlobalCommands() {
 
 // Midnight birthday cron
 cron.schedule("0 0 * * *", async () => {
+  await deleteBirthdayMessages(client, config.birthdayListChannelId);
+
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -113,10 +116,8 @@ client.on("interactionCreate", async interaction => {
   } catch (err) {
     console.error(err);
 
-    const errorMsg = {
-      content: "❌ Error executing this command.",
-      flags: MessageFlags.Ephemeral
-    };
+    const errorEmbd = createErrorEmbed("An error occurred while executing the command.");
+    const errorMsg = { embeds: [errorEmbd], flags: MessageFlags.Ephemeral };
 
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(errorMsg);

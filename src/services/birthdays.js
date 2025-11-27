@@ -1,46 +1,50 @@
 // src/services/birthdays.js
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import {
+  loadDataFile,
+  saveToFile,
+  getDataFilePath,
+  ensureDataDirectoryExists
+} from "../utils/utils.js";
 
-// storage files
-const SETTINGS_DIR = path.resolve(__dirname, "../data");
-const SETTINGS_FILE = path.join(SETTINGS_DIR, "settings.json");
-const BIRTHDAY_FILE = path.resolve(SETTINGS_DIR, "birthdays.json");
+// Make sure data/ folder exists
+ensureDataDirectoryExists();
 
-// ensure data folder exists
-if (!fs.existsSync(SETTINGS_DIR)) fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+// File paths
+const SETTINGS_FILE = getDataFilePath("settings.json");
+const BIRTHDAYS_FILE = getDataFilePath("birthdays.json");
 
-// file helpers
 export function loadBirthdaysFile() {
-  if (!fs.existsSync(BIRTHDAY_FILE)) return {};
-  return JSON.parse(fs.readFileSync(BIRTHDAY_FILE, "utf8"));
+  try {
+    return loadDataFile("birthdays.json");
+  } catch {
+    return {};
+  }
 }
 
 export function saveBirthdaysFile(data) {
-  fs.writeFileSync(BIRTHDAY_FILE, JSON.stringify(data, null, 2), "utf8");
+  saveToFile(BIRTHDAYS_FILE, data);
 }
 
-// settings helpers
+// Settings Helpers
 function loadSettingsFile() {
-  if (!fs.existsSync(SETTINGS_FILE)) {
+  try {
+    return loadDataFile("settings.json");
+  } catch {
     const defaultSettings = {
-      birthdayTemplate: "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}"
+      birthdayTemplate:
+        "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}"
     };
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaultSettings, null, 2), "utf8");
+
+    saveToFile(SETTINGS_FILE, defaultSettings);
     return defaultSettings;
   }
-  return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
 }
 
 function saveSettingsFile(obj) {
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(obj, null, 2), "utf8");
+  saveToFile(SETTINGS_FILE, obj);
 }
 
-// parsing logic
 const blockRegex = /ღ:\s*(\d{2}\.\d{2})\s*:\s*([^\n⎯]+)/g;
 const personRegex = /^\s*(<@!?\d+>|@[^,—–-]+?)(?:\s*[—–-]\s*(.+?))?\s*$/u;
 
@@ -108,16 +112,14 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId)
     let member = null;
 
     try {
-      // Fetch the member — includes user info
       member = await guild.members.fetch(id);
     } catch {
-      // Member not found in this guild (left, kicked, or invalid)
-      member = null;
+      member = null; // left / kicked / invalid ID
     }
 
     fetchedMembers.set(id, member);
 
-    await sleep(120); // protect from rate-limits
+    await sleep(120); // rate-limit protection
   }
 
   for (const [date, entries] of Object.entries(parsed)) {
@@ -128,9 +130,10 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId)
       let name = entry.name;
 
       if (member) {
-        name = member.displayName
-          || member.user.globalName
-          || member.user.username;
+        name =
+          member.displayName ||
+          member.user.globalName ||
+          member.user.username;
       }
 
       out[date].push({
@@ -144,19 +147,21 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId)
   return out;
 }
 
-// update birthdays from message
 export async function updateBirthdayListFromMessage(client, channelId, messageId) {
   const channel = await client.channels.fetch(channelId);
   const message = await channel.messages.fetch(messageId);
 
   const parsed = parseBirthdayMessage(message.content);
-  const resolved = await resolveParsedBirthdaysWithDiscord(client, parsed, channel.guild.id);
+  const resolved = await resolveParsedBirthdaysWithDiscord(
+    client,
+    parsed,
+    channel.guild.id
+  );
 
   saveBirthdaysFile(resolved);
   return resolved;
 }
 
-// get todays birthdays
 export function getTodaysBirthdaysFromFileAsArray() {
   const birthdays = loadBirthdaysFile();
   const now = new Date();
@@ -171,7 +176,6 @@ export function getTodaysBirthdaysFromFileAsArray() {
   }));
 }
 
-// 1) Build the finished birthday message (no sending)
 export function buildBirthdayMessage(b, pingEveryone = true) {
   const userMention = b.mention || (b.userId ? `<@${b.userId}>` : null);
   const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
@@ -184,20 +188,85 @@ export function buildBirthdayMessage(b, pingEveryone = true) {
     .replace(/{userNick}/g, userNick);
 }
 
-// 2) Sends the built messages for all birthdays
 export async function sendBirthdayMessages(client, channelId, birthdaysArray, pingEveryone = true) {
   const channel = await client.channels.fetch(channelId);
 
+  let firstMessageId = null;
+
   for (const b of birthdaysArray) {
-    const message = buildBirthdayMessage(b, pingEveryone);
-    await channel.send(message);
+    const msgContent = buildBirthdayMessage(b, pingEveryone);
+    const sentMsg = await channel.send(msgContent);
+
+    if (!firstMessageId) {
+      firstMessageId = sentMsg.id;
+
+      // Save into settings.json
+      const settings = loadSettingsFile();
+      settings.lastBirthdayMessageId = sentMsg.id;
+      saveSettingsFile(settings);
+    }
   }
 }
 
-// template helpers
+import { loadSettings, saveSettings } from "./utils.js";
+
+/**
+ * Deletes all messages in a channel up to (and including) the first birthday message.
+ * After deletion, clears firstBirthdayMessageId from settings.json.
+ */
+export async function deleteBirthdayMessages(client, channelId) {
+  const settings = loadSettings();
+  const firstId = settings.firstBirthdayMessageId;
+
+  if (!firstId) {
+    return;
+  }
+
+  const channel = await client.channels.fetch(channelId);
+
+  let reachedFirst = false;
+  let lastMessageId = undefined;
+
+  while (!reachedFirst) {
+    // Fetch messages in batches of 100 (Discord limit)
+    const messages = await channel.messages.fetch({ limit: 100, before: lastMessageId });
+
+    if (messages.size === 0) {
+      console.log("Reached end of channel history without finding the message.");
+      break;
+    }
+
+    for (const msg of messages.values()) {
+      // Check if this is the first birthday message
+      if (msg.id === firstId) {
+        reachedFirst = true;
+      }
+
+      // Delete the message
+      try {
+        await msg.delete();
+      } catch (err) {
+        console.warn(`Failed to delete message ${msg.id}:`, err);
+      }
+    }
+
+    // Prepare for next batch
+    lastMessageId = messages.last().id;
+  }
+
+  // Clear ID from settings
+  delete settings.firstBirthdayMessageId;
+  saveSettings(settings);
+
+  console.log("All birthday messages deleted and settings cleared.");
+}
+
 export function getCurrentTemplate() {
   const s = loadSettingsFile();
-  return s.birthdayTemplate || "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}";
+  return (
+    s.birthdayTemplate ||
+    "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}"
+  );
 }
 
 export function setCurrentTemplate(newTemplate) {

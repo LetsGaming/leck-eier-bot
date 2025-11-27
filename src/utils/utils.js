@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import { PermissionsBitField } from "discord.js";
@@ -18,6 +18,33 @@ export function loadConfig() {
     console.error("❌ Failed to load config.json at:", configPath);
     throw err;
   }
+}
+
+export function getDataFilePath(filename) {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  return path.resolve(__dirname, "../data", filename);
+}
+
+export function ensureDataDirectoryExists() {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const dataDir = path.resolve(__dirname, "../data");
+
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+}
+
+export function loadDataFile(filename) {
+  const filePath = getDataFilePath(filename);
+
+  const raw = readFileSync(filePath, "utf8");
+  return JSON.parse(raw);
+}
+
+export function saveToFile(filepath, data) {
+  writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
 }
 
 // Checks if user is either the bot owner (as per config) or has administrator permissions

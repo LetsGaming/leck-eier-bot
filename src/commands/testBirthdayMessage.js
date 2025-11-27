@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, MessageFlags  } from "discord.js";
 import { buildBirthdayMessage } from "../services/birthdays.js";
 import { isAdmin } from "../utils/utils.js";
+import { createNoAdminEmbed } from "../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("testbirthdaymessage")
@@ -9,8 +10,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   // Extra server-side safety check
   if (!isAdmin(interaction)) {
+    const noAdmin = createNoAdminEmbed();
     return interaction.reply({
-      content: "❌ Only administrators can use this command.",
+      embeds: [noAdmin],
       flags: MessageFlags.Ephemeral
     });
   }
