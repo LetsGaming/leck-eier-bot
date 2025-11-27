@@ -6,8 +6,6 @@ import {
   ComponentType,
 } from "discord.js";
 
-import { EmbedBuilder } from "discord.js";
-
 /**
  * Creates a customizable embed.
  * @param {object} options - Options for the embed.
