@@ -57,3 +57,8 @@ export function isAdmin(interaction) {
 
   return isOwner || hasAdminPerms;
 }
+
+export function isConfigGuild(interaction) {
+  const config = loadConfig();
+  return interaction.guildId === config.guildId;
+}

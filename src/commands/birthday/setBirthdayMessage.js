@@ -1,8 +1,8 @@
 // src/commands/setBirthdayMessage.js
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
-import { setCurrentTemplate } from "../services/birthdays.js";
-import { isAdmin } from "../utils/utils.js";
-import { createErrorEmbed, createNoAdminEmbed, createSuccessEmbed } from "../utils/embedUtils.js";
+import { setCurrentTemplate } from "../../services/birthdays.js";
+import { isAdmin } from "../../utils/utils.js";
+import { createErrorEmbed, createNoAdminEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("setbirthdaymessage")

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, MessageFlags  } from "discord.js";
-import { updateBirthdayListFromMessage } from "../services/birthdays.js";
-import { isAdmin, loadConfig } from "../utils/utils.js";
-import { createNoAdminEmbed, createSuccessEmbed } from "../utils/embedUtils.js";
+import { updateBirthdayListFromMessage } from "../../services/birthdays.js";
+import { isAdmin, loadConfig } from "../../utils/utils.js";
+import { createNoAdminEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("refreshbirthdays")

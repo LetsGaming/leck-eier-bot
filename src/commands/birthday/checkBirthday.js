@@ -4,9 +4,9 @@ import {
   getTodaysBirthdaysFromFileAsArray,
   getCurrentTemplate,
   sendBirthdayMessages
-} from "../services/birthdays.js";
-import { isAdmin } from "../utils/utils.js";
-import { createEmbed, createNoAdminEmbed } from "../utils/embedUtils.js";
+} from "../../services/birthdays.js";
+import { isAdmin } from "../../utils/utils.js";
+import { createEmbed, createNoAdminEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("checkbirthday")
@@ -58,7 +58,7 @@ export async function execute(interaction) {
         value: previewList
       },
       {
-        name: "Send Messages",
+        name: "Send Message(s)",
         value: sendMessage ? "Yes" : "No",
         inline: true
       }

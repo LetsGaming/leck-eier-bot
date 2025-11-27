@@ -12,7 +12,7 @@ import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
 
 import { deleteBirthdayMessages, loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
-import { loadConfig } from "./utils/utils.js";
+import { isConfigGuild, loadConfig } from "./utils/utils.js";
 import { createErrorEmbed } from "./utils/embedUtils.js";
 
 const config = loadConfig();
@@ -112,6 +112,10 @@ client.on("interactionCreate", async interaction => {
   if (!cmd) return;
 
   try {
+    if(!isConfigGuild(interaction)) {
+      const errorEmbd = createErrorEmbed("This command can only be used in the configured guild.");
+      return await interaction.reply({ embeds: [errorEmbd], flags: MessageFlags.Ephemeral });
+    }
     await cmd.execute(interaction);
   } catch (err) {
     console.error(err);

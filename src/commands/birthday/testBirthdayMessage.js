@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, MessageFlags  } from "discord.js";
-import { buildBirthdayMessage } from "../services/birthdays.js";
-import { isAdmin } from "../utils/utils.js";
-import { createNoAdminEmbed } from "../utils/embedUtils.js";
+import { buildBirthdayMessage } from "../../services/birthdays.js";
+import { isAdmin } from "../../utils/utils.js";
+import { createNoAdminEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("testbirthdaymessage")
