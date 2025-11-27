@@ -1,5 +1,3 @@
-// src/services/birthdays.js
-
 import {
   loadDataFile,
   saveToFile,
@@ -208,14 +206,12 @@ export async function sendBirthdayMessages(client, channelId, birthdaysArray, pi
   }
 }
 
-import { loadSettings, saveSettings } from "./utils.js";
-
 /**
  * Deletes all messages in a channel up to (and including) the first birthday message.
  * After deletion, clears firstBirthdayMessageId from settings.json.
  */
 export async function deleteBirthdayMessages(client, channelId) {
-  const settings = loadSettings();
+  const settings = loadSettingsFile();
   const firstId = settings.firstBirthdayMessageId;
 
   if (!firstId) {
@@ -256,7 +252,7 @@ export async function deleteBirthdayMessages(client, channelId) {
 
   // Clear ID from settings
   delete settings.firstBirthdayMessageId;
-  saveSettings(settings);
+  saveSettingsFile(settings);
 
   console.log("All birthday messages deleted and settings cleared.");
 }
