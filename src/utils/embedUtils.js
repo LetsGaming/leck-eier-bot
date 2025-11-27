@@ -6,6 +6,8 @@ import {
   ComponentType,
 } from "discord.js";
 
+import { EmbedBuilder } from "discord.js";
+
 /**
  * Creates a customizable embed.
  * @param {object} options - Options for the embed.
@@ -14,6 +16,7 @@ import {
  * @param {number} [options.color=0x00bfff] - The embed color.
  * @param {object} [options.footer] - Footer object with a `text` property.
  * @param {Date|string|number|boolean} [options.timestamp=true] - A Date or true to use current time, false to omit.
+ * @param {Array<{name: string, value: string, inline?: boolean}>} [options.fields] - Array of fields to add to the embed.
  * @returns {EmbedBuilder} - The constructed embed.
  */
 export function createEmbed({
@@ -22,11 +25,13 @@ export function createEmbed({
   color = 0x00bfff,
   footer,
   timestamp = true,
+  fields,
 }) {
   const embed = new EmbedBuilder().setTitle(title).setColor(color);
 
   if (description) embed.setDescription(description);
   if (footer?.text) embed.setFooter(footer);
+
   if (timestamp === true) {
     embed.setTimestamp();
   } else if (
@@ -35,6 +40,12 @@ export function createEmbed({
     typeof timestamp === "string"
   ) {
     embed.setTimestamp(timestamp);
+  }
+
+  if (Array.isArray(fields)) {
+    fields.forEach(f => {
+      if (f.name && f.value) embed.addFields(f);
+    });
   }
 
   return embed;
