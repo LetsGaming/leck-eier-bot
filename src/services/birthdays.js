@@ -229,74 +229,111 @@ export async function sendBirthdayMessages(
 }
 
 /**
+ * Deletes all birthday messages in a channel down to (and including)
+ * the firstBirthdayMessageId stored in settings.json.
+ * Ensures the birthday list message is NEVER deleted.
+ *
  * @param {import("discord.js").Client} client
- * Deletes all messages in a channel up to (and including) the first birthday message.
- * After deletion, clears firstBirthdayMessageId from settings.json.
+ * @param {string} channelId
+ * @param {string} birthdayListMessageId
+ * @returns {Promise<number>} deletedCount
  */
-export async function deleteBirthdayMessages(
-  client,
-  channelId,
-  birthdayListMessageId
-) {
+export async function deleteBirthdayMessages(client, channelId, birthdayListMessageId) {
   const settings = loadSettingsFile();
   const firstId = settings.firstBirthdayMessageId;
 
-  const deletedCount = 0;
   if (!firstId) {
-    return deletedCount;
+    console.warn("No firstBirthdayMessageId set. Nothing to delete.");
+    return 0;
   }
 
   const channel = await client.channels.fetch(channelId);
 
   if (!channel || !channel.isTextBased()) {
-    console.warn(`Channel ${channelId} not found or is not text-based.`);
-    return deletedCount;
+    console.warn(`Channel ${channelId} not found or not text-based.`);
+    return 0;
   }
 
+  let deletedCount = 0;
   let reachedFirst = false;
   let lastMessageId = undefined;
+  const seen = new Set(); // protect against infinite loops
 
   while (!reachedFirst) {
-    // Fetch messages in batches of 100 (Discord limit)
     const messages = await channel.messages.fetch({
       limit: 100,
-      before: lastMessageId,
+      before: lastMessageId
     });
 
     if (messages.size === 0) {
-      console.log(
-        "Reached end of channel history without finding the message."
-      );
+      console.warn("Reached end of channel history without finding firstBirthdayMessageId.");
       break;
     }
 
+    // Detect repeated fetches (Discord sometimes returns same messages twice)
+    const firstMsgOfBatch = messages.first();
+    if (firstMsgOfBatch && seen.has(firstMsgOfBatch.id)) {
+      console.warn("Encountered repeated batch. Breaking to avoid infinite loop.");
+      break;
+    }
+    for (const m of messages.values()) seen.add(m.id);
+
     for (const msg of messages.values()) {
-      // Check if this is the first birthday message
-      if (msg.id === firstId) {
+      // If reached the target, delete it and stop further processing
+      const isFirstMessage = msg.id === firstId;
+
+      // Always delete the first message by design
+      if (isFirstMessage) {
+        if (msg.id !== birthdayListMessageId) {
+          try {
+            await msg.delete();
+            deletedCount++;
+          } catch (err) {
+            console.warn(`Failed to delete first birthday message ${msg.id}:`, err);
+          }
+        } else {
+          console.error("ERROR: firstBirthdayMessageId == birthdayListMessageId. This should NEVER happen.");
+        }
+
         reachedFirst = true;
+        break;
       }
 
-      // Delete the message
-      try {
-        if (msg.id !== birthdayListMessageId) {
-          await msg.delete();
-          deletedCount++;
-        }
-      } catch (err) {
-        console.warn(`Failed to delete message ${msg.id}:`, err);
+      // Skip the list message for safety
+      if (msg.id === birthdayListMessageId) {
+        continue;
       }
-      await sleep(120); // rate-limit protection
+
+      // Try deleting other messages
+      try {
+        await msg.delete();
+        deletedCount++;
+      } catch (err) {
+        // Common error: older than 14 days → cannot be deleted
+        if (err.code === 50034) {
+          console.warn(`Message ${msg.id} too old to delete (older than 14 days). Skipping.`);
+        } else {
+          console.warn(`Failed to delete message ${msg.id}:`, err);
+        }
+      }
+
+      // Rate-limit friendliness: 250ms is very safe for large batch deletes
+      await sleep(250);
     }
 
     // Prepare for next batch
     lastMessageId = messages.last().id;
   }
 
-  // Clear ID from settings
-  delete settings.firstBirthdayMessageId;
-  saveSettingsFile(settings);
+  // Clear stored ID only if we found & processed it
+  if (reachedFirst) {
+    delete settings.firstBirthdayMessageId;
+    saveSettingsFile(settings);
+    console.log("Birthday messages deleted and settings cleared.");
+  } else {
+    console.warn("Did NOT delete firstBirthdayMessageId because the message was never found.");
+  }
 
-  console.log("All birthday messages deleted and settings cleared.");
   return deletedCount;
 }
 
