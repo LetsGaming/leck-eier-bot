@@ -76,7 +76,7 @@ async function registerGlobalCommands() {
 
 // Midnight birthday cron
 cron.schedule("0 0 * * *", async () => {
-  await deleteBirthdayMessages(client, config.birthdayListChannelId);
+  await deleteBirthdayMessages(client, config.birthdayListChannelId, config.birthdayListMessageId);
 
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");

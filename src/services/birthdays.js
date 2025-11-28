@@ -2,7 +2,7 @@ import {
   loadDataFile,
   saveToFile,
   getDataFilePath,
-  ensureDataDirectoryExists
+  ensureDataDirectoryExists,
 } from "../utils/utils.js";
 
 // Make sure data/ folder exists
@@ -31,7 +31,7 @@ function loadSettingsFile() {
   } catch {
     const defaultSettings = {
       birthdayTemplate:
-        "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}"
+        "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}",
     };
 
     saveToFile(SETTINGS_FILE, defaultSettings);
@@ -53,7 +53,10 @@ export function parseBirthdayMessage(text) {
   while ((m = blockRegex.exec(text)) !== null) {
     const date = m[1];
     const rest = m[2].trim();
-    const people = rest.split(",").map(s => s.trim()).filter(Boolean);
+    const people = rest
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     for (const p of people) {
       const pm = p.match(personRegex);
@@ -61,9 +64,17 @@ export function parseBirthdayMessage(text) {
         const fallback = p.match(/(<@!?\d+>)|(@\S+)/);
         if (fallback) {
           const mention = fallback[0];
-          const name = p.replace(mention, "").replace(/^[^\w\u00C0-\u017F]+/, "").trim() || null;
+          const name =
+            p
+              .replace(mention, "")
+              .replace(/^[^\w\u00C0-\u017F]+/, "")
+              .trim() || null;
           result[date] = result[date] || [];
-          result[date].push({ mention, userId: extractIdFromMention(mention), name });
+          result[date].push({
+            mention,
+            userId: extractIdFromMention(mention),
+            name,
+          });
         }
         continue;
       }
@@ -88,10 +99,14 @@ function extractIdFromMention(mention) {
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId) {
+export async function resolveParsedBirthdaysWithDiscord(
+  client,
+  parsed,
+  guildId
+) {
   const out = {};
   const allIds = new Set();
 
@@ -129,15 +144,13 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId)
 
       if (member) {
         name =
-          member.displayName ||
-          member.user.globalName ||
-          member.user.username;
+          member.displayName || member.user.globalName || member.user.username;
       }
 
       out[date].push({
         ...entry,
         name,
-        discordMember: member
+        discordMember: member,
       });
     }
   }
@@ -145,7 +158,11 @@ export async function resolveParsedBirthdaysWithDiscord(client, parsed, guildId)
   return out;
 }
 
-export async function updateBirthdayListFromMessage(client, channelId, messageId) {
+export async function updateBirthdayListFromMessage(
+  client,
+  channelId,
+  messageId
+) {
   const channel = await client.channels.fetch(channelId);
   const message = await channel.messages.fetch(messageId);
 
@@ -167,10 +184,10 @@ export function getTodaysBirthdaysFromFileAsArray() {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const key = `${dd}.${mm}`;
 
-  return (birthdays[key] || []).map(entry => ({
+  return (birthdays[key] || []).map((entry) => ({
     mention: entry.mention,
     userId: entry.userId,
-    name: entry.name
+    name: entry.name,
   }));
 }
 
@@ -186,7 +203,12 @@ export function buildBirthdayMessage(b, pingEveryone = true) {
     .replace(/{userNick}/g, userNick);
 }
 
-export async function sendBirthdayMessages(client, channelId, birthdaysArray, pingEveryone = true) {
+export async function sendBirthdayMessages(
+  client,
+  channelId,
+  birthdaysArray,
+  pingEveryone = true
+) {
   const channel = await client.channels.fetch(channelId);
 
   let firstMessageId = null;
@@ -207,28 +229,44 @@ export async function sendBirthdayMessages(client, channelId, birthdaysArray, pi
 }
 
 /**
+ * @param {import("discord.js").Client} client
  * Deletes all messages in a channel up to (and including) the first birthday message.
  * After deletion, clears firstBirthdayMessageId from settings.json.
  */
-export async function deleteBirthdayMessages(client, channelId) {
+export async function deleteBirthdayMessages(
+  client,
+  channelId,
+  birthdayListMessageId
+) {
   const settings = loadSettingsFile();
   const firstId = settings.firstBirthdayMessageId;
 
+  const deletedCount = 0;
   if (!firstId) {
-    return;
+    return deletedCount;
   }
 
   const channel = await client.channels.fetch(channelId);
+
+  if (!channel || !channel.isTextBased()) {
+    console.warn(`Channel ${channelId} not found or is not text-based.`);
+    return deletedCount;
+  }
 
   let reachedFirst = false;
   let lastMessageId = undefined;
 
   while (!reachedFirst) {
     // Fetch messages in batches of 100 (Discord limit)
-    const messages = await channel.messages.fetch({ limit: 100, before: lastMessageId });
+    const messages = await channel.messages.fetch({
+      limit: 100,
+      before: lastMessageId,
+    });
 
     if (messages.size === 0) {
-      console.log("Reached end of channel history without finding the message.");
+      console.log(
+        "Reached end of channel history without finding the message."
+      );
       break;
     }
 
@@ -240,10 +278,14 @@ export async function deleteBirthdayMessages(client, channelId) {
 
       // Delete the message
       try {
-        await msg.delete();
+        if (msg.id !== birthdayListMessageId) {
+          await msg.delete();
+          deletedCount++;
+        }
       } catch (err) {
         console.warn(`Failed to delete message ${msg.id}:`, err);
       }
+      await sleep(120); // rate-limit protection
     }
 
     // Prepare for next batch
@@ -255,6 +297,7 @@ export async function deleteBirthdayMessages(client, channelId) {
   saveSettingsFile(settings);
 
   console.log("All birthday messages deleted and settings cleared.");
+  return deletedCount;
 }
 
 export function getCurrentTemplate() {
