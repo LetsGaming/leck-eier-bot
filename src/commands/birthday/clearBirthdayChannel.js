@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags  } from "discord.js";
 import { deleteBirthdayMessages } from "../../services/birthdays.js";
-import { isAdmin,  } from "../../utils/utils.js";
+import { isAdmin, loadConfig } from "../../utils/utils.js";
 import { createNoAdminEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 
 export const data = new SlashCommandBuilder()
