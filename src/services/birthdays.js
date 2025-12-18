@@ -211,18 +211,16 @@ export async function sendBirthdayMessages(
 ) {
   const channel = await client.channels.fetch(channelId);
 
-  let firstMessageId = null;
+  const settings = loadSettingsFile();
+  let firstBirthdayMessageId = settings.firstBirthdayMessageId || null;
 
   for (const b of birthdaysArray) {
     const msgContent = buildBirthdayMessage(b, pingEveryone);
     const sentMsg = await channel.send(msgContent);
 
-    if (!firstMessageId) {
-      firstMessageId = sentMsg.id;
-
-      // Save into settings.json
-      const settings = loadSettingsFile();
-      settings.lastBirthdayMessageId = sentMsg.id;
+    if (!firstBirthdayMessageId) {
+      firstBirthdayMessageId = sentMsg.id;
+      settings.firstBirthdayMessageId = firstBirthdayMessageId;
       saveSettingsFile(settings);
     }
   }
@@ -243,7 +241,6 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
   const firstId = settings.firstBirthdayMessageId;
 
   if (!firstId) {
-    console.warn("No firstBirthdayMessageId set. Nothing to delete.");
     return 0;
   }
 
@@ -276,9 +273,9 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
       console.warn("Encountered repeated batch. Breaking to avoid infinite loop.");
       break;
     }
-    for (const m of messages.values()) seen.add(m.id);
 
     for (const msg of messages.values()) {
+      seen.add(msg.id);
       // If reached the target, delete it and stop further processing
       const isFirstMessage = msg.id === firstId;
 
