@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags  } from "discord.js";
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import { deleteBirthdayMessages } from "../../services/birthdays.js";
 import { isAdmin, loadConfig } from "../../utils/utils.js";
 import { createNoAdminEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
@@ -8,7 +8,6 @@ export const data = new SlashCommandBuilder()
   .setDescription("Clear all messages in the birthday announcements channel");
 
 export async function execute(interaction) {
-  // Extra server-side safety check
   if (!isAdmin(interaction)) {
     const noAdmin = createNoAdminEmbed();
     return interaction.reply({
@@ -17,12 +16,22 @@ export async function execute(interaction) {
     });
   }
 
-  const config = loadConfig();
-  const count = await deleteBirthdayMessages(interaction.client, config.birthdayListChannelId, config.birthdayListMessageId);
+  // Acknowledge immediately
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const successEmbd = createSuccessEmbed(`Cleared ${count} messages from the birthday announcements channel.`);
-  return interaction.reply({
-    embeds: [successEmbd],
-    flags: MessageFlags.Ephemeral
+  const config = loadConfig();
+
+  const count = await deleteBirthdayMessages(
+    interaction.client,
+    config.birthdayListChannelId,
+    config.birthdayListMessageId
+  );
+
+  const successEmbed = createSuccessEmbed(
+    `Cleared ${count} messages from the birthday announcements channel.`
+  );
+
+  return interaction.editReply({
+    embeds: [successEmbed]
   });
 }
