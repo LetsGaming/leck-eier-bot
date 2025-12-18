@@ -191,6 +191,24 @@ export function getTodaysBirthdaysFromFileAsArray() {
   }));
 }
 
+export function getNextBirthdayDateFromFile() {
+  const birthdays = loadBirthdaysFile();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const dates = Object.keys(birthdays)
+
+    .map((d) => {
+      const [dd, mm] = d.split(".").map((x) => parseInt(x, 10));
+      let date = new Date(currentYear, mm - 1, dd);
+      if (date < now) {
+        date = new Date(currentYear + 1, mm - 1, dd);
+      }
+      return date;
+    })
+    .sort((a, b) => a - b);
+  return dates.length > 0 ? dates[0] : null;
+}
+
 export function buildBirthdayMessage(b, pingEveryone = true) {
   const userMention = b.mention || (b.userId ? `<@${b.userId}>` : null);
   const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
@@ -236,7 +254,11 @@ export async function sendBirthdayMessages(
  * @param {string} birthdayListMessageId
  * @returns {Promise<number>} deletedCount
  */
-export async function deleteBirthdayMessages(client, channelId, birthdayListMessageId) {
+export async function deleteBirthdayMessages(
+  client,
+  channelId,
+  birthdayListMessageId
+) {
   const settings = loadSettingsFile();
   const firstId = settings.firstBirthdayMessageId;
 
@@ -259,18 +281,22 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
   while (!reachedFirst) {
     const messages = await channel.messages.fetch({
       limit: 100,
-      before: lastMessageId
+      before: lastMessageId,
     });
 
     if (messages.size === 0) {
-      console.warn("Reached end of channel history without finding firstBirthdayMessageId.");
+      console.warn(
+        "Reached end of channel history without finding firstBirthdayMessageId."
+      );
       break;
     }
 
     // Detect repeated fetches (Discord sometimes returns same messages twice)
     const firstMsgOfBatch = messages.first();
     if (firstMsgOfBatch && seen.has(firstMsgOfBatch.id)) {
-      console.warn("Encountered repeated batch. Breaking to avoid infinite loop.");
+      console.warn(
+        "Encountered repeated batch. Breaking to avoid infinite loop."
+      );
       break;
     }
 
@@ -286,10 +312,15 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
             await msg.delete();
             deletedCount++;
           } catch (err) {
-            console.warn(`Failed to delete first birthday message ${msg.id}:`, err);
+            console.warn(
+              `Failed to delete first birthday message ${msg.id}:`,
+              err
+            );
           }
         } else {
-          console.error("ERROR: firstBirthdayMessageId == birthdayListMessageId. This should NEVER happen.");
+          console.error(
+            "ERROR: firstBirthdayMessageId == birthdayListMessageId. This should NEVER happen."
+          );
         }
 
         reachedFirst = true;
@@ -308,7 +339,9 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
       } catch (err) {
         // Common error: older than 14 days → cannot be deleted
         if (err.code === 50034) {
-          console.warn(`Message ${msg.id} too old to delete (older than 14 days). Skipping.`);
+          console.warn(
+            `Message ${msg.id} too old to delete (older than 14 days). Skipping.`
+          );
         } else {
           console.warn(`Failed to delete message ${msg.id}:`, err);
         }
@@ -328,7 +361,9 @@ export async function deleteBirthdayMessages(client, channelId, birthdayListMess
     saveSettingsFile(settings);
     console.log("Birthday messages deleted and settings cleared.");
   } else {
-    console.warn("Did NOT delete firstBirthdayMessageId because the message was never found.");
+    console.warn(
+      "Did NOT delete firstBirthdayMessageId because the message was never found."
+    );
   }
 
   return deletedCount;

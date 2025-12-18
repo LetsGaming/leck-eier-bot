@@ -3,7 +3,8 @@ import { SlashCommandBuilder, MessageFlags } from "discord.js";
 import {
   getTodaysBirthdaysFromFileAsArray,
   getCurrentTemplate,
-  sendBirthdayMessages
+  sendBirthdayMessages,
+  getNextBirthdayDateFromFile
 } from "../../services/birthdays.js";
 import { isAdmin } from "../../utils/utils.js";
 import { createEmbed, createNoAdminEmbed } from "../../utils/embedUtils.js";
@@ -32,8 +33,17 @@ export async function execute(interaction) {
   const sendMessage = interaction.options.getBoolean("sendmessage") ?? false;
 
   if (!birthdays || birthdays.length === 0) {
+
+    const nextBirthday = getNextBirthdayDateFromFile();
+    let replyContent = "🎂 No birthdays today!";
+
+    if (nextBirthday) {
+      replyContent += `\nThe next birthday is on **${nextBirthday.date}**: ${nextBirthday.entries
+        .map(e => e.name ?? "Unknown")
+        .join(", ")}`;
+    }
     return interaction.reply({
-      content: "🎂 No birthdays today!",
+      content: replyContent,
       flags: MessageFlags.Ephemeral
     });
   }
