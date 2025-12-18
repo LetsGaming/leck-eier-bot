@@ -1,23 +1,36 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { PermissionsBitField } from "discord.js";
 
 /**
- * Absolute path to the project root.
- * This assumes the bot is started from the root directory
- * (e.g. `node src/index.js`)
+ * Resolve __dirname in ESM
  */
-const PROJECT_ROOT = process.cwd();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
- * Loads config.json from the project root
+ * Root of the `src` directory
+ */
+const SRC_ROOT = path.resolve(__dirname, "..");
+
+/**
+ * Cache config after first load
+ */
+let cachedConfig = null;
+
+/**
+ * Loads config.json from src
  */
 export function loadConfig() {
-  const configPath = path.resolve(PROJECT_ROOT, "src", "config.json");
+  if (cachedConfig) return cachedConfig;
+
+  const configPath = path.resolve(SRC_ROOT, "config.json");
 
   try {
     const raw = readFileSync(configPath, "utf8");
-    return JSON.parse(raw);
+    cachedConfig = JSON.parse(raw);
+    return cachedConfig;
   } catch (err) {
     console.error("❌ Failed to load config.json at:", configPath);
     throw err;
@@ -28,14 +41,14 @@ export function loadConfig() {
  * Returns an absolute path to a file inside /data (project root)
  */
 export function getDataFilePath(filename) {
-  return path.resolve(PROJECT_ROOT, "data", filename);
+  return path.resolve(SRC_ROOT, "..", "data", filename);
 }
 
 /**
  * Ensures /data exists in the project root
  */
 export function ensureDataDirectoryExists() {
-  const dataDir = path.resolve(PROJECT_ROOT, "data");
+  const dataDir = path.resolve(SRC_ROOT, "..", "data");
 
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
@@ -67,9 +80,7 @@ export function isAdmin(interaction) {
 
   const isOwner = interaction.user.id === botOwnerId;
   const hasAdminPerms =
-    interaction.memberPermissions.has(
-      PermissionsBitField.Flags.Administrator
-    );
+    interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator);
 
   return isOwner || hasAdminPerms;
 }
