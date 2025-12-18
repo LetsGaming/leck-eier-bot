@@ -191,22 +191,25 @@ export function getTodaysBirthdaysFromFileAsArray() {
   }));
 }
 
-export function getNextBirthdayDateFromFile() {
+export function getNextBirthdayFromFile() {
   const birthdays = loadBirthdaysFile();
   const now = new Date();
   const currentYear = now.getFullYear();
-  const dates = Object.keys(birthdays)
 
-    .map((d) => {
-      const [dd, mm] = d.split(".").map((x) => parseInt(x, 10));
-      let date = new Date(currentYear, mm - 1, dd);
-      if (date < now) {
-        date = new Date(currentYear + 1, mm - 1, dd);
-      }
-      return date;
-    })
-    .sort((a, b) => a - b);
-  return dates.length > 0 ? dates[0] : null;
+  // Map each date string to a full Date object + entries
+  const allDates = Object.entries(birthdays).map(([key, entries]) => {
+    const [dd, mm] = key.split(".").map(x => parseInt(x, 10));
+    let date = new Date(currentYear, mm - 1, dd);
+    if (date < now) {
+      date = new Date(currentYear + 1, mm - 1, dd);
+    }
+    return { date, entries };
+  });
+
+  // Sort by date
+  allDates.sort((a, b) => a.date - b.date);
+
+  return allDates.length > 0 ? allDates[0] : null;
 }
 
 export function buildBirthdayMessage(b, pingEveryone = true) {
