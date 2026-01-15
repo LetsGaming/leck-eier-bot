@@ -26,12 +26,14 @@ export async function execute(interaction) {
     });
   }
 
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const servername = interaction.options
     .getString("servername", true)
     .toLowerCase();
   const guild = interaction.guild;
   if (!guild) {
-    return interaction.reply({
+    return interaction.editReply({
       content: "This command can only be used in a server.",
       flags: MessageFlags.Ephemeral,
     });
@@ -47,7 +49,7 @@ export async function execute(interaction) {
     const errorEmbed = createErrorEmbed(
       `No users found with servername matching "${servername}".`
     );
-    return interaction.reply({
+    return interaction.editReply({
       embeds: [errorEmbed],
       flags: MessageFlags.Ephemeral,
     });
@@ -59,7 +61,7 @@ export async function execute(interaction) {
   const successEmbed = createSuccessEmbed(
     `Found ${matchedMembers.size} user(s) matching "${servername}":\n\n${memberList}`
   );
-  return interaction.reply({
+  return interaction.editReply({
     embeds: [successEmbed],
     flags: MessageFlags.Ephemeral,
   });
