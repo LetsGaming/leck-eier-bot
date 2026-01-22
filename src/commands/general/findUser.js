@@ -1,10 +1,23 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { transliterate } from "transliteration";
 import { isAdmin } from "../../utils/utils.js";
 import {
   createNoAdminEmbed,
   createSuccessEmbed,
   createErrorEmbed,
 } from "../../utils/embedUtils.js";
+
+/**
+ * Fully normalizes usernames so Unicode fonts, emojis,
+ * accents and symbols do not break searching.
+ */
+function normalizeForSearch(str) {
+  return transliterate(str)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // diacritics
+    .replace(/[^a-zA-Z0-9]/g, "") // symbols, emojis, punctuation
+    .toLowerCase();
+}
 
 export const data = new SlashCommandBuilder()
   .setName("finduser")
@@ -13,11 +26,10 @@ export const data = new SlashCommandBuilder()
     opt
       .setName("servername")
       .setDescription("The servername of the user to find.")
-      .setRequired(true)
+      .setRequired(true),
   );
 
 export async function execute(interaction) {
-  // Extra server-side safety check
   if (!isAdmin(interaction)) {
     const noAdmin = createNoAdminEmbed();
     return interaction.reply({
@@ -28,9 +40,9 @@ export async function execute(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const servername = interaction.options
-    .getString("servername", true)
-    .toLowerCase();
+  const rawSearch = interaction.options.getString("servername", true);
+  const search = normalizeForSearch(rawSearch);
+
   const guild = interaction.guild;
   if (!guild) {
     return interaction.editReply({
@@ -39,15 +51,16 @@ export async function execute(interaction) {
     });
   }
 
-  const members = guild.members.cache;
-  const matchedMembers = members.filter(
-    (member) =>
-      member.user.username.toLowerCase().includes(servername) ||
-      (member.nickname && member.nickname.toLowerCase().includes(servername))
-  );
+  const matchedMembers = guild.members.cache.filter((member) => {
+    const username = normalizeForSearch(member.user.username);
+    const nickname = member.nickname ? normalizeForSearch(member.nickname) : "";
+
+    return username.includes(search) || nickname.includes(search);
+  });
+
   if (matchedMembers.size === 0) {
     const errorEmbed = createErrorEmbed(
-      `No users found with servername matching "${servername}".`
+      `No users found with servername matching "${rawSearch}".`,
     );
     return interaction.editReply({
       embeds: [errorEmbed],
@@ -56,11 +69,13 @@ export async function execute(interaction) {
   }
 
   const memberList = matchedMembers
-    .map((member) => `• ${member.user.tag} (Tag: <@${member.user.id}>)`)
+    .map((member) => `• ${member.user.tag} (Mention: <@${member.user.id}>)`)
     .join("\n");
+
   const successEmbed = createSuccessEmbed(
-    `Found ${matchedMembers.size} user(s) matching "${servername}":\n\n${memberList}`
+    `Found ${matchedMembers.size} user(s) matching "${rawSearch}":\n\n${memberList}`,
   );
+
   return interaction.editReply({
     embeds: [successEmbed],
     flags: MessageFlags.Ephemeral,
