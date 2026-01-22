@@ -39,7 +39,7 @@ export async function execute(interaction) {
     });
   }
 
-  const members = await guild.members.fetch();
+  const members = guild.members.cache;
   const matchedMembers = members.filter(
     (member) =>
       member.user.username.toLowerCase().includes(servername) ||
@@ -56,7 +56,7 @@ export async function execute(interaction) {
   }
 
   const memberList = matchedMembers
-    .map((member) => `• ${member.user.tag} (ID: ${member.user.id})`)
+    .map((member) => `• ${member.user.tag} (Tag: <@${member.user.id}>)`)
     .join("\n");
   const successEmbed = createSuccessEmbed(
     `Found ${matchedMembers.size} user(s) matching "${servername}":\n\n${memberList}`
