@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PermissionsBitField } from "discord.js";
+import logger from "./logger";
 
 /**
  * Resolve __dirname in ESM
@@ -32,7 +33,7 @@ export function loadConfig() {
     cachedConfig = JSON.parse(raw);
     return cachedConfig;
   } catch (err) {
-    console.error("❌ Failed to load config.json at:", configPath);
+    logger.error("❌ Failed to load config.json at:", configPath);
     throw err;
   }
 }

@@ -14,6 +14,7 @@ import cron from "node-cron";
 import { deleteBirthdayMessages, loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
 import { isConfigGuild, loadConfig } from "./utils/utils.js";
 import { createErrorEmbed } from "./utils/embedUtils.js";
+import logger from "./utils/logger.js";
 
 const config = loadConfig();
 
@@ -55,7 +56,7 @@ async function loadCommands() {
     if (enabled && command.data && command.execute) {
       client.commands.set(command.data.name, command);
     } else {
-      console.warn(`Skipping ${file}, missing data/execute or disabled`);
+      logger.warn(`Skipping ${file}, missing data/execute or disabled`);
     }
   }
 }
@@ -64,14 +65,14 @@ async function registerGlobalCommands() {
   const rest = new REST({ version: "10" }).setToken(config.token);
   const commands = [...client.commands.map(cmd => cmd.data.toJSON())];
 
-  console.log("Registering global slash commands...");
+  logger.info("Registering global slash commands...");
 
   await rest.put(
     Routes.applicationCommands(config.clientId), 
     { body: commands }
   );
 
-  console.log("✔ Registered.");
+  logger.info("✔ Registered.");
 }
 
 // Midnight birthday cron
@@ -99,7 +100,7 @@ cron.schedule("0 0 * * *", async () => {
 // Auto-update when message is edited
 client.on("messageUpdate", async (oldMsg, newMsg) => {
   if (newMsg.id === config.birthdayListMessageId) {
-    console.log("Birthday list updated (edit detected)");
+    logger.info("Birthday list updated (edit detected)");
     await updateBirthdayListFromMessage(client, newMsg.channelId, newMsg.id);
   }
 });
@@ -118,7 +119,7 @@ client.on("interactionCreate", async interaction => {
     }
     await cmd.execute(interaction);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
 
     const errorEmbd = createErrorEmbed("An error occurred while executing the command.");
     const errorMsg = { embeds: [errorEmbd], flags: MessageFlags.Ephemeral };
@@ -136,7 +137,7 @@ client.on("interactionCreate", async interaction => {
   await registerGlobalCommands();
 
   client.once("clientReady", async () => {
-    console.log(`Bot logged in as ${client.user.tag}`);
+    logger.info(`Bot logged in as ${client.user.tag}`);
     await updateBirthdayListFromMessage(client, config.birthdayListChannelId, config.birthdayListMessageId);
   });
 

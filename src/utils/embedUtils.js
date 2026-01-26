@@ -5,6 +5,7 @@ import {
   EmbedBuilder,
   ComponentType,
 } from "discord.js";
+import logger from "./logger";
 
 /**
  * Creates a customizable embed.
@@ -197,7 +198,7 @@ export async function handlePagination(message, interaction, embeds) {
         components: [createPaginationButtons(page, totalPages)],
       });
     } catch (err) {
-      console.warn("Failed to update page during pagination:", err.message);
+      logger.warn("Failed to update page during pagination:", err.message);
     }
   });
 
@@ -206,7 +207,7 @@ export async function handlePagination(message, interaction, embeds) {
     try {
       await message.edit({ components: [] });
     } catch (err) {
-      console.warn(
+      logger.warn(
         "Failed to remove buttons after pagination timeout:",
         err.message
       );

@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import {
   loadDataFile,
   saveToFile,
@@ -272,7 +273,7 @@ export async function deleteBirthdayMessages(
   const channel = await client.channels.fetch(channelId);
 
   if (!channel || !channel.isTextBased()) {
-    console.warn(`Channel ${channelId} not found or not text-based.`);
+    logger.warn(`Channel ${channelId} not found or not text-based.`);
     return 0;
   }
 
@@ -288,7 +289,7 @@ export async function deleteBirthdayMessages(
     });
 
     if (messages.size === 0) {
-      console.warn(
+      logger.warn(
         "Reached end of channel history without finding firstBirthdayMessageId."
       );
       break;
@@ -297,7 +298,7 @@ export async function deleteBirthdayMessages(
     // Detect repeated fetches (Discord sometimes returns same messages twice)
     const firstMsgOfBatch = messages.first();
     if (firstMsgOfBatch && seen.has(firstMsgOfBatch.id)) {
-      console.warn(
+      logger.warn(
         "Encountered repeated batch. Breaking to avoid infinite loop."
       );
       break;
@@ -315,13 +316,13 @@ export async function deleteBirthdayMessages(
             await msg.delete();
             deletedCount++;
           } catch (err) {
-            console.warn(
+            logger.warn(
               `Failed to delete first birthday message ${msg.id}:`,
               err
             );
           }
         } else {
-          console.error(
+          logger.error(
             "ERROR: firstBirthdayMessageId == birthdayListMessageId. This should NEVER happen."
           );
         }
@@ -342,11 +343,11 @@ export async function deleteBirthdayMessages(
       } catch (err) {
         // Common error: older than 14 days → cannot be deleted
         if (err.code === 50034) {
-          console.warn(
+          logger.warn(
             `Message ${msg.id} too old to delete (older than 14 days). Skipping.`
           );
         } else {
-          console.warn(`Failed to delete message ${msg.id}:`, err);
+          logger.warn(`Failed to delete message ${msg.id}:`, err);
         }
       }
 
@@ -362,9 +363,9 @@ export async function deleteBirthdayMessages(
   if (reachedFirst) {
     delete settings.firstBirthdayMessageId;
     saveSettingsFile(settings);
-    console.log("Birthday messages deleted and settings cleared.");
+    logger.info("Birthday messages deleted and settings cleared.");
   } else {
-    console.warn(
+    logger.warn(
       "Did NOT delete firstBirthdayMessageId because the message was never found."
     );
   }
