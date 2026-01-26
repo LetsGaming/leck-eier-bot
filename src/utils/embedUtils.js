@@ -5,7 +5,7 @@ import {
   EmbedBuilder,
   ComponentType,
 } from "discord.js";
-import logger from "./logger";
+import logger from "./logger.js";
 
 /**
  * Creates a customizable embed.

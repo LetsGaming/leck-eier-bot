@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PermissionsBitField } from "discord.js";
-import logger from "./logger";
+import logger from "./logger.js";
 
 /**
  * Resolve __dirname in ESM
