@@ -12,6 +12,7 @@ import {
  * accents and symbols do not break searching.
  */
 function normalizeForSearch(str) {
+  if (!str) return "";
   return transliterate(str)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "") // diacritics
@@ -41,7 +42,7 @@ export async function execute(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const rawSearch = interaction.options.getString("servername", true);
-  const search = normalizeForSearch(rawSearch);
+  const normalizedSearch = normalizeForSearch(rawSearch);
 
   const guild = interaction.guild;
   if (!guild) {
@@ -51,33 +52,60 @@ export async function execute(interaction) {
     });
   }
 
-  const matchedMembers = guild.members.cache.filter((member) => {
-    const username = normalizeForSearch(member.user.username);
-    const nickname = member.nickname ? normalizeForSearch(member.nickname) : "";
+  try {
+    /* STRATEGY: Use the API 'query' to fetch only relevant members. 
+       This prevents timeouts because we aren't downloading the whole guild.
+    */
+    const fetchedMembers = await guild.members.fetch({
+      query: rawSearch,
+      limit: 20, // Fetch up to 20 matches from Discord's API
+    });
 
-    return username.includes(search) || nickname.includes(search);
-  });
+    // Apply your custom normalization filter on the results returned by Discord
+    const matchedMembers = fetchedMembers.filter((member) => {
+      const username = normalizeForSearch(member.user.username);
+      const nickname = member.nickname
+        ? normalizeForSearch(member.nickname)
+        : "";
+      const displayName = member.displayName
+        ? normalizeForSearch(member.displayName)
+        : "";
 
-  if (matchedMembers.size === 0) {
-    const errorEmbed = createErrorEmbed(
-      `No users found with servername matching "${rawSearch}".`,
+      return (
+        username.includes(normalizedSearch) ||
+        nickname.includes(normalizedSearch) ||
+        displayName.includes(normalizedSearch)
+      );
+    });
+
+    if (matchedMembers.size === 0) {
+      const errorEmbed = createErrorEmbed(
+        `No users found with servername matching "${rawSearch}".`,
+      );
+      return interaction.editReply({
+        embeds: [errorEmbed],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const memberList = matchedMembers
+      .map((member) => `• ${member.user.tag} (Mention: <@${member.user.id}>)`)
+      .join("\n");
+
+    const successEmbed = createSuccessEmbed(
+      `Found ${matchedMembers.size} user(s) matching "${rawSearch}":\n\n${memberList}`,
     );
+
     return interaction.editReply({
-      embeds: [errorEmbed],
+      embeds: [successEmbed],
+      flags: MessageFlags.Ephemeral,
+    });
+  } catch (error) {
+    console.error("Member Fetch Error:", error);
+    return interaction.editReply({
+      content:
+        "The search timed out or failed. Please try a more specific name.",
       flags: MessageFlags.Ephemeral,
     });
   }
-
-  const memberList = matchedMembers
-    .map((member) => `• ${member.user.tag} (Mention: <@${member.user.id}>)`)
-    .join("\n");
-
-  const successEmbed = createSuccessEmbed(
-    `Found ${matchedMembers.size} user(s) matching "${rawSearch}":\n\n${memberList}`,
-  );
-
-  return interaction.editReply({
-    embeds: [successEmbed],
-    flags: MessageFlags.Ephemeral,
-  });
 }
