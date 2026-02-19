@@ -46,7 +46,7 @@ export async function execute(interaction) {
         .join(", ")}`;
     }
 
-    return interaction.reply({
+    return interaction.editReply({
       content: replyContent,
       flags: MessageFlags.Ephemeral,
     });
