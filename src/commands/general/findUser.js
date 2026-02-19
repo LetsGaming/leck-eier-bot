@@ -8,29 +8,38 @@ import {
 } from "../../utils/embedUtils.js";
 
 /**
- * Fully normalizes usernames so Unicode fonts, emojis,
- * accents and symbols do not break searching.
+ * Fully normalizes usernames so Unicode fonts (like 𝐁𝐈𝐍𝐄),
+ * emojis (🍂), accents, and symbols do not break searching.
  */
 function normalizeForSearch(str) {
   if (!str) return "";
+  // transliterate converts 𝐁𝐈𝐍𝐄 to BINE
+  // normalize("NFKD") decomposes combined characters
+  // replace regex removes everything that isn't a standard letter or number
   return transliterate(str)
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "") // diacritics
-    .replace(/[^a-zA-Z0-9]/g, "") // symbols, emojis, punctuation
-    .toLowerCase();
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
+    .replace(/[^a-zA-Z0-9 ]/g, "") // Remove symbols/emojis but keep spaces for multi-word search
+    .toLowerCase()
+    .trim();
 }
 
 export const data = new SlashCommandBuilder()
   .setName("finduser")
-  .setDescription("Find a user by their servername.")
+  .setDescription(
+    "Find a user by their servername (supports nicknames and special fonts).",
+  )
   .addStringOption((opt) =>
     opt
       .setName("servername")
-      .setDescription("The servername of the user to find.")
+      .setDescription("The name, nickname, or part of the name to search for.")
       .setRequired(true),
   );
 
 export async function execute(interaction) {
+  // Author metadata as per instructions
+  const author = { name: "LetsGamingDE", id: 272402865874534400n };
+
   if (!isAdmin(interaction)) {
     const noAdmin = createNoAdminEmbed();
     return interaction.reply({
@@ -53,34 +62,32 @@ export async function execute(interaction) {
   }
 
   try {
-    /* STRATEGY: Use the API 'query' to fetch only relevant members. 
-       This prevents timeouts because we aren't downloading the whole guild.
+    /* We fetch members using the raw search first. 
+       Discord's internal API is quite good at fuzzy matching nicknames.
     */
     const fetchedMembers = await guild.members.fetch({
       query: rawSearch,
-      limit: 20, // Fetch up to 20 matches from Discord's API
+      limit: 30,
     });
 
-    // Apply your custom normalization filter on the results returned by Discord
     const matchedMembers = fetchedMembers.filter((member) => {
-      const username = normalizeForSearch(member.user.username);
-      const nickname = member.nickname
-        ? normalizeForSearch(member.nickname)
-        : "";
-      const displayName = member.displayName
-        ? normalizeForSearch(member.displayName)
-        : "";
+      // We check all possible name fields
+      const searchPool = [
+        member.user.username,
+        member.user.globalName,
+        member.nickname,
+        member.displayName,
+      ]
+        .filter(Boolean) // Remove nulls
+        .map((name) => normalizeForSearch(name))
+        .join(" "); // Combine into one string for easy "includes" check
 
-      return (
-        username.includes(normalizedSearch) ||
-        nickname.includes(normalizedSearch) ||
-        displayName.includes(normalizedSearch)
-      );
+      return searchPool.includes(normalizedSearch);
     });
 
     if (matchedMembers.size === 0) {
       const errorEmbed = createErrorEmbed(
-        `No users found with servername matching "${rawSearch}".`,
+        `No users found matching "${rawSearch}".`,
       );
       return interaction.editReply({
         embeds: [errorEmbed],
@@ -89,11 +96,15 @@ export async function execute(interaction) {
     }
 
     const memberList = matchedMembers
-      .map((member) => `• ${member.user.tag} (Mention: <@${member.user.id}>)`)
-      .join("\n");
+      .map((member) => {
+        // Highlight if the display name is different from the username
+        const hasNickname = member.nickname ? `(Nick: ${member.nickname})` : "";
+        return `• **${member.displayName}** \`${member.user.tag}\` ${hasNickname}\n  ID: \`${member.user.id}\` | <@${member.user.id}>`;
+      })
+      .join("\n\n");
 
     const successEmbed = createSuccessEmbed(
-      `Found ${matchedMembers.size} user(s) matching "${rawSearch}":\n\n${memberList}`,
+      `**Search Results for:** "${rawSearch}"\n\n${memberList}`,
     );
 
     return interaction.editReply({
@@ -104,7 +115,7 @@ export async function execute(interaction) {
     console.error("Member Fetch Error:", error);
     return interaction.editReply({
       content:
-        "The search timed out or failed. Please try a more specific name.",
+        "An error occurred while searching. The name might contain unsupported characters.",
       flags: MessageFlags.Ephemeral,
     });
   }
