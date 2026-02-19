@@ -13,14 +13,13 @@ import {
  */
 function normalizeForSearch(str) {
   if (!str) return "";
-  // transliterate converts 𝐁𝐈𝐍𝐄 to BINE
-  // normalize("NFKD") decomposes combined characters
-  // replace regex removes everything that isn't a standard letter or number
+  // Transliterate handles the mathematical bold "𝐁𝐈𝐍𝐄" -> "BINE"
   return transliterate(str)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
-    .replace(/[^a-zA-Z0-9 ]/g, "") // Remove symbols/emojis but keep spaces for multi-word search
+    .replace(/[^a-zA-Z0-9 ]/g, " ") // Replace symbols/emojis with spaces
     .toLowerCase()
+    .replace(/\s+/g, " ") // Collapse multiple spaces
     .trim();
 }
 
@@ -37,9 +36,6 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  // Author metadata as per instructions
-  const author = { name: "LetsGamingDE", id: 272402865874534400n };
-
   if (!isAdmin(interaction)) {
     const noAdmin = createNoAdminEmbed();
     return interaction.reply({
@@ -62,32 +58,31 @@ export async function execute(interaction) {
   }
 
   try {
-    /* We fetch members using the raw search first. 
-       Discord's internal API is quite good at fuzzy matching nicknames.
+    /* STRATEGY CHANGE: 
+       Discord's 'query' API often fails on symbols like "—" or "🍂".
+       Instead, we fetch ALL members (or a large chunk) and filter them ourselves locally.
     */
-    const fetchedMembers = await guild.members.fetch({
-      query: rawSearch,
-      limit: 30,
-    });
+    const allMembers = await guild.members.fetch();
 
-    const matchedMembers = fetchedMembers.filter((member) => {
-      // We check all possible name fields
-      const searchPool = [
+    const matchedMembers = allMembers.filter((member) => {
+      // Check every name field available
+      const namesToCheck = [
         member.user.username,
         member.user.globalName,
         member.nickname,
         member.displayName,
-      ]
-        .filter(Boolean) // Remove nulls
-        .map((name) => normalizeForSearch(name))
-        .join(" "); // Combine into one string for easy "includes" check
+      ];
 
-      return searchPool.includes(normalizedSearch);
+      return namesToCheck.some((name) => {
+        if (!name) return false;
+        const normalizedName = normalizeForSearch(name);
+        return normalizedName.includes(normalizedSearch);
+      });
     });
 
     if (matchedMembers.size === 0) {
       const errorEmbed = createErrorEmbed(
-        `No users found matching "${rawSearch}".`,
+        `No users found matching "${rawSearch}".\n\n*Note: I searched through ${allMembers.size} members using deep normalization.*`,
       );
       return interaction.editReply({
         embeds: [errorEmbed],
@@ -95,16 +90,17 @@ export async function execute(interaction) {
       });
     }
 
-    const memberList = matchedMembers
+    // Limit results to 15 to avoid embed character limits
+    const results = [...matchedMembers.values()].slice(0, 15);
+    const memberList = results
       .map((member) => {
-        // Highlight if the display name is different from the username
         const hasNickname = member.nickname ? `(Nick: ${member.nickname})` : "";
         return `• **${member.displayName}** \`${member.user.tag}\` ${hasNickname}\n  ID: \`${member.user.id}\` | <@${member.user.id}>`;
       })
       .join("\n\n");
 
     const successEmbed = createSuccessEmbed(
-      `**Search Results for:** "${rawSearch}"\n\n${memberList}`,
+      `**Search Results for:** "${rawSearch}"\nFound ${matchedMembers.size} match(es):\n\n${memberList}${matchedMembers.size > 15 ? "\n\n*...and more results.*" : ""}`,
     );
 
     return interaction.editReply({
@@ -115,7 +111,7 @@ export async function execute(interaction) {
     console.error("Member Fetch Error:", error);
     return interaction.editReply({
       content:
-        "An error occurred while searching. The name might contain unsupported characters.",
+        "The member list is too large to fetch at once or the bot lacks 'Server Members Intent'.",
       flags: MessageFlags.Ephemeral,
     });
   }
