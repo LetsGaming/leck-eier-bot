@@ -170,7 +170,7 @@ client.on("interactionCreate", async (interaction) => {
   await loadCommands();
   await registerGlobalCommands();
 
-  client.once("ready", async () => {
+  client.once("clientReady", async () => {
     logger.info(`Bot logged in as ${client.user.tag}`);
 
     // Initialize Member Cache for the configured guild
