@@ -17,6 +17,11 @@ import {
   sendBirthdayMessages,
   updateBirthdayListFromMessage,
 } from "./services/birthdays.js";
+import {
+  initMemberCache,
+  updateCacheMember,
+  removeCacheMember,
+} from "./services/memberCache.js";
 import { isConfigGuild, loadConfig } from "./utils/utils.js";
 import { createErrorEmbed } from "./utils/embedUtils.js";
 import logger from "./utils/logger.js";
@@ -42,7 +47,6 @@ client.commands = new Collection();
 // Recursively load command files
 function getCommandFiles(dir) {
   let files = [];
-
   for (const file of readdirSync(dir)) {
     const full = path.join(dir, file);
     if (statSync(full).isDirectory()) {
@@ -51,16 +55,13 @@ function getCommandFiles(dir) {
       files.push(full);
     }
   }
-
   return files;
 }
 
 async function loadCommands() {
   const commandFiles = getCommandFiles(path.join(__dirname, "commands"));
-
   for (const file of commandFiles) {
     const command = await import(path.resolve(file));
-
     const enabled = config.commands?.[command.data.name]?.enabled ?? true;
 
     if (enabled && command.data && command.execute) {
@@ -76,11 +77,9 @@ async function registerGlobalCommands() {
   const commands = [...client.commands.map((cmd) => cmd.data.toJSON())];
 
   logger.info("Registering global slash commands...");
-
   await rest.put(Routes.applicationCommands(config.clientId), {
     body: commands,
   });
-
   logger.info("✔ Registered.");
 }
 
@@ -98,7 +97,6 @@ cron.schedule("0 0 * * *", async () => {
 
   const dateStr = `${dd}.${mm}`;
   const birthdays = loadBirthdaysFile();
-
   const birthdaysToday = birthdays[dateStr] || [];
 
   if (birthdaysToday && birthdaysToday.length > 0) {
@@ -110,9 +108,21 @@ cron.schedule("0 0 * * *", async () => {
   }
 });
 
+// --- Cache Sync Events ---
+client.on("guildMemberAdd", (member) => {
+  updateCacheMember(member);
+});
+
+client.on("guildMemberUpdate", (oldMember, newMember) => {
+  updateCacheMember(newMember);
+});
+
+client.on("guildMemberRemove", (member) => {
+  removeCacheMember(member.id);
+});
+
 // Auto-update when message is edited
 client.on("messageUpdate", async (oldMsg, newMsg) => {
-  // If an edit happens in the birthday channel, re-parse the list
   if (newMsg.channelId === config.birthdayListChannelId) {
     logger.info("Potential birthday list update detected via edit");
     await updateBirthdayListFromMessage(
@@ -143,7 +153,6 @@ client.on("interactionCreate", async (interaction) => {
     await cmd.execute(interaction);
   } catch (err) {
     logger.error(err);
-
     const errorEmbd = createErrorEmbed(
       "An error occurred while executing the command.",
     );
@@ -161,8 +170,20 @@ client.on("interactionCreate", async (interaction) => {
   await loadCommands();
   await registerGlobalCommands();
 
-  client.once("clientReady", async () => {
+  client.once("ready", async () => {
     logger.info(`Bot logged in as ${client.user.tag}`);
+
+    // Initialize Member Cache for the configured guild
+    const guild = client.guilds.cache.get(config.guildId);
+    if (guild) {
+      await initMemberCache(guild);
+    } else {
+      logger.error(
+        `Could not find guild with ID ${config.guildId} for caching.`,
+      );
+    }
+
+    // Initial birthday list parse
     await updateBirthdayListFromMessage(
       client,
       config.birthdayListChannelId,
