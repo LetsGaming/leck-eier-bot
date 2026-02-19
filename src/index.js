@@ -6,31 +6,23 @@ import {
   Routes,
   MessageFlags,
 } from "discord.js";
-import path from "path";
-import { fileURLToPath } from "url";
-import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
+import logger from "./utils/logger.js";
+import { loadConfig, isConfigGuild } from "./utils/utils.js";
 
+// Loaders & Handlers
+import { loadCommands } from "./loaders/commandLoader.js";
+import registerMemberEvents from "./events/memberEvents.js";
+import registerBirthdayWatcher from "./events/birthdayWatcher.js";
+import { initMemberCache } from "./services/memberCache.js";
 import {
   deleteBirthdayMessages,
   loadBirthdaysFile,
   sendBirthdayMessages,
   updateBirthdayListFromMessage,
 } from "./services/birthdays.js";
-import {
-  initMemberCache,
-  updateCacheMember,
-  removeCacheMember,
-} from "./services/memberCache.js";
-import { isConfigGuild, loadConfig } from "./utils/utils.js";
-import { createErrorEmbed } from "./utils/embedUtils.js";
-import logger from "./utils/logger.js";
 
 const config = loadConfig();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -42,154 +34,71 @@ const client = new Client({
 
 client.commands = new Collection();
 
-function getCommandFiles(dir) {
-  let files = [];
-  for (const file of readdirSync(dir)) {
-    const full = path.join(dir, file);
-    if (statSync(full).isDirectory()) {
-      files = files.concat(getCommandFiles(full));
-    } else if (file.endsWith(".js")) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-async function loadCommands() {
-  const commandFiles = getCommandFiles(path.join(__dirname, "commands"));
-  for (const file of commandFiles) {
-    const command = await import(path.resolve(file));
-    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
-
-    if (enabled && command.data && command.execute) {
-      client.commands.set(command.data.name, command);
-    } else {
-      logger.warn(`Skipping ${file}, missing data/execute or disabled`);
-    }
-  }
-}
-
-async function registerGlobalCommands() {
-  const rest = new REST({ version: "10" }).setToken(config.token);
-  const commands = [...client.commands.map((cmd) => cmd.data.toJSON())];
-
-  logger.info("Registering global slash commands...");
-  await rest.put(Routes.applicationCommands(config.clientId), {
-    body: commands,
-  });
-  logger.info("✔ Registered.");
-}
-
-// Midnight birthday cron
+// 1. Cron Jobs
 cron.schedule("0 0 * * *", async () => {
   await deleteBirthdayMessages(
     client,
     config.birthdayListChannelId,
     config.birthdayListMessageId,
   );
-
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, "0");
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-
-  const dateStr = `${dd}.${mm}`;
   const birthdays = loadBirthdaysFile();
-  const birthdaysToday = birthdays[dateStr] || [];
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2, "0")}.${String(today.getMonth() + 1).padStart(2, "0")}`;
 
-  if (birthdaysToday && birthdaysToday.length > 0) {
+  if (birthdays[dateStr]?.length > 0) {
     await sendBirthdayMessages(
       client,
       config.birthdayListChannelId,
-      birthdaysToday,
+      birthdays[dateStr],
     );
   }
 });
 
-// --- Cache Sync Events ---
-client.on("guildMemberAdd", (member) => {
-  logger.info(
-    `Member joined: ${member.user.tag} (${member.id}), adding to cache`,
-  );
-  updateCacheMember(member);
-});
-
-client.on("guildMemberUpdate", (oldMember, newMember) => {
-  updateCacheMember(newMember);
-});
-
-client.on("guildMemberRemove", (member) => {
-  logger.info(
-    `Member removed/left: ${member.user.tag} (${member.id}), removing from cache`,
-  );
-  removeCacheMember(member.id);
-});
-
-// --- Unified Birthday Watcher ---
-const triggerBirthdayUpdate = async (message) => {
-  if (message.channelId === config.birthdayListChannelId) {
-    logger.info(`Birthday channel activity detected (Msg: ${message.id})`);
-    // Re-parse starting from the original anchor
-    await updateBirthdayListFromMessage(
-      client,
-      config.birthdayListChannelId,
-      config.birthdayListMessageId,
-    );
-  }
-};
-
-client.on("messageUpdate", async (oldMsg, newMsg) => {
-  await triggerBirthdayUpdate(newMsg);
-});
-
-// Slash command handler
+// 2. Interaction Handler
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-
   const cmd = client.commands.get(interaction.commandName);
   if (!cmd) return;
 
   try {
     if (!isConfigGuild(interaction)) {
-      const errorEmbd = createErrorEmbed(
-        "This command can only be used in the configured guild.",
-      );
       return await interaction.reply({
-        embeds: [errorEmbd],
+        embeds: [createErrorEmbed("Only for configured guild.")],
         flags: MessageFlags.Ephemeral,
       });
     }
     await cmd.execute(interaction);
   } catch (err) {
     logger.error(err);
-    const errorEmbd = createErrorEmbed(
-      "An error occurred while executing the command.",
-    );
-    const errorMsg = { embeds: [errorEmbd], flags: MessageFlags.Ephemeral };
-
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(errorMsg);
-    } else {
-      await interaction.reply(errorMsg);
-    }
+    const msg = {
+      embeds: [createErrorEmbed("Command error.")],
+      flags: MessageFlags.Ephemeral,
+    };
+    interaction.replied || interaction.deferred
+      ? await interaction.followUp(msg)
+      : await interaction.reply(msg);
   }
 });
 
+// 3. Initialization Logic
 (async () => {
-  await loadCommands();
-  await registerGlobalCommands();
+  await loadCommands(client, config);
 
-  // Preserving clientReady as requested
+  // Slash Registration
+  const rest = new REST({ version: "10" }).setToken(config.token);
+  await rest.put(Routes.applicationCommands(config.clientId), {
+    body: [...client.commands.map((c) => c.data.toJSON())],
+  });
+
+  // Event Modules
+  registerMemberEvents(client);
+  registerBirthdayWatcher(client, config);
+
   client.once("clientReady", async () => {
     logger.info(`Bot logged in as ${client.user.tag}`);
 
     const guild = client.guilds.cache.get(config.guildId);
-    if (guild) {
-      await initMemberCache(guild);
-    } else {
-      logger.error(
-        `Could not find guild with ID ${config.guildId} for caching.`,
-      );
-    }
+    if (guild) await initMemberCache(guild);
 
     await updateBirthdayListFromMessage(
       client,
