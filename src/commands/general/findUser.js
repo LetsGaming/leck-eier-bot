@@ -8,9 +8,35 @@ import {
   createErrorEmbed,
 } from "../../utils/embedUtils.js";
 
+/**
+ * Normalizes complex strings.
+ * Handles Mathematical Bold (𝐁𝐈𝐍𝐄), Emojis (🍂), and standardizes the string.
+ */
 function normalizeForSearch(str) {
   if (!str) return "";
-  return transliterate(str)
+
+  // 1. Manually map mathematical bold/italic characters to standard latin
+  // This handles the specific "𝐁𝐈𝐍𝐄" case (Mathematical Bold Capital)
+  const fancyToNormal = (text) => {
+    return text.replace(/[\u1d400-\u1d7ff]/g, (char) => {
+      const cp = char.codePointAt(0);
+      // Bold A-Z (1D400-1D419) -> A-Z (65-90)
+      if (cp >= 0x1d400 && cp <= 0x1d419)
+        return String.fromCharCode(cp - 0x1d400 + 65);
+      // Bold a-z (1D41a-1D433) -> a-z (97-122)
+      if (cp >= 0x1d41a && cp <= 0x1d433)
+        return String.fromCharCode(cp - 0x1d41a + 97);
+      return char;
+    });
+  };
+
+  let normalized = fancyToNormal(str);
+
+  // 2. Use transliterate as a secondary fallback for other symbols
+  normalized = transliterate(normalized);
+
+  // 3. Decompose and remove diacritics/emojis/symbols
+  return normalized
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9 ]/g, " ")
@@ -44,6 +70,8 @@ export async function execute(interaction) {
     });
   }
 
+  interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
   const rawSearch = interaction.options.getString("servername", true);
   const normalizedSearch = normalizeForSearch(rawSearch);
   const members = getCachedMembers();
@@ -60,7 +88,7 @@ export async function execute(interaction) {
   });
 
   if (matchedMembers.size === 0) {
-    return interaction.reply({
+    return interaction.editReply({
       embeds: [createErrorEmbed(`No users found matching "${rawSearch}".`)],
       flags: MessageFlags.Ephemeral,
     });
@@ -75,7 +103,7 @@ export async function execute(interaction) {
     `**Search Results for:** "${rawSearch}"\n\n${memberList}`,
   );
 
-  return interaction.reply({
+  return interaction.editReply({
     embeds: [successEmbed],
     flags: MessageFlags.Ephemeral,
   });
