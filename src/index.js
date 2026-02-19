@@ -28,11 +28,9 @@ import logger from "./utils/logger.js";
 
 const config = loadConfig();
 
-// Fix __dirname for ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -44,7 +42,6 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Recursively load command files
 function getCommandFiles(dir) {
   let files = [];
   for (const file of readdirSync(dir)) {
@@ -110,6 +107,9 @@ cron.schedule("0 0 * * *", async () => {
 
 // --- Cache Sync Events ---
 client.on("guildMemberAdd", (member) => {
+  logger.info(
+    `Member joined: ${member.user.tag} (${member.id}), adding to cache`,
+  );
   updateCacheMember(member);
 });
 
@@ -118,19 +118,27 @@ client.on("guildMemberUpdate", (oldMember, newMember) => {
 });
 
 client.on("guildMemberRemove", (member) => {
+  logger.info(
+    `Member removed/left: ${member.user.tag} (${member.id}), removing from cache`,
+  );
   removeCacheMember(member.id);
 });
 
-// Auto-update when message is edited
-client.on("messageUpdate", async (oldMsg, newMsg) => {
-  if (newMsg.channelId === config.birthdayListChannelId) {
-    logger.info("Potential birthday list update detected via edit");
+// --- Unified Birthday Watcher ---
+const triggerBirthdayUpdate = async (message) => {
+  if (message.channelId === config.birthdayListChannelId) {
+    logger.info(`Birthday channel activity detected (Msg: ${message.id})`);
+    // Re-parse starting from the original anchor
     await updateBirthdayListFromMessage(
       client,
       config.birthdayListChannelId,
       config.birthdayListMessageId,
     );
   }
+};
+
+client.on("messageUpdate", async (oldMsg, newMsg) => {
+  await triggerBirthdayUpdate(newMsg);
 });
 
 // Slash command handler
@@ -170,10 +178,10 @@ client.on("interactionCreate", async (interaction) => {
   await loadCommands();
   await registerGlobalCommands();
 
+  // Preserving clientReady as requested
   client.once("clientReady", async () => {
     logger.info(`Bot logged in as ${client.user.tag}`);
 
-    // Initialize Member Cache for the configured guild
     const guild = client.guilds.cache.get(config.guildId);
     if (guild) {
       await initMemberCache(guild);
@@ -183,7 +191,6 @@ client.on("interactionCreate", async (interaction) => {
       );
     }
 
-    // Initial birthday list parse
     await updateBirthdayListFromMessage(
       client,
       config.birthdayListChannelId,
