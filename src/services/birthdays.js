@@ -6,10 +6,8 @@ import {
   ensureDataDirectoryExists,
 } from "../utils/utils.js";
 
-// Make sure data/ folder exists
 ensureDataDirectoryExists();
 
-// File paths
 const SETTINGS_FILE = getDataFilePath("settings.json");
 const BIRTHDAYS_FILE = getDataFilePath("birthdays.json");
 
@@ -25,7 +23,6 @@ export function saveBirthdaysFile(data) {
   saveToFile(BIRTHDAYS_FILE, data);
 }
 
-// Settings Helpers
 function loadSettingsFile() {
   try {
     return loadDataFile("settings.json");
@@ -34,7 +31,6 @@ function loadSettingsFile() {
       birthdayTemplate:
         "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}",
     };
-
     saveToFile(SETTINGS_FILE, defaultSettings);
     return defaultSettings;
   }
@@ -50,7 +46,6 @@ const personRegex = /^\s*(<@!?\d+>|@[^,—–-]+?)(?:\s*[—–-]\s*(.+?))?\s*$/
 export function parseBirthdayMessage(text) {
   const result = {};
   let m;
-
   while ((m = blockRegex.exec(text)) !== null) {
     const date = m[1];
     const rest = m[2].trim();
@@ -79,18 +74,14 @@ export function parseBirthdayMessage(text) {
         }
         continue;
       }
-
       const mention = pm[1].trim();
       let name = pm[2] ? pm[2].trim() : null;
       const userId = extractIdFromMention(mention);
-
       if (name === "") name = null;
-
       result[date] = result[date] || [];
       result[date].push({ mention, userId, name });
     }
   }
-
   return result;
 }
 
@@ -106,11 +97,10 @@ function sleep(ms) {
 export async function resolveParsedBirthdaysWithDiscord(
   client,
   parsed,
-  guildId
+  guildId,
 ) {
   const out = {};
   const allIds = new Set();
-
   for (const entries of Object.values(parsed)) {
     for (const e of entries) {
       if (e.userId) allIds.add(e.userId);
@@ -119,61 +109,70 @@ export async function resolveParsedBirthdaysWithDiscord(
 
   const guild = client.guilds.cache.get(guildId);
   if (!guild) throw new Error(`Guild ${guildId} not found`);
-
   const fetchedMembers = new Map();
 
   for (const id of allIds) {
     let member = null;
-
     try {
       member = await guild.members.fetch(id);
     } catch {
-      member = null; // left / kicked / invalid ID
+      member = null;
     }
-
     fetchedMembers.set(id, member);
-
-    await sleep(120); // rate-limit protection
+    await sleep(120);
   }
 
   for (const [date, entries] of Object.entries(parsed)) {
     out[date] = [];
-
     for (const entry of entries) {
       const member = fetchedMembers.get(entry.userId);
       let name = entry.name;
-
       if (member) {
         name =
           member.displayName || member.user.globalName || member.user.username;
       }
-
-      out[date].push({
-        ...entry,
-        name,
-        discordMember: member,
-      });
+      out[date].push({ ...entry, name, discordMember: member });
     }
   }
-
   return out;
 }
 
 export async function updateBirthdayListFromMessage(
   client,
   channelId,
-  messageId
+  messageId,
 ) {
   const channel = await client.channels.fetch(channelId);
-  const message = await channel.messages.fetch(messageId);
+  if (!channel) return;
 
-  const parsed = parseBirthdayMessage(message.content);
+  const anchorMessage = await channel.messages.fetch(messageId);
+  const authorId = anchorMessage.author.id;
+  const subsequentMessages = await channel.messages.fetch({
+    after: messageId,
+    limit: 50,
+  });
+
+  let fullContent = anchorMessage.content;
+  const sortedMessages = [...subsequentMessages.values()].sort(
+    (a, b) => a.createdTimestamp - b.createdTimestamp,
+  );
+
+  for (const msg of sortedMessages) {
+    // Only continue the chain if the message contains the list identifier
+    if (msg.author.id === authorId && msg.content.includes("ღ:")) {
+      fullContent += "\n" + msg.content;
+    } else if (msg.author.id === authorId) {
+      // Stop as soon as the list author sends a message that isn't part of the list
+      break;
+    }
+  }
+
+  const parsed = parseBirthdayMessage(fullContent);
   const resolved = await resolveParsedBirthdaysWithDiscord(
     client,
     parsed,
-    channel.guild.id
+    channel.guild.id,
   );
-
   saveBirthdaysFile(resolved);
   return resolved;
 }
@@ -184,7 +183,6 @@ export function getTodaysBirthdaysFromFileAsArray() {
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const key = `${dd}.${mm}`;
-
   return (birthdays[key] || []).map((entry) => ({
     mention: entry.mention,
     userId: entry.userId,
@@ -196,20 +194,15 @@ export function getNextBirthdayFromFile() {
   const birthdays = loadBirthdaysFile();
   const now = new Date();
   const currentYear = now.getFullYear();
-
-  // Map each date string to a full Date object + entries
   const allDates = Object.entries(birthdays).map(([key, entries]) => {
-    const [dd, mm] = key.split(".").map(x => parseInt(x, 10));
+    const [dd, mm] = key.split(".").map((x) => parseInt(x, 10));
     let date = new Date(currentYear, mm - 1, dd);
     if (date < now) {
       date = new Date(currentYear + 1, mm - 1, dd);
     }
     return { date, entries };
   });
-
-  // Sort by date
   allDates.sort((a, b) => a.date - b.date);
-
   return allDates.length > 0 ? allDates[0] : null;
 }
 
@@ -218,7 +211,6 @@ export function buildBirthdayMessage(b, pingEveryone = true) {
   const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
   const everyoneMention = pingEveryone ? "@everyone" : "";
   const template = getCurrentTemplate();
-
   return template
     .replace(/{userMention}/g, userMention)
     .replace(/{everyoneMention}/g, everyoneMention)
@@ -229,17 +221,15 @@ export async function sendBirthdayMessages(
   client,
   channelId,
   birthdaysArray,
-  pingEveryone = true
+  pingEveryone = true,
 ) {
   const channel = await client.channels.fetch(channelId);
-
   const settings = loadSettingsFile();
   let firstBirthdayMessageId = settings.firstBirthdayMessageId || null;
 
   for (const b of birthdaysArray) {
     const msgContent = buildBirthdayMessage(b, pingEveryone);
     const sentMsg = await channel.send(msgContent);
-
     if (!firstBirthdayMessageId) {
       firstBirthdayMessageId = sentMsg.id;
       settings.firstBirthdayMessageId = firstBirthdayMessageId;
@@ -248,128 +238,60 @@ export async function sendBirthdayMessages(
   }
 }
 
-/**
- * Deletes all birthday messages in a channel down to (and including)
- * the firstBirthdayMessageId stored in settings.json.
- * Ensures the birthday list message is NEVER deleted.
- *
- * @param {import("discord.js").Client} client
- * @param {string} channelId
- * @param {string} birthdayListMessageId
- * @returns {Promise<number>} deletedCount
- */
 export async function deleteBirthdayMessages(
   client,
   channelId,
-  birthdayListMessageId
+  birthdayListMessageId,
 ) {
   const settings = loadSettingsFile();
   const firstId = settings.firstBirthdayMessageId;
-
-  if (!firstId) {
-    return 0;
-  }
+  if (!firstId) return 0;
 
   const channel = await client.channels.fetch(channelId);
-
-  if (!channel || !channel.isTextBased()) {
-    logger.warn(`Channel ${channelId} not found or not text-based.`);
-    return 0;
-  }
+  if (!channel || !channel.isTextBased()) return 0;
 
   let deletedCount = 0;
   let reachedFirst = false;
   let lastMessageId = undefined;
-  const seen = new Set(); // protect against infinite loops
+  const seen = new Set();
 
   while (!reachedFirst) {
     const messages = await channel.messages.fetch({
       limit: 100,
       before: lastMessageId,
     });
-
-    if (messages.size === 0) {
-      logger.warn(
-        "Reached end of channel history without finding firstBirthdayMessageId."
-      );
-      break;
-    }
-
-    // Detect repeated fetches (Discord sometimes returns same messages twice)
-    const firstMsgOfBatch = messages.first();
-    if (firstMsgOfBatch && seen.has(firstMsgOfBatch.id)) {
-      logger.warn(
-        "Encountered repeated batch. Breaking to avoid infinite loop."
-      );
-      break;
-    }
+    if (messages.size === 0) break;
+    if (messages.first() && seen.has(messages.first().id)) break;
 
     for (const msg of messages.values()) {
       seen.add(msg.id);
-      // If reached the target, delete it and stop further processing
-      const isFirstMessage = msg.id === firstId;
-
-      // Always delete the first message by design
-      if (isFirstMessage) {
+      if (msg.id === firstId) {
         if (msg.id !== birthdayListMessageId) {
           try {
             await msg.delete();
             deletedCount++;
           } catch (err) {
-            logger.warn(
-              `Failed to delete first birthday message ${msg.id}:`,
-              err
-            );
+            logger.warn(`Delete fail: ${msg.id}`, err);
           }
-        } else {
-          logger.error(
-            "ERROR: firstBirthdayMessageId == birthdayListMessageId. This should NEVER happen."
-          );
         }
-
         reachedFirst = true;
         break;
       }
-
-      // Skip the list message for safety
-      if (msg.id === birthdayListMessageId) {
-        continue;
-      }
-
-      // Try deleting other messages
+      if (msg.id === birthdayListMessageId) continue;
       try {
         await msg.delete();
         deletedCount++;
       } catch (err) {
-        // Common error: older than 14 days → cannot be deleted
-        if (err.code === 50034) {
-          logger.warn(
-            `Message ${msg.id} too old to delete (older than 14 days). Skipping.`
-          );
-        } else {
-          logger.warn(`Failed to delete message ${msg.id}:`, err);
-        }
+        if (err.code !== 50034) logger.warn(`Delete fail: ${msg.id}`, err);
       }
-
-      // Rate-limit friendliness: 250ms is very safe for large batch deletes
       await sleep(250);
     }
-
-    // Prepare for next batch
     lastMessageId = messages.last().id;
   }
-
-  // Clear stored ID only if we found & processed it
   if (reachedFirst) {
     delete settings.firstBirthdayMessageId;
     saveSettingsFile(settings);
-    logger.info("Birthday messages deleted and settings cleared.");
-  } else {
-    logger.warn(
-      "Did NOT delete firstBirthdayMessageId because the message was never found."
-    );
   }
-
   return deletedCount;
 }
 

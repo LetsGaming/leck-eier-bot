@@ -4,14 +4,19 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
-  MessageFlags
+  MessageFlags,
 } from "discord.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, statSync } from "fs";
 import cron from "node-cron";
 
-import { deleteBirthdayMessages, loadBirthdaysFile, sendBirthdayMessages, updateBirthdayListFromMessage } from "./services/birthdays.js";
+import {
+  deleteBirthdayMessages,
+  loadBirthdaysFile,
+  sendBirthdayMessages,
+  updateBirthdayListFromMessage,
+} from "./services/birthdays.js";
 import { isConfigGuild, loadConfig } from "./utils/utils.js";
 import { createErrorEmbed } from "./utils/embedUtils.js";
 import logger from "./utils/logger.js";
@@ -24,7 +29,11 @@ const __dirname = path.dirname(__filename);
 
 // Create client
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 client.commands = new Collection();
@@ -63,21 +72,24 @@ async function loadCommands() {
 
 async function registerGlobalCommands() {
   const rest = new REST({ version: "10" }).setToken(config.token);
-  const commands = [...client.commands.map(cmd => cmd.data.toJSON())];
+  const commands = [...client.commands.map((cmd) => cmd.data.toJSON())];
 
   logger.info("Registering global slash commands...");
 
-  await rest.put(
-    Routes.applicationCommands(config.clientId), 
-    { body: commands }
-  );
+  await rest.put(Routes.applicationCommands(config.clientId), {
+    body: commands,
+  });
 
   logger.info("✔ Registered.");
 }
 
 // Midnight birthday cron
 cron.schedule("0 0 * * *", async () => {
-  await deleteBirthdayMessages(client, config.birthdayListChannelId, config.birthdayListMessageId);
+  await deleteBirthdayMessages(
+    client,
+    config.birthdayListChannelId,
+    config.birthdayListMessageId,
+  );
 
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");
@@ -92,36 +104,48 @@ cron.schedule("0 0 * * *", async () => {
     await sendBirthdayMessages(
       client,
       config.birthdayListChannelId,
-      birthdaysToday
+      birthdaysToday,
     );
   }
 });
 
 // Auto-update when message is edited
 client.on("messageUpdate", async (oldMsg, newMsg) => {
-  if (newMsg.id === config.birthdayListMessageId) {
-    logger.info("Birthday list updated (edit detected)");
-    await updateBirthdayListFromMessage(client, newMsg.channelId, newMsg.id);
+  // If an edit happens in the birthday channel, re-parse the list
+  if (newMsg.channelId === config.birthdayListChannelId) {
+    logger.info("Potential birthday list update detected via edit");
+    await updateBirthdayListFromMessage(
+      client,
+      config.birthdayListChannelId,
+      config.birthdayListMessageId,
+    );
   }
 });
 
 // Slash command handler
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const cmd = client.commands.get(interaction.commandName);
   if (!cmd) return;
 
   try {
-    if(!isConfigGuild(interaction)) {
-      const errorEmbd = createErrorEmbed("This command can only be used in the configured guild.");
-      return await interaction.reply({ embeds: [errorEmbd], flags: MessageFlags.Ephemeral });
+    if (!isConfigGuild(interaction)) {
+      const errorEmbd = createErrorEmbed(
+        "This command can only be used in the configured guild.",
+      );
+      return await interaction.reply({
+        embeds: [errorEmbd],
+        flags: MessageFlags.Ephemeral,
+      });
     }
     await cmd.execute(interaction);
   } catch (err) {
     logger.error(err);
 
-    const errorEmbd = createErrorEmbed("An error occurred while executing the command.");
+    const errorEmbd = createErrorEmbed(
+      "An error occurred while executing the command.",
+    );
     const errorMsg = { embeds: [errorEmbd], flags: MessageFlags.Ephemeral };
 
     if (interaction.replied || interaction.deferred) {
@@ -136,9 +160,13 @@ client.on("interactionCreate", async interaction => {
   await loadCommands();
   await registerGlobalCommands();
 
-  client.once("clientReady", async () => {
+  client.once("ready", async () => {
     logger.info(`Bot logged in as ${client.user.tag}`);
-    await updateBirthdayListFromMessage(client, config.birthdayListChannelId, config.birthdayListMessageId);
+    await updateBirthdayListFromMessage(
+      client,
+      config.birthdayListChannelId,
+      config.birthdayListMessageId,
+    );
   });
 
   await client.login(config.token);
