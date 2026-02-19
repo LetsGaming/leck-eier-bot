@@ -8,23 +8,33 @@ import {
   createErrorEmbed,
 } from "../../utils/embedUtils.js";
 
-/**
- * Normalizes complex strings.
- * Handles Mathematical Bold (𝐁𝐈𝐍𝐄), Emojis (🍂), and standardizes the string.
- */
 function normalizeForSearch(str) {
   if (!str) return "";
 
-  const fancyToNormal = (text) => {
-    return text.replace(/[\u1d400-\u1d7ff]/g, (char) => {
+  const unfancy = (text) => {
+    return text.replace(/[\u{1D400}-\u{1D7FF}]/gu, (char) => {
       const cp = char.codePointAt(0);
-      if (cp >= 0x1d400 && cp <= 0x1d419) return String.fromCharCode(cp - 0x1d400 + 65);
-      if (cp >= 0x1d41a && cp <= 0x1d433) return String.fromCharCode(cp - 0x1d41a + 97);
+      if (cp >= 0x1d400 && cp <= 0x1d419)
+        return String.fromCharCode(cp - 0x1d400 + 65);
+      if (cp >= 0x1d41a && cp <= 0x1d433)
+        return String.fromCharCode(cp - 0x1d41a + 97);
+      if (cp >= 0x1d434 && cp <= 0x1d44d)
+        return String.fromCharCode(cp - 0x1d434 + 65);
+      if (cp >= 0x1d44e && cp <= 0x1d467)
+        return String.fromCharCode(cp - 0x1d44e + 97);
+      if (cp >= 0x1d468 && cp <= 0x1d481)
+        return String.fromCharCode(cp - 0x1d468 + 65);
+      if (cp >= 0x1d482 && cp <= 0x1d49b)
+        return String.fromCharCode(cp - 0x1d482 + 97);
+      if (cp >= 0x1d5a0 && cp <= 0x1d5b9)
+        return String.fromCharCode(cp - 0x1d5a0 + 65);
+      if (cp >= 0x1d5ba && cp <= 0x1d5d3)
+        return String.fromCharCode(cp - 0x1d5ba + 97);
       return char;
     });
   };
 
-  let normalized = fancyToNormal(str);
+  let normalized = unfancy(str);
   normalized = transliterate(normalized);
 
   return normalized
@@ -58,12 +68,11 @@ export async function execute(interaction) {
 
   if (!isCacheReady()) {
     return interaction.reply({
-      content: "The member cache is still building. Please wait a moment.",
+      content: "The member cache is still building...",
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  // CRITICAL FIX: Added await here
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const rawSearch = interaction.options.getString("servername", true);
@@ -83,7 +92,7 @@ export async function execute(interaction) {
 
   if (matchedMembers.size === 0) {
     return interaction.editReply({
-      embeds: [createErrorEmbed(`No users found matching "${rawSearch}".`, true)],
+      embeds: [createErrorEmbed(`No users found matching "${rawSearch}".`)],
     });
   }
 
@@ -96,7 +105,5 @@ export async function execute(interaction) {
     `**Search Results for:** "${rawSearch}"\n\n${memberList}`,
   );
 
-  return interaction.editReply({
-    embeds: [successEmbed],
-  });
+  return interaction.editReply({ embeds: [successEmbed] });
 }
