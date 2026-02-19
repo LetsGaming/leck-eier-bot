@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function loadCommands(client, config) {
-  const commandsPath = path.join(__dirname, "../../commands");
+  const commandsPath = path.join(__dirname, "../commands");
   const commandFiles = getCommandFiles(commandsPath);
 
   for (const file of commandFiles) {
