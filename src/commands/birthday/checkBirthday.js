@@ -12,13 +12,13 @@ import { createEmbed, createNoAdminEmbed } from "../../utils/embedUtils.js";
 export const data = new SlashCommandBuilder()
   .setName("checkbirthday")
   .setDescription(
-    "Manually checks today's birthdays and optionally sends messages."
+    "Manually checks today's birthdays and optionally sends messages.",
   )
   .addBooleanOption((opt) =>
     opt
       .setName("sendmessage")
       .setDescription("If true, the bot will send the birthday messages.")
-      .setRequired(false)
+      .setRequired(false),
   );
 
 export async function execute(interaction) {
@@ -30,6 +30,8 @@ export async function execute(interaction) {
       flags: MessageFlags.Ephemeral,
     });
   }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const birthdays = getTodaysBirthdaysFromFileAsArray();
   const sendMessage = interaction.options.getBoolean("sendmessage") ?? false;
@@ -87,7 +89,7 @@ export async function execute(interaction) {
       interaction.client,
       interaction.channelId,
       birthdays,
-      shouldPingEveryone
+      shouldPingEveryone,
     );
   }
 }
