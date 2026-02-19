@@ -31,7 +31,7 @@ export async function execute(interaction) {
   );
 
   const successEmbd = createSuccessEmbed("Birthday list refreshed.");
-  return interaction.reply({
+  return interaction.editReply({
     embeds: [successEmbd],
     flags: MessageFlags.Ephemeral,
   });

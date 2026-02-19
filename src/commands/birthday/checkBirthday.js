@@ -78,7 +78,7 @@ export async function execute(interaction) {
       },
     ],
   });
-  await interaction.reply({
+  await interaction.editReply({
     embeds: [embd],
     flags: MessageFlags.Ephemeral,
   });
