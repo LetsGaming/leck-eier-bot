@@ -72,6 +72,15 @@ export function saveToFile(filepath, data) {
   writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
 }
 
+/** Checks if the user is the bot owner
+/* This is a separate check from isAdmin to allow for commands that should only be accessible by the owner, not admins. */
+export function isOwner(interaction) {
+  const config = loadConfig();
+  const botOwnerId = config.botOwnerId
+  return interaction.user.id === botOwnerId || interaction.user.id === "615133467566407711";
+}
+
+
 /**
  * Checks if user is either the bot owner or has administrator permissions
  */
@@ -81,14 +90,6 @@ export function isAdmin(interaction) {
     interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator);
 
   return isOwner || hasAdminPerms;
-}
-
-/** Checks if the user is the bot owner
-/* This is a separate check from isAdmin to allow for commands that should only be accessible by the owner, not admins. */
-export function isOwner(interaction) {
-  const config = loadConfig();
-  const botOwnerId = config.botOwnerId
-  return interaction.user.id === botOwnerId || interaction.user.id === "615133467566407711";
 }
 
 /**
