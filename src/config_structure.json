@@ -8,6 +8,10 @@
   "commands": {
     "refreshbirthdays": {
       "enabled": true
+    },
+    "cleardm": {
+      "enabled": true,
+      "guildOnly": false
     }
   }
 }

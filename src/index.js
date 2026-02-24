@@ -61,17 +61,20 @@ client.on("interactionCreate", async (interaction) => {
   if (!cmd) return;
 
   try {
-    if (!isConfigGuild(interaction)) {
+    // Check if the command is restricted to the configured guild
+    // If guildOnly is false, it skips the guild check entirely
+    if (cmd.guildOnly && !isConfigGuild(interaction)) {
       return await interaction.reply({
-        embeds: [createErrorEmbed("Only for configured guild.")],
+        content: "❌ This command can only be used in the main server.",
         flags: MessageFlags.Ephemeral,
       });
     }
+
     await cmd.execute(interaction);
   } catch (err) {
     logger.error(err);
     const msg = {
-      embeds: [createErrorEmbed("Command error.")],
+      content: "⚠️ Command error occurred.",
       flags: MessageFlags.Ephemeral,
     };
     interaction.replied || interaction.deferred

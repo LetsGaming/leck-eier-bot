@@ -12,7 +12,13 @@ export async function loadCommands(client, config) {
 
   for (const file of commandFiles) {
     const command = await import(path.resolve(file));
-    const enabled = config.commands?.[command.data.name]?.enabled ?? true;
+
+    // Get config for this specific command
+    const cmdConfig = config.commands?.[command.data.name];
+    const enabled = cmdConfig?.enabled ?? true;
+
+    // Attach the guildOnly flag to the command object (defaulting to true if not specified)
+    command.guildOnly = cmdConfig?.guildOnly ?? true;
 
     if (enabled && command.data && command.execute) {
       client.commands.set(command.data.name, command);

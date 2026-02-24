@@ -11,6 +11,7 @@ import logger from "../utils/logger.js";
 export default function registerMemberEvents(client) {
   // Add member to cache on join
   client.on("guildMemberAdd", (member) => {
+    logger.info(`New member joined: ${member.user.tag} (${member.id})`);
     updateCacheMember(member);
   });
 
