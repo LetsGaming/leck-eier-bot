@@ -1,6 +1,6 @@
 import path from "path";
 import { readdirSync, statSync } from "fs";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url"; // Added pathToFileURL for safer imports
 import logger from "../utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,19 +11,35 @@ export async function loadCommands(client, config) {
   const commandFiles = getCommandFiles(commandsPath);
 
   for (const file of commandFiles) {
-    const command = await import(path.resolve(file));
+    // Use pathToFileURL to ensure Windows/Linux compatibility with ESM imports
+    const fileUrl = pathToFileURL(path.resolve(file)).href;
+    const commandModule = await import(fileUrl);
 
-    // Get config for this specific command
-    const cmdConfig = config.commands?.[command.data.name];
+    // The name is inside commandModule.data.name
+    const commandName = commandModule.data?.name;
+
+    if (!commandName) {
+      logger.warn(
+        `Skipping ${file}: No command name found in SlashCommandBuilder data.`,
+      );
+      continue;
+    }
+
+    const cmdConfig = config.commands?.[commandName];
     const enabled = cmdConfig?.enabled ?? true;
 
-    // Attach the guildOnly flag to the command object (defaulting to true if not specified)
-    command.guildOnly = cmdConfig?.guildOnly ?? true;
+    if (enabled && commandModule.execute) {
+      // Create a NEW object so it's extensible
+      const commandObject = {
+        data: commandModule.data,
+        execute: commandModule.execute,
+        // Pull guildOnly from config, default to true if not specified
+        guildOnly: cmdConfig?.guildOnly ?? true,
+      };
 
-    if (enabled && command.data && command.execute) {
-      client.commands.set(command.data.name, command);
+      client.commands.set(commandName, commandObject);
     } else {
-      logger.warn(`Skipping ${file}, missing data/execute or disabled`);
+      logger.warn(`Skipping ${file}: Disabled or missing execute function.`);
     }
   }
 }

@@ -58,7 +58,12 @@ cron.schedule("0 0 * * *", async () => {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const cmd = client.commands.get(interaction.commandName);
-  if (!cmd) return;
+
+  if (!cmd)
+    return await interaction.reply({
+      content: "❌ Command not found, or disabled.",
+      flags: MessageFlags.Ephemeral,
+    });
 
   try {
     // Check if the command is restricted to the configured guild
