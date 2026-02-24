@@ -3,25 +3,24 @@ import {
   MessageFlags,
   AttachmentBuilder,
 } from "discord.js";
-import { isAdmin } from "../../utils/utils.js";
+import { isOwner } from "../../utils/utils.js";
 
 export const data = new SlashCommandBuilder()
   .setName("cleardm")
   .setDescription(
-    "Deletes the bot's messages in your DMs with an optional backup.",
+    "Deletes all bot messages in your DMs (handles more than 100).",
   )
   .addBooleanOption((opt) =>
     opt
       .setName("save_history")
       .setDescription(
-        "If true, sends a .txt file of the messages before deleting them.",
+        "If true, sends a .txt file of all messages before deleting them.",
       )
       .setRequired(false),
   );
 
 export async function execute(interaction) {
-  // Owner check
-  if (!isAdmin(interaction)) {
+  if (!isOwner(interaction)) {
     return interaction.reply({
       content: "❌ You do not have permission to use this command.",
       flags: MessageFlags.Ephemeral,
@@ -34,76 +33,87 @@ export async function execute(interaction) {
   const dmChannel = await interaction.user.createDM();
 
   try {
-    // Fetch last 100 messages from the DM channel
-    const messages = await dmChannel.messages.fetch({ limit: 100 });
-    // Bots can only delete their own messages in DMs
-    const botMessages = messages.filter(
-      (m) => m.author.id === interaction.client.user.id,
-    );
+    let allBotMessages = [];
+    let lastId = null;
+    let fetching = true;
 
-    if (botMessages.size === 0) {
+    // 1. Fetch ALL messages (Looping 100 at a time)
+    while (fetching) {
+      const options = { limit: 100 };
+      if (lastId) options.before = lastId;
+
+      const fetched = await dmChannel.messages.fetch(options);
+      if (fetched.size === 0) {
+        fetching = false;
+        break;
+      }
+
+      // Filter only bot messages
+      const batch = fetched.filter(
+        (m) => m.author.id === interaction.client.user.id,
+      );
+      allBotMessages.push(...batch.values());
+
+      lastId = fetched.last().id;
+
+      // If we fetched fewer than 100 total messages, we've reached the end of history
+      if (fetched.size < 100) fetching = false;
+    }
+
+    if (allBotMessages.length === 0) {
       return interaction.editReply({
         content: "ℹ️ No bot messages found to delete.",
         flags: MessageFlags.Ephemeral,
       });
     }
 
-    let logContent = `CLEARED DM LOG\n`;
-    logContent += `Exported on: ${new Date().toLocaleString("de-DE")}\n`;
-    logContent += `--------------------------------------------------\n\n`;
-
-    // 1. Generate the backup if requested
+    // 2. Optional Backup
+    let logContent = `FULL CLEARED DM LOG\nExported: ${new Date().toLocaleString("de-DE")}\n----------------------------------\n\n`;
     if (shouldSave) {
-      const sorted = [...botMessages.values()].reverse();
-      sorted.forEach((msg) => {
-        const time = msg.createdAt.toLocaleString("de-DE");
-        logContent += `[${time}] BOT:\n${msg.cleanContent || "[Embed/Media]"}\n`;
-
-        if (msg.attachments.size > 0) {
-          msg.attachments.forEach(
-            (att) => (logContent += ` > Attachment: ${att.url}\n`),
-          );
-        }
+      // Reverse to chronological order for the log
+      [...allBotMessages].reverse().forEach((msg) => {
+        logContent += `[${msg.createdAt.toLocaleString("de-DE")}] BOT:\n${msg.cleanContent || "[Media]"}\n`;
+        msg.attachments.forEach(
+          (att) => (logContent += ` > Link: ${att.url}\n`),
+        );
         logContent += `\n`;
       });
     }
 
-    // 2. Perform the deletion
+    // 3. Delete messages one-by-one
     let deletedCount = 0;
-    for (const msg of botMessages.values()) {
+    for (const msg of allBotMessages) {
       try {
         await msg.delete();
         deletedCount++;
-        // 500ms delay to avoid aggressive rate limiting in DMs
+        // Keep the 500ms delay to prevent Discord's "Spam Trigger"
         await new Promise((r) => setTimeout(r, 500));
       } catch (e) {
-        // Continue if a specific message fails to delete
         continue;
       }
     }
 
-    // 3. Final Reply
+    // 4. Final Response
     if (shouldSave) {
       const buffer = Buffer.from(logContent, "utf-8");
       const attachment = new AttachmentBuilder(buffer, {
-        name: "dm-backup.txt",
+        name: "dm-full-backup.txt",
       });
-
       await interaction.editReply({
-        content: `✅ Deleted ${deletedCount} messages. Here is your backup:`,
+        content: `✅ Full wipe complete. Deleted **${deletedCount}** messages.`,
         files: [attachment],
         flags: MessageFlags.Ephemeral,
       });
     } else {
       await interaction.editReply({
-        content: `✅ Successfully deleted ${deletedCount} messages from our DMs.`,
+        content: `✅ Successfully wiped **${deletedCount}** bot messages from our DMs.`,
         flags: MessageFlags.Ephemeral,
       });
     }
   } catch (error) {
-    console.error("Error in cleardm:", error);
+    console.error("Error in full cleardm:", error);
     await interaction.editReply({
-      content: "⚠️ An error occurred while trying to clear the DMs.",
+      content: "⚠️ An error occurred during the deep clean.",
       flags: MessageFlags.Ephemeral,
     });
   }
