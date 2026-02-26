@@ -6,7 +6,7 @@ import DailyRotateFile from "winston-daily-rotate-file";
 const { combine, printf, timestamp, colorize, errors, splat, json } = format;
 
 // 1. Use environment variables for flexibility
-const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "logs");
+const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "..", "logs");
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 const RETENTION_DAYS = "14d";
 
