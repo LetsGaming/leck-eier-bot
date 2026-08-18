@@ -1,13 +1,28 @@
 {
     "name": "leck-eier-bot",
     "version": "1.0.0",
-    "main": "index.js",
+    "main": "dist/index.js",
     "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "tsx watch src/index.ts",
+        "typecheck": "tsc --noEmit",
+        "config:template": "tsx scripts/generateConfigTemplate.ts"
+    },
     "dependencies": {
+        "better-sqlite3": "^13.0.3",
         "discord.js": "^14.25.1",
         "node-cron": "^4.2.1",
         "transliteration": "^2.6.1",
         "winston": "^3.19.0",
-        "winston-daily-rotate-file": "^5.0.0"
+        "winston-daily-rotate-file": "^5.0.0",
+        "zod": "^4.4.3"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^9.6.0",
+        "@types/node": "^26.2.0",
+        "tsx": "^4.23.12",
+        "typescript": "^7.0.2"
     }
 }

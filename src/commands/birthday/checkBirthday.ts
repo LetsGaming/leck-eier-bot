@@ -1,16 +1,17 @@
-// src/commands/checkBirthday.js
-import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
 import {
-  getTodaysBirthdaysFromFileAsArray,
-  getNextBirthdayFromFile,
+  getTodaysBirthdays,
+  getNextBirthday,
   getCurrentTemplate,
   sendBirthdayMessages,
 } from "../../services/birthdays.js";
-import { isAdmin } from "../../utils/utils.js";
-import { createEmbed, createNoAdminEmbed } from "../../utils/embedUtils.js";
+import { createEmbed } from "../../utils/embedUtils.js";
+import { CommandName, CommandPermission, EmbedColor } from "../../constants.js";
+
+export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
-  .setName("checkbirthday")
+  .setName(CommandName.CheckBirthday)
   .setDescription(
     "Manually checks today's birthdays and optionally sends messages.",
   )
@@ -21,23 +22,14 @@ export const data = new SlashCommandBuilder()
       .setRequired(false),
   );
 
-export async function execute(interaction) {
-  // admin check
-  if (!isAdmin(interaction)) {
-    const noAdmin = createNoAdminEmbed();
-    return interaction.reply({
-      embeds: [noAdmin],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
+export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const birthdays = getTodaysBirthdaysFromFileAsArray();
+  const birthdays = getTodaysBirthdays();
   const sendMessage = interaction.options.getBoolean("sendmessage") ?? false;
 
-  if (!birthdays || birthdays.length === 0) {
-    const nextBirthday = getNextBirthdayFromFile();
+  if (birthdays.length === 0) {
+    const nextBirthday = getNextBirthday();
     let replyContent = "🎂 No birthdays today!";
 
     if (nextBirthday) {
@@ -48,7 +40,6 @@ export async function execute(interaction) {
 
     return interaction.editReply({
       content: replyContent,
-      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -65,7 +56,7 @@ export async function execute(interaction) {
   const embd = createEmbed({
     title: "🎂 Birthdays Today",
     description: `Found ${birthdays.length} birthday(s) today.`,
-    color: 0x55ff55,
+    color: EmbedColor.Success,
     fields: [
       {
         name: "Birthdays",
@@ -80,7 +71,6 @@ export async function execute(interaction) {
   });
   await interaction.editReply({
     embeds: [embd],
-    flags: MessageFlags.Ephemeral,
   });
 
   // Only send messages if sendmessage=true

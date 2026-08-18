@@ -1,0 +1,14 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      # LOG_DIR defaults to "<cwd>/../logs"; override so logs land inside
+      # the mounted volume instead of outside the container's filesystem.
+      LOG_DIR: /app/logs
+    volumes:
+      # config.json lives next to whichever code is running — in the
+      # production image that's dist/, not src/.
+      - ./config.json:/app/dist/config.json:ro
+      - ./data:/app/data
+      - ./logs:/app/logs

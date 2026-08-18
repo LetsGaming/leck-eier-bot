@@ -4,11 +4,26 @@ import {
   removeCacheMember,
   getCachedMembers, // Added to retrieve the member before deletion
 } from "../services/memberCache.js";
-import logger from "../utils/logger.js";
+import logger, { errorMessage } from "../utils/logger.js";
+import type { BotClient } from "../types.js";
+import { AUDIT_LOG_RECENT_WINDOW_MS, AUDIT_LOG_SYNC_DELAY_MS } from "../constants.js";
 
 // Author: { name: "LetsGamingDE", id: 272402865874534400n }
 
-export default function registerMemberEvents(client) {
+/** Whether `entry` is a recent-enough audit log action targeting `userId`. */
+function isRecentActionAgainst(
+  entry: { target?: { id: string } | null; createdTimestamp: number } | undefined,
+  userId: string,
+  now: number,
+): boolean {
+  return (
+    !!entry &&
+    entry.target?.id === userId &&
+    now - entry.createdTimestamp < AUDIT_LOG_RECENT_WINDOW_MS
+  );
+}
+
+export default function registerMemberEvents(client: BotClient): void {
   // Add member to cache on join
   client.on("guildMemberAdd", (member) => {
     logger.info(`New member joined: ${member.user.tag} (${member.id})`);
@@ -16,7 +31,7 @@ export default function registerMemberEvents(client) {
   });
 
   // Update member in cache on nickname/role change
-  client.on("guildMemberUpdate", (oldMember, newMember) => {
+  client.on("guildMemberUpdate", (_oldMember, newMember) => {
     updateCacheMember(newMember);
   });
 
@@ -34,26 +49,16 @@ export default function registerMemberEvents(client) {
 
     try {
       // 3. Wait for Audit Logs to sync
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, AUDIT_LOG_SYNC_DELAY_MS));
 
       const [kickLogs, banLogs] = await Promise.all([
         guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberKick }),
         guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }),
       ]);
 
-      const kickEntry = kickLogs.entries.first();
-      const banEntry = banLogs.entries.first();
       const now = Date.now();
-
-      const wasKicked =
-        kickEntry &&
-        kickEntry.target.id === user.id &&
-        now - kickEntry.createdTimestamp < 10000;
-
-      const wasBanned =
-        banEntry &&
-        banEntry.target.id === user.id &&
-        now - banEntry.createdTimestamp < 10000;
+      const wasKicked = isRecentActionAgainst(kickLogs.entries.first(), user.id, now);
+      const wasBanned = isRecentActionAgainst(banLogs.entries.first(), user.id, now);
 
       if (wasKicked || wasBanned) {
         return;
@@ -73,7 +78,7 @@ export default function registerMemberEvents(client) {
         `User ${knownAs} (${user.tag}) left voluntarily. Owner notified.`,
       );
     } catch (error) {
-      logger.error("Error checking Audit Logs on member leave:", error);
+      logger.error(`Error checking Audit Logs on member leave: ${errorMessage(error)}`);
     }
   });
 }

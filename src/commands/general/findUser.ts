@@ -1,45 +1,37 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
 import { transliterate } from "transliteration";
-import { isAdmin } from "../../utils/utils.js";
 import { getCachedMembers, isCacheReady } from "../../services/memberCache.js";
-import {
-  createNoAdminEmbed,
-  createSuccessEmbed,
-  createErrorEmbed,
-} from "../../utils/embedUtils.js";
+import { createSuccessEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
+import { CommandName, CommandPermission, FIND_USER_RESULT_LIMIT } from "../../constants.js";
 
-function normalizeForSearch(str) {
+export const permission = CommandPermission.Admin;
+
+/** Unicode ranges for the "Mathematical Alphanumeric Symbols" block, mapped back to plain ASCII. */
+const MATH_ALPHANUMERIC_RANGES: Array<{ start: number; end: number; base: number }> = [
+  { start: 0x1d400, end: 0x1d419, base: 65 }, // Bold A-Z
+  { start: 0x1d41a, end: 0x1d433, base: 97 }, // Bold a-z
+  { start: 0x1d434, end: 0x1d44d, base: 65 }, // Italic A-Z
+  { start: 0x1d44e, end: 0x1d467, base: 97 }, // Italic a-z
+  { start: 0x1d468, end: 0x1d481, base: 65 }, // Bold Italic A-Z
+  { start: 0x1d482, end: 0x1d49b, base: 97 }, // Bold Italic a-z
+  { start: 0x1d5a0, end: 0x1d5b9, base: 65 }, // Sans-Serif A-Z
+  { start: 0x1d5ba, end: 0x1d5d3, base: 97 }, // Sans-Serif a-z
+];
+
+function unfancy(text: string): string {
+  return text.replace(/[\u{1D400}-\u{1D7FF}]/gu, (char) => {
+    const cp = char.codePointAt(0)!;
+    const range = MATH_ALPHANUMERIC_RANGES.find((r) => cp >= r.start && cp <= r.end);
+    return range ? String.fromCharCode(cp - range.start + range.base) : char;
+  });
+}
+
+function normalizeForSearch(str: string | null | undefined): string {
   if (!str) return "";
 
-  const unfancy = (text) => {
-    return text.replace(/[\u{1D400}-\u{1D7FF}]/gu, (char) => {
-      const cp = char.codePointAt(0);
-      if (cp >= 0x1d400 && cp <= 0x1d419)
-        return String.fromCharCode(cp - 0x1d400 + 65);
-      if (cp >= 0x1d41a && cp <= 0x1d433)
-        return String.fromCharCode(cp - 0x1d41a + 97);
-      if (cp >= 0x1d434 && cp <= 0x1d44d)
-        return String.fromCharCode(cp - 0x1d434 + 65);
-      if (cp >= 0x1d44e && cp <= 0x1d467)
-        return String.fromCharCode(cp - 0x1d44e + 97);
-      if (cp >= 0x1d468 && cp <= 0x1d481)
-        return String.fromCharCode(cp - 0x1d468 + 65);
-      if (cp >= 0x1d482 && cp <= 0x1d49b)
-        return String.fromCharCode(cp - 0x1d482 + 97);
-      if (cp >= 0x1d5a0 && cp <= 0x1d5b9)
-        return String.fromCharCode(cp - 0x1d5a0 + 65);
-      if (cp >= 0x1d5ba && cp <= 0x1d5d3)
-        return String.fromCharCode(cp - 0x1d5ba + 97);
-      return char;
-    });
-  };
-
-  let normalized = unfancy(str);
-  normalized = transliterate(normalized);
-
-  return normalized
+  return transliterate(unfancy(str))
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-zA-Z0-9 ]/g, " ")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -47,7 +39,7 @@ function normalizeForSearch(str) {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName("finduser")
+  .setName(CommandName.FindUser)
   .setDescription("Find a user by their servername (cached).")
   .addStringOption((opt) =>
     opt
@@ -56,15 +48,8 @@ export const data = new SlashCommandBuilder()
       .setRequired(true),
   );
 
-export async function execute(interaction) {
+export async function execute(interaction: ChatInputCommandInteraction) {
   // Author: { name: "LetsGamingDE", id: 272402865874534400n }
-
-  if (!isAdmin(interaction)) {
-    return interaction.reply({
-      embeds: [createNoAdminEmbed()],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
 
   if (!isCacheReady()) {
     return interaction.reply({
@@ -96,7 +81,7 @@ export async function execute(interaction) {
     });
   }
 
-  const results = [...matchedMembers.values()].slice(0, 15);
+  const results = [...matchedMembers.values()].slice(0, FIND_USER_RESULT_LIMIT);
   const memberList = results
     .map((m) => `• **${m.displayName}** \`${m.user.tag}\` <@${m.id}>`)
     .join("\n\n");

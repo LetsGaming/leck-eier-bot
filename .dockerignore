@@ -1,0 +1,10 @@
+node_modules
+dist
+data
+logs
+.git
+.gitignore
+config.json
+src/config.json
+*.md
+.env

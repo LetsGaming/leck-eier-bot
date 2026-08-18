@@ -2,11 +2,16 @@ import {
   SlashCommandBuilder,
   MessageFlags,
   AttachmentBuilder,
+  type ChatInputCommandInteraction,
+  type Message,
 } from "discord.js";
-import { isOwner } from "../../utils/utils.js";
+import logger, { errorMessage } from "../../utils/logger.js";
+import { CommandName, CommandPermission, DISCORD_FETCH_PAGE_SIZE, DM_DELETE_DELAY_MS } from "../../constants.js";
+
+export const permission = CommandPermission.Owner;
 
 export const data = new SlashCommandBuilder()
-  .setName("cleardm")
+  .setName(CommandName.ClearDm)
   .setDescription("Deletes bot messages in your DMs.")
   .addBooleanOption((opt) =>
     opt
@@ -24,14 +29,7 @@ export const data = new SlashCommandBuilder()
       .setMinValue(1),
   );
 
-export async function execute(interaction) {
-  if (!isOwner(interaction)) {
-    return interaction.reply({
-      content: "❌ You do not have permission to use this command.",
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
+export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const shouldSave = interaction.options.getBoolean("save_history") ?? false;
@@ -39,13 +37,13 @@ export async function execute(interaction) {
   const dmChannel = await interaction.user.createDM();
 
   try {
-    let allBotMessages = [];
-    let lastId = null;
+    let allBotMessages: Message[] = [];
+    let lastId: string | undefined = undefined;
     let fetching = true;
 
     // 1. Fetching Logic
     while (fetching) {
-      const options = { limit: 100 };
+      const options: { limit: number; before?: string } = { limit: DISCORD_FETCH_PAGE_SIZE };
       if (lastId) options.before = lastId;
 
       const fetched = await dmChannel.messages.fetch(options);
@@ -60,10 +58,10 @@ export async function execute(interaction) {
       );
 
       allBotMessages.push(...batch.values());
-      lastId = fetched.last().id;
+      lastId = fetched.last()!.id;
 
       // Stop if we hit the end of history or if we already have enough messages (if amount set)
-      if (fetched.size < 100 || (amount && allBotMessages.length >= amount)) {
+      if (fetched.size < DISCORD_FETCH_PAGE_SIZE || (amount && allBotMessages.length >= amount)) {
         fetching = false;
       }
     }
@@ -76,7 +74,6 @@ export async function execute(interaction) {
     if (allBotMessages.length === 0) {
       return interaction.editReply({
         content: "ℹ️ No bot messages found to delete.",
-        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -102,9 +99,9 @@ export async function execute(interaction) {
       try {
         await msg.delete();
         deletedCount++;
-        // 500ms delay to prevent rate limits
-        await new Promise((r) => setTimeout(r, 500));
-      } catch (e) {
+        // Delay to prevent rate limits
+        await new Promise((r) => setTimeout(r, DM_DELETE_DELAY_MS));
+      } catch {
         continue;
       }
     }
@@ -120,19 +117,16 @@ export async function execute(interaction) {
       await interaction.editReply({
         content: finalMsg,
         files: [attachment],
-        flags: MessageFlags.Ephemeral,
       });
     } else {
       await interaction.editReply({
         content: finalMsg,
-        flags: MessageFlags.Ephemeral,
       });
     }
   } catch (error) {
-    console.error("Error in cleardm:", error);
+    logger.error(`Error in cleardm: ${errorMessage(error)}`);
     await interaction.editReply({
       content: "⚠️ An error occurred during the clearing process.",
-      flags: MessageFlags.Ephemeral,
     });
   }
 }

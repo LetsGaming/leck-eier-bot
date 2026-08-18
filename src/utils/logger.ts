@@ -2,13 +2,13 @@ import path from "path";
 import fs from "fs";
 import { createLogger, format, transports } from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
+import { LOG_MAX_FILE_SIZE, LOG_RETENTION_DAYS } from "../constants.js";
 
 const { combine, printf, timestamp, colorize, errors, splat, json } = format;
 
 // 1. Use environment variables for flexibility
 const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "..", "logs");
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
-const RETENTION_DAYS = "14d";
 
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -43,8 +43,8 @@ const logger = createLogger({
       filename: path.join(LOG_DIR, "error-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       zippedArchive: true, // Compress old logs
-      maxSize: "20m", // Rotate if file exceeds 20MB
-      maxFiles: RETENTION_DAYS,
+      maxSize: LOG_MAX_FILE_SIZE,
+      maxFiles: LOG_RETENTION_DAYS,
       level: "error",
     }),
     // Rotated combined logs
@@ -52,8 +52,8 @@ const logger = createLogger({
       filename: path.join(LOG_DIR, "combined-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       zippedArchive: true,
-      maxSize: "20m",
-      maxFiles: RETENTION_DAYS,
+      maxSize: LOG_MAX_FILE_SIZE,
+      maxFiles: LOG_RETENTION_DAYS,
     }),
   ],
   // Handle uncaught exceptions and rejections so the app doesn't crash silently
@@ -79,3 +79,13 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default logger;
+
+/**
+ * Renders an unknown catch value as a log-friendly string. Passing an Error
+ * as a second `logger.error()` argument gets swallowed by winston's splat
+ * handling, so call sites should fold it into the message text instead:
+ * `logger.error(\`Something failed: ${errorMessage(err)}\`)`.
+ */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? (err.stack ?? err.message) : String(err);
+}

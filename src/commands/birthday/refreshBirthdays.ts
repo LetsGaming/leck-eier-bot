@@ -1,25 +1,16 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
 import { updateBirthdayListFromMessage } from "../../services/birthdays.js";
-import { isAdmin, loadConfig } from "../../utils/utils.js";
-import {
-  createNoAdminEmbed,
-  createSuccessEmbed,
-} from "../../utils/embedUtils.js";
+import { loadConfig } from "../../config/index.js";
+import { createSuccessEmbed } from "../../utils/embedUtils.js";
+import { CommandName, CommandPermission } from "../../constants.js";
+
+export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
-  .setName("refreshbirthdays")
+  .setName(CommandName.RefreshBirthdays)
   .setDescription("Re-scan and update the birthday list");
 
-export async function execute(interaction) {
-  // Extra server-side safety check
-  if (!isAdmin(interaction)) {
-    const noAdmin = createNoAdminEmbed();
-    return interaction.reply({
-      embeds: [noAdmin],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
+export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const config = loadConfig();
@@ -33,6 +24,5 @@ export async function execute(interaction) {
   const successEmbd = createSuccessEmbed("Birthday list refreshed.");
   return interaction.editReply({
     embeds: [successEmbd],
-    flags: MessageFlags.Ephemeral,
   });
 }
