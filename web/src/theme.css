@@ -1056,3 +1056,72 @@ th {
     padding: 28px 20px;
   }
 }
+
+/* Data tables (Commands, Birthdays, Member Audit): sideways-scrolling a
+   6-7 column table is the classic "technically fits, still not actually
+   responsive" cop-out, so below the point a table stops fitting, each row
+   becomes its own labeled little card instead — every <table> in the app
+   opts in via the stack-on-mobile class, with a data-label on each <td>
+   supplying the heading that would otherwise have come from <th>. */
+@media (max-width: 700px) {
+  .table-scroll {
+    overflow-x: visible;
+  }
+
+  table.stack-on-mobile thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  table.stack-on-mobile,
+  table.stack-on-mobile tbody,
+  table.stack-on-mobile tr,
+  table.stack-on-mobile td {
+    display: block;
+    width: 100%;
+  }
+
+  table.stack-on-mobile tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 12px;
+  }
+
+  table.stack-on-mobile td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+  }
+
+  table.stack-on-mobile td:last-child {
+    border-bottom: none;
+  }
+
+  table.stack-on-mobile td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  /* A cell with nothing meaningful to label (an avatar) — shown plain,
+     un-flexed, instead of pairing an empty label with a right-aligned image. */
+  table.stack-on-mobile td.stack-plain {
+    display: block;
+    text-align: left;
+  }
+}

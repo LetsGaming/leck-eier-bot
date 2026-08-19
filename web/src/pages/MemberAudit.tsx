@@ -6,11 +6,17 @@ import type { MemberAuditEntry, MemberAuditResponse } from "../types";
 
 const DEBOUNCE_MS = 300;
 
-function DateCell({ iso }: { iso: string | null }) {
+function DateCell({ label, iso }: { label: string; iso: string | null }) {
   return (
-    <td className="mono small">
-      {formatAbsolute(iso)}
-      <div className="muted small">{formatRelative(iso)}</div>
+    <td className="mono small" data-label={label}>
+      {/* A single wrapping element, not two loose children — the stacked
+          mobile layout flexes each <td> (label on the left, value on the
+          right), and a bare text node plus a sibling <div> would each
+          become their own flex item instead of one right-aligned block. */}
+      <div>
+        {formatAbsolute(iso)}
+        <div className="muted small">{formatRelative(iso)}</div>
+      </div>
     </td>
   );
 }
@@ -18,17 +24,19 @@ function DateCell({ iso }: { iso: string | null }) {
 function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boolean }) {
   return (
     <tr>
-      <td>
+      <td className="stack-plain">
         <img src={entry.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
       </td>
-      <td>{entry.displayName}</td>
-      <td className="muted">{entry.tag}</td>
-      <td className="muted">
+      <td data-label="Name">{entry.displayName}</td>
+      <td className="muted" data-label="Username">
+        {entry.tag}
+      </td>
+      <td className="muted" data-label="ID">
         <code>{entry.userId}</code>
       </td>
-      <DateCell iso={entry.joinedAt} />
-      <DateCell iso={entry.rulesAcceptedAt} />
-      {showLeft && <DateCell iso={entry.leftAt} />}
+      <DateCell label="Joined" iso={entry.joinedAt} />
+      <DateCell label="Rules accepted" iso={entry.rulesAcceptedAt} />
+      {showLeft && <DateCell label="Left" iso={entry.leftAt} />}
     </tr>
   );
 }
@@ -37,7 +45,7 @@ function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showL
   if (entries.length === 0) return <p className="muted">Nobody here.</p>;
   return (
     <div className="table-scroll">
-      <table>
+      <table className="stack-on-mobile">
         <thead>
           <tr>
             <th></th>

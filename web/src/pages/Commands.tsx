@@ -38,7 +38,7 @@ export default function Commands() {
           <div className="loading">Loading…</div>
         ) : (
           <div className="table-scroll">
-            <table>
+            <table className="stack-on-mobile">
               <thead>
                 <tr>
                   <th>Command</th>
@@ -51,10 +51,12 @@ export default function Commands() {
               <tbody>
                 {commands.map((c) => (
                   <tr key={c.name}>
-                    <td>/{c.name}</td>
-                    <td className="muted">{c.description}</td>
-                    <td>{c.permission ?? "none"}</td>
-                    <td>
+                    <td data-label="Command">/{c.name}</td>
+                    <td className="muted" data-label="Description">
+                      {c.description}
+                    </td>
+                    <td data-label="Permission">{c.permission ?? "none"}</td>
+                    <td data-label="Enabled">
                       <input
                         type="checkbox"
                         checked={c.enabled}
@@ -62,7 +64,7 @@ export default function Commands() {
                         onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
                       />
                     </td>
-                    <td>
+                    <td data-label="Guild only">
                       <input
                         type="checkbox"
                         checked={c.guildOnly}

@@ -294,7 +294,7 @@ export default function Birthdays() {
               <p className="muted">No birthdays parsed yet.</p>
             ) : (
               <div className="table-scroll">
-                <table>
+                <table className="stack-on-mobile">
                   <thead>
                     <tr>
                       <th>Date</th>
@@ -307,14 +307,14 @@ export default function Birthdays() {
                     {upcoming.flatMap((b) =>
                       b.entries.map((entry, i) => (
                         <tr key={`${b.dateKey}-${i}`}>
-                          <td>{b.dateKey}</td>
-                          <td>{entryLabel(entry)}</td>
-                          <td>
+                          <td data-label="Date">{b.dateKey}</td>
+                          <td data-label="Person">{entryLabel(entry)}</td>
+                          <td data-label="Source">
                             <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
                               {entry.source === "self" ? "self-registered" : "list"}
                             </span>
                           </td>
-                          <td className="muted">{relativeDay(b.daysUntil)}</td>
+                          <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
                         </tr>
                       )),
                     )}
