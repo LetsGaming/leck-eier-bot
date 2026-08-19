@@ -8,6 +8,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; end?: boolean }> = [
   { to: "/reaction-roles", label: "Reaction Roles" },
   { to: "/birthdays", label: "Birthdays" },
   { to: "/commands", label: "Commands" },
+  { to: "/find-user", label: "Find User" },
   { to: "/settings", label: "Settings" },
 ];
 

@@ -9,6 +9,8 @@ import type {
   Mapping,
   MappingInput,
   Me,
+  MemberSearchResult,
+  UpcomingBirthday,
   Panel,
   PanelInput,
   RoleOption,
@@ -58,6 +60,8 @@ export const api = {
   roles: () => request<RoleOption[]>("/discord/roles"),
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
+  searchMembers: (query: string) => request<MemberSearchResult[]>(`/members/search?q=${encodeURIComponent(query)}`),
+
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),
   updatePanel: (id: number, body: PanelInput) =>
@@ -81,6 +85,7 @@ export const api = {
     request<{ rendered: string }>("/settings/birthday/preview", { method: "POST", ...json({ template }) }),
   refreshBirthdayList: () => request<{ ok: boolean }>("/settings/birthday/refresh", { method: "POST" }),
   birthdays: () => request<BirthdaysByDate>("/birthdays"),
+  upcomingBirthdays: () => request<UpcomingBirthday[]>("/birthdays/upcoming"),
 
   commands: () => request<CommandDef[]>("/commands"),
   updateCommand: (name: string, body: { enabled?: boolean; guildOnly?: boolean }) =>

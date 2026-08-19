@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "../api";
 import EmojiPicker from "../components/EmojiPicker";
+import MessagePreview from "../components/MessagePreview";
+import SearchableSelect from "../components/SearchableSelect";
+import { useToast } from "../components/ToastContext";
 import type {
   Channel,
   CreatePanelInput,
@@ -55,7 +58,7 @@ function emptyPanelForm(): PanelFormState {
   return {
     name: "",
     channelId: "",
-    messageType: "embed",
+    messageType: "text",
     removeReaction: false,
     allowMultiple: false,
     removable: true,
@@ -103,9 +106,9 @@ export default function ReactionRoles() {
   const [attachMode, setAttachMode] = useState<"new" | "existing">("new");
   const [messageLink, setMessageLink] = useState("");
   const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [allowedRoleSearch, setAllowedRoleSearch] = useState("");
   const [busy, setBusy] = useState(false);
+  const { showError, showSuccess } = useToast();
 
   function loadAll() {
     Promise.all([api.panels(), api.channels(), api.roles(), api.emojis()])
@@ -115,7 +118,7 @@ export default function ReactionRoles() {
         setRoles(r);
         setEmojis(e);
       })
-      .catch((err) => setError(errorMessage(err)));
+      .catch((err) => showError(errorMessage(err)));
   }
 
   useEffect(loadAll, []);
@@ -131,6 +134,18 @@ export default function ReactionRoles() {
 
   const messageSource: MessageSource = attachMode === "existing" ? "existing" : form.messageType === "text" ? "simple" : "embed";
 
+  // A role can only grant one outcome per panel — once it's mapped to an
+  // option, picking it again for a second option would just be ambiguous.
+  const usedRoleIds = useMemo(() => new Set(selected?.mappings.map((m) => m.roleId) ?? []), [selected]);
+
+  // Keeps already-checked roles visible even when they don't match the
+  // current search, so typing never hides your existing selection.
+  const filteredAllowedRoles = useMemo(() => {
+    const q = allowedRoleSearch.trim().toLowerCase();
+    if (!q) return roles;
+    return roles.filter((r) => r.name.toLowerCase().includes(q) || form.allowedRoleIds.includes(r.id));
+  }, [roles, allowedRoleSearch, form.allowedRoleIds]);
+
   useEffect(() => {
     if (selectedId === "new") {
       setForm(emptyPanelForm());
@@ -144,8 +159,6 @@ export default function ReactionRoles() {
   }, [selectedId, selected]);
 
   function selectPanel(id: number | "new") {
-    setError(null);
-    setNotice(null);
     setSelectedId(id);
   }
 
@@ -170,7 +183,7 @@ export default function ReactionRoles() {
 
   async function handleSavePanel() {
     if (!form.name.trim()) {
-      setError("Give the panel a name.");
+      showError("Give the panel a name.");
       return;
     }
     const attachingExisting = selectedId === "new" && attachMode === "existing";
@@ -178,16 +191,14 @@ export default function ReactionRoles() {
     if (attachingExisting) {
       existingLocation = parseMessageLink(messageLink);
       if (!existingLocation) {
-        setError("Paste a valid message link (right-click the message → Copy Message Link).");
+        showError("Paste a valid message link (right-click the message → Copy Message Link).");
         return;
       }
     } else if (!form.channelId) {
-      setError("Pick a channel first.");
+      showError("Pick a channel first.");
       return;
     }
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       let saved: Panel;
       if (selectedId === "new") {
@@ -201,7 +212,7 @@ export default function ReactionRoles() {
           existingMessageId: attachingExisting ? existingLocation!.messageId : null,
         };
         saved = await api.createPanel(body);
-        setNotice("Panel created as a draft — add roles below, then click Send when ready.");
+        showSuccess("Panel created as a draft — add roles below, then click Send when ready.");
       } else if (typeof selectedId === "number") {
         saved = await api.updatePanel(selectedId, {
           ...form,
@@ -209,7 +220,7 @@ export default function ReactionRoles() {
           description: form.description.trim() ? form.description : null,
           allowedRoleIds: form.allowedRoleIds.length ? form.allowedRoleIds : null,
         });
-        setNotice(saved.sent ? "Panel saved and re-synced with Discord." : "Draft saved.");
+        showSuccess(saved.sent ? "Panel saved and re-synced with Discord." : "Draft saved.");
       } else {
         return;
       }
@@ -219,7 +230,7 @@ export default function ReactionRoles() {
       });
       setSelectedId(saved.id);
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -233,13 +244,12 @@ export default function ReactionRoles() {
         : "Delete this panel and its Discord message?";
     if (!confirm(confirmMsg)) return;
     setBusy(true);
-    setError(null);
     try {
       await api.deletePanel(selectedId);
       setPanels((prev) => prev.filter((p) => p.id !== selectedId));
       setSelectedId(null);
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -248,14 +258,12 @@ export default function ReactionRoles() {
   async function handleSend() {
     if (typeof selectedId !== "number") return;
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       const saved = await api.sendPanel(selectedId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
-      setNotice("Panel sent — it's live on Discord now.");
+      showSuccess("Panel sent — it's live on Discord now.");
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -264,14 +272,12 @@ export default function ReactionRoles() {
   async function handleSync() {
     if (typeof selectedId !== "number") return;
     setBusy(true);
-    setError(null);
-    setNotice(null);
     try {
       const saved = await api.syncPanel(selectedId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
-      setNotice("Panel re-synced with Discord.");
+      showSuccess("Panel re-synced with Discord.");
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -280,23 +286,22 @@ export default function ReactionRoles() {
   async function handleAddMapping() {
     if (typeof selectedId !== "number") return;
     if (!mappingDraft.roleId) {
-      setError("Pick a role.");
+      showError("Pick a role.");
       return;
     }
     if (effectiveSelectionType === "reactions" && !mappingDraft.emojiName) {
-      setError("Pick an emoji.");
+      showError("Pick an emoji.");
       return;
     }
     if (effectiveSelectionType !== "reactions" && !mappingDraft.label.trim()) {
-      setError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
+      showError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
       return;
     }
     if (atOptionCap) {
-      setError(`Discord allows at most ${optionCap} options for this selection type.`);
+      showError(`Discord allows at most ${optionCap} options for this selection type.`);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       const saved = await api.addMapping(selectedId, {
         emojiName: mappingDraft.emojiName || null,
@@ -307,7 +312,7 @@ export default function ReactionRoles() {
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       setMappingDraft(emptyMappingDraft());
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -316,12 +321,11 @@ export default function ReactionRoles() {
   async function handleRemoveMapping(mappingId: number) {
     if (typeof selectedId !== "number") return;
     setBusy(true);
-    setError(null);
     try {
       const saved = await api.deleteMapping(selectedId, mappingId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -335,12 +339,11 @@ export default function ReactionRoles() {
     if (swapWith < 0 || swapWith >= ordered.length) return;
     [ordered[index], ordered[swapWith]] = [ordered[swapWith], ordered[index]];
     setBusy(true);
-    setError(null);
     try {
       const saved = await api.reorderMappings(selected.id, ordered);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -364,8 +367,6 @@ export default function ReactionRoles() {
   return (
     <div>
       <h2>Reaction Roles</h2>
-      {error && <div className="alert error">{error}</div>}
-      {notice && <div className="alert success">{notice}</div>}
 
       <div className="rr-layout">
         <div className="rr-list">
@@ -485,18 +486,14 @@ export default function ReactionRoles() {
                   <>
                     <div className="field">
                       <label htmlFor="rr-channel">Channel</label>
-                      <select
+                      <SearchableSelect
                         id="rr-channel"
                         value={form.channelId}
-                        onChange={(e) => setForm((f) => ({ ...f, channelId: e.target.value }))}
-                      >
-                        <option value="">— pick a channel —</option>
-                        {channels.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            #{c.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => setForm((f) => ({ ...f, channelId: v }))}
+                        placeholder="Search channels…"
+                        emptyLabel="— pick a channel —"
+                        options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                      />
                     </div>
                     {form.messageType === "embed" && (
                       <div className="field">
@@ -553,6 +550,20 @@ export default function ReactionRoles() {
                 )}
               </div>
 
+              {!isExistingMessageMode && (
+                <div className="card">
+                  <h2>Preview</h2>
+                  <MessagePreview
+                    messageType={form.messageType}
+                    selectionType={effectiveSelectionType}
+                    title={form.title || form.name}
+                    description={form.description}
+                    mappings={selected?.mappings ?? []}
+                    resolveRoleLabel={(m) => m.label ?? roleName(m.roleId)}
+                  />
+                </div>
+              )}
+
               {typeof selectedId === "number" && selected && (
                 <div className="card">
                   <h2>Roles</h2>
@@ -599,19 +610,21 @@ export default function ReactionRoles() {
                         customEmojis={emojis}
                         allowEmpty={effectiveSelectionType !== "reactions"}
                       />
-                      <select
+                      <SearchableSelect
                         className="grow"
                         value={mappingDraft.roleId}
-                        onChange={(e) => setMappingDraft((d) => ({ ...d, roleId: e.target.value }))}
-                      >
-                        <option value="">— pick a role —</option>
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id} disabled={!r.manageable}>
-                            {r.name}
-                            {!r.manageable ? " (not assignable)" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => setMappingDraft((d) => ({ ...d, roleId: v }))}
+                        placeholder="Search roles…"
+                        emptyLabel="— pick a role —"
+                        options={roles
+                          .filter((r) => !usedRoleIds.has(r.id))
+                          .map((r) => ({
+                            value: r.id,
+                            label: r.name,
+                            disabled: !r.manageable,
+                            hint: r.manageable ? undefined : "(not assignable)",
+                          }))}
+                      />
                       <input
                         type="text"
                         className="grow"
@@ -678,6 +691,15 @@ export default function ReactionRoles() {
 
                     <div className="field">
                       <label>Allowed roles</label>
+                      {roles.length > 8 && (
+                        <input
+                          type="text"
+                          placeholder="Search roles…"
+                          value={allowedRoleSearch}
+                          onChange={(e) => setAllowedRoleSearch(e.target.value)}
+                          style={{ marginBottom: 6 }}
+                        />
+                      )}
                       <div
                         style={{
                           display: "flex",
@@ -692,7 +714,10 @@ export default function ReactionRoles() {
                         }}
                       >
                         {roles.length === 0 && <span className="muted">No roles found.</span>}
-                        {roles.map((r) => (
+                        {roles.length > 0 && filteredAllowedRoles.length === 0 && (
+                          <span className="muted">No matches.</span>
+                        )}
+                        {filteredAllowedRoles.map((r) => (
                           <label
                             key={r.id}
                             className="switch"

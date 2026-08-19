@@ -112,6 +112,13 @@ export interface BirthdayEntry {
 
 export type BirthdaysByDate = Record<string, BirthdayEntry[]>;
 
+export interface UpcomingBirthday {
+  dateKey: string;
+  /** Whole days from now, computed server-side (0 = today, 1 = tomorrow, ...) — see docs/DATABASE.md and the daysUntil() doc comment for why this isn't a timestamp. */
+  daysUntil: number;
+  entries: BirthdayEntry[];
+}
+
 export interface CommandDef {
   name: string;
   description: string;
@@ -122,4 +129,13 @@ export interface CommandDef {
 
 export interface GeneralSettings {
   leaveNotificationsEnabled: boolean;
+}
+
+export interface MemberSearchResult {
+  id: string;
+  username: string;
+  tag: string;
+  displayName: string;
+  nickname: string | null;
+  avatarUrl: string;
 }

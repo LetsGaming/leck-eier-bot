@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
+import { useToast } from "../components/ToastContext";
 import type { Status } from "../types";
 
 function formatUptime(ms: number): string {
@@ -13,19 +14,18 @@ function formatUptime(ms: number): string {
 
 export default function Overview() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { showError } = useToast();
 
   useEffect(() => {
     api
       .status()
       .then(setStatus)
-      .catch((err) => setError(errorMessage(err)));
-  }, []);
+      .catch((err) => showError(errorMessage(err)));
+  }, [showError]);
 
   return (
     <div>
       <h2>Overview</h2>
-      {error && <div className="alert error">{error}</div>}
       {!status ? (
         <div className="loading">Loading…</div>
       ) : (

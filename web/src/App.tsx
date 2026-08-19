@@ -8,6 +8,7 @@ import Overview from "./pages/Overview";
 import ReactionRoles from "./pages/ReactionRoles";
 import Birthdays from "./pages/Birthdays";
 import Commands from "./pages/Commands";
+import FindUser from "./pages/FindUser";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/reaction-roles" element={<ReactionRoles />} />
         <Route path="/birthdays" element={<Birthdays />} />
         <Route path="/commands" element={<Commands />} />
+        <Route path="/find-user" element={<FindUser />} />
         <Route path="/settings" element={<Settings me={me} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

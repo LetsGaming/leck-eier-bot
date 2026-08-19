@@ -1,27 +1,27 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
+import { useToast } from "../components/ToastContext";
 import type { CommandDef } from "../types";
 
 export default function Commands() {
   const [commands, setCommands] = useState<CommandDef[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const { showError } = useToast();
 
   useEffect(() => {
     api
       .commands()
       .then(setCommands)
-      .catch((err) => setError(errorMessage(err)));
-  }, []);
+      .catch((err) => showError(errorMessage(err)));
+  }, [showError]);
 
   async function toggle(name: string, field: "enabled" | "guildOnly", value: boolean) {
     setPending(name);
-    setError(null);
     try {
       const updated = await api.updateCommand(name, { [field]: value });
       setCommands((prev) => prev?.map((c) => (c.name === name ? updated : c)) ?? null);
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setPending(null);
     }
@@ -33,7 +33,6 @@ export default function Commands() {
       <p className="muted">
         Disabling a command removes it from Discord's slash-command list within a minute — no restart needed.
       </p>
-      {error && <div className="alert error">{error}</div>}
       <div className="card">
         {!commands ? (
           <div className="loading">Loading…</div>

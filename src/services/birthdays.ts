@@ -162,19 +162,51 @@ export function getTodaysBirthdays(): BirthdayEntry[] {
   return getBirthdaysForDate(todayDateKey());
 }
 
-export function getNextBirthday(): { date: Date; entries: BirthdayEntry[] } | null {
+export interface UpcomingBirthday {
+  /** `DD.MM`, as stored — see the `birthdays` table's `date` column. */
+  dateKey: string;
+  /** This year's occurrence, or next year's if that's already passed (today itself still counts as upcoming). */
+  date: Date;
+  entries: BirthdayEntry[];
+}
+
+/** Every distinct birthday date, resolved to its next real occurrence and sorted soonest-first (wrapping the year). Powers both the dashboard's Birthdays page and {@link getNextBirthday}. */
+export function getUpcomingBirthdays(): UpcomingBirthday[] {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const allDates = Object.entries(getAllBirthdaysByDate()).map(([key, entries]) => {
-    const [dd, mm] = key.split(".").map((x) => parseInt(x, 10));
-    let date = new Date(currentYear, mm! - 1, dd);
-    if (date < now) {
-      date = new Date(currentYear + 1, mm! - 1, dd);
-    }
-    return { date, entries };
+  const todayMonth = now.getMonth();
+  const todayDate = now.getDate();
+
+  const upcoming = Object.entries(getAllBirthdaysByDate()).map(([dateKey, entries]) => {
+    const [dd, mm] = dateKey.split(".").map((x) => parseInt(x, 10));
+    const month = mm! - 1;
+    const alreadyPassedThisYear = month < todayMonth || (month === todayMonth && dd! < todayDate);
+    const year = alreadyPassedThisYear ? currentYear + 1 : currentYear;
+    return { dateKey, date: new Date(year, month, dd), entries };
   });
-  allDates.sort((a, b) => a.date.getTime() - b.date.getTime());
-  return allDates.length > 0 ? allDates[0]! : null;
+
+  upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return upcoming;
+}
+
+/**
+ * Whole days between now and `date` (both taken at server-local midnight,
+ * so this is always an exact integer — 0 for today, 1 for tomorrow, ...).
+ * Deliberately not done by shipping `date` itself to a client and
+ * re-deriving this there: round-tripping a Date through JSON and
+ * re-interpreting it in a *different* timezone (the browser's) than the
+ * one that computed it (the server's) can land on the wrong calendar day
+ * entirely — see the API route in src/web/routes/birthdaysReadonly.ts.
+ */
+export function daysUntil(date: Date): number {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((date.getTime() - startOfToday.getTime()) / 86_400_000);
+}
+
+/** The single soonest upcoming birthday — only meaningful when called after confirming there's none *today* (see `/checkbirthday`), since today's own date otherwise sorts first. */
+export function getNextBirthday(): UpcomingBirthday | null {
+  return getUpcomingBirthdays()[0] ?? null;
 }
 
 export function renderBirthdayTemplate(

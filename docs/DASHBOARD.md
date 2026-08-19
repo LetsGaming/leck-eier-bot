@@ -1,6 +1,6 @@
 # Dashboard
 
-An optional web UI for configuring the bot without SSH access: reaction-role panels, the birthday template/channel/schedule, per-command enable/guildOnly toggles, and the leave-notification setting. Everything it edits takes effect live — no restart.
+An optional web UI for configuring the bot without SSH access: reaction-role panels, the birthday template/channel/schedule, per-command enable/guildOnly toggles, the leave-notification setting, and searching cached guild members. Everything it edits takes effect live — no restart.
 
 It's a React SPA (`web/`) served as static files by the bot's own HTTP server (Fastify, `src/web/`), gated behind Discord OAuth2. There's no separate deployment: setting the right env vars is the whole setup.
 
@@ -76,9 +76,10 @@ Sessions are server-side rows in the `web_sessions` table (see [DATABASE.md](DAT
 | Route | What it does |
 | --- | --- |
 | `/` | Bot status (uptime, guild, member/cache counts, panel count) and quick links. |
-| `/reaction-roles` | Create/edit/delete reaction-role panels (reactions, buttons, or a dropdown) and their role mappings as a draft, then send them; manual re-sync afterward. See [REACTION_ROLES.md](REACTION_ROLES.md#dashboard-workflow). |
-| `/birthdays` | Edit the message template (with live preview), the announcement channel/anchor message, the cron schedule, and a read-only table of currently-parsed birthdays. |
+| `/reaction-roles` | Create/edit/delete reaction-role panels (reactions, buttons, or a dropdown) and their role mappings as a draft, then send them; manual re-sync afterward. A role already used by another option on the same panel is filtered out of the picker, and a live preview shows roughly how the message will render on Discord before you send it. See [REACTION_ROLES.md](REACTION_ROLES.md#dashboard-workflow). |
+| `/birthdays` | Edit the message template (with live preview), the announcement channel/anchor message, and the cron schedule; a "next up" tile for the soonest birthday(ies) and a chronologically-sorted table of every registered birthday with days-until. |
 | `/commands` | Table of every command on disk (including currently-disabled ones) with `enabled`/`guildOnly` switches. |
+| `/find-user` | Search cached guild members by username, global name, nickname, or display name — same matching (including stylized/lookalike Unicode names) as [`/finduser`](COMMANDS.md#finduser). |
 | `/settings` | The leave-notification toggle and current session info. |
 
 ## How it's wired up (for developers)
@@ -89,4 +90,4 @@ Sessions are server-side rows in the `web_sessions` table (see [DATABASE.md](DAT
 - `src/web/routes/*.ts` — one file per resource, all thin: validate the body with `zod`, delegate to the same repository/service functions the slash commands and cron job use (`src/db/*Repository.ts`, `src/services/*.ts`). The dashboard never has its own copy of business logic.
 - `web/` — a separate `package.json`/Vite project (see [DEVELOPMENT.md](DEVELOPMENT.md#dashboard-frontend)), deliberately dependency-light: plain CSS custom properties for theming, no component library, no state-management library.
 
-Writes from the dashboard use the same `settingsBus` event emitter as slash-command writes (`src/services/settingsBus.ts`), so e.g. saving a new birthday cron expression from `/birthdays` reschedules the live cron job in `src/index.ts` exactly the same way `/setbirthdaymessage` would.
+Writes from the dashboard use the same `settingsBus` event emitter as slash-command writes (`src/services/settingsBus.ts`), so e.g. saving a new birthday cron expression from `/birthdays` reschedules the live cron job in `src/index.ts` exactly the same way `/setbirthdaymessage` would. Reads work the same way: `/find-user`'s `GET /api/members/search` and the `/finduser` slash command both call `searchCachedMembers()` (`src/services/memberSearch.ts`) — the matching/normalization logic exists in exactly one place.

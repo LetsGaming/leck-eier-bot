@@ -7,6 +7,7 @@ import {
   getPanel,
   listPanels,
   reorderMappings,
+  setPanelMessageId,
   setPanelSent,
   updatePanel,
   upsertMapping,
@@ -107,6 +108,14 @@ async function trySync(client: BotClient, reply: FastifyReply, panelId: number):
   }
 }
 
+/** Best-effort delete of a message the bot posted — used both when removing a managed panel and when it's moved to a different channel (see the PATCH route). */
+async function deleteDiscordMessage(client: BotClient, channelId: string, messageId: string): Promise<void> {
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased() || channel.isDMBased()) return;
+  const message = await channel.messages.fetch(messageId).catch(() => null);
+  await message?.delete().catch((err) => logger.warn(`Failed to delete old panel message: ${errorMessage(err)}`));
+}
+
 export function registerReactionRolePanelRoutes(app: FastifyInstance, client: BotClient): void {
   app.get("/reaction-roles/panels", async () => listPanels());
 
@@ -135,10 +144,20 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
   app.patch("/reaction-roles/panels/:id", async (request, reply) => {
     const id = parsePanelId(request, reply);
     if (id === null) return;
-    if (!getPanel(id)) return reply.code(404).send({ error: "Panel not found" });
+    const before = getPanel(id);
+    if (!before) return reply.code(404).send({ error: "Panel not found" });
 
     const body = PanelBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+
+    // A managed panel's message lives in a specific channel — Discord
+    // messages can't move between channels, so relocating the panel means
+    // deleting the old one and letting the next sync post a fresh one in
+    // the new channel, rather than leaving the old message orphaned.
+    if (before.managed && before.messageId && body.data.channelId !== before.channelId) {
+      await deleteDiscordMessage(client, before.channelId, before.messageId);
+      setPanelMessageId(id, null);
+    }
 
     updatePanel(id, body.data);
     await trySync(client, reply, id);
@@ -156,13 +175,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     // admin's rules post), which removing a reaction-role config from
     // shouldn't also delete.
     if (panel.managed && panel.messageId) {
-      const channel = await client.channels.fetch(panel.channelId).catch(() => null);
-      if (channel?.isTextBased() && !channel.isDMBased()) {
-        const message = await channel.messages.fetch(panel.messageId).catch(() => null);
-        await message?.delete().catch((err) =>
-          logger.warn(`Failed to delete panel message on panel removal: ${errorMessage(err)}`),
-        );
-      }
+      await deleteDiscordMessage(client, panel.channelId, panel.messageId);
     }
 
     deletePanel(id);
@@ -215,6 +228,9 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
+    if (panel.mappings.some((m) => m.roleId === body.data.roleId)) {
+      return reply.code(400).send({ error: "That role is already used by another option on this panel." });
+    }
     const cap = mappingCap(panel.selectionType);
     if (cap !== null && panel.mappings.length >= cap) {
       return reply.code(400).send({ error: `Discord allows at most ${cap} options for this selection type.` });
@@ -239,6 +255,9 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
+    if (panel.mappings.some((m) => m.id !== mappingId && m.roleId === body.data.roleId)) {
+      return reply.code(400).send({ error: "That role is already used by another option on this panel." });
+    }
 
     upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...body.data });
     await trySync(client, reply, id);
