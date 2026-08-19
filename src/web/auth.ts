@@ -29,6 +29,22 @@ interface DiscordGuildMember {
 }
 
 /**
+ * A misrouted URL (wrong path, a proxy in front of discord.com, etc.) can
+ * still come back with a 2xx status but an HTML body — a plain `.json()`
+ * call on that throws an opaque "Unexpected token '<'" deep inside V8's
+ * JSON parser. Checking content-type first turns that into a message that
+ * actually says what went wrong.
+ */
+async function parseJsonResponse<T>(res: Response, label: string): Promise<T> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const body = (await res.text()).slice(0, 200);
+    throw new Error(`${label} returned a non-JSON response (content-type "${contentType}"): ${body}`);
+  }
+  return (await res.json()) as T;
+}
+
+/**
  * Which of `web.publicUrls` (if any) the request actually came in on, so
  * `redirect_uri` always matches an origin the app is genuinely reachable
  * at — Discord requires the exact same `redirect_uri` at both the
@@ -146,7 +162,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       if (!tokenRes.ok) {
         throw new Error(`Discord token exchange returned ${tokenRes.status}: ${await tokenRes.text()}`);
       }
-      accessToken = ((await tokenRes.json()) as DiscordTokenResponse).access_token;
+      accessToken = (await parseJsonResponse<DiscordTokenResponse>(tokenRes, "Discord token exchange")).access_token;
     } catch (err) {
       logger.error(`OAuth token exchange failed: ${errorMessage(err)}`);
       return reply.code(502).send("Failed to complete Discord login. Please try again.");
@@ -167,8 +183,8 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       if (!userRes.ok) throw new Error(`Failed to fetch Discord profile: ${userRes.status}`);
       if (!memberRes.ok) throw new Error(`Failed to fetch guild membership: ${memberRes.status}`);
 
-      discordUser = (await userRes.json()) as DiscordUser;
-      roleIds = ((await memberRes.json()) as DiscordGuildMember).roles;
+      discordUser = await parseJsonResponse<DiscordUser>(userRes, "Discord user fetch");
+      roleIds = (await parseJsonResponse<DiscordGuildMember>(memberRes, "Discord guild member fetch")).roles;
     } catch (err) {
       logger.error(`OAuth profile fetch failed: ${errorMessage(err)}`);
       return reply.code(502).send("Failed to fetch your Discord profile. Please try again.");

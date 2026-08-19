@@ -43,7 +43,7 @@ export const WEB_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 /** How long a login attempt has to complete the Discord OAuth2 round trip (authorize + any 2FA/consent) before its state cookie expires. */
 export const WEB_OAUTH_STATE_TTL_SECONDS = 10 * 60; // 10 minutes
 export const DISCORD_OAUTH_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
-export const DISCORD_OAUTH_TOKEN_URL = "https://discord.com/oauth2/token";
+export const DISCORD_OAUTH_TOKEN_URL = "https://discord.com/api/oauth2/token";
 export const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 
 // --- Logging ---
