@@ -28,21 +28,32 @@ export function loadConfig(): Config {
   }
   const env = parsed.data;
 
+  // Comma-separated list -> normalized, deduplicated origins (no trailing
+  // slash, so string comparison against a request's computed origin is a
+  // plain equality check everywhere else in the app).
+  const publicUrls = [
+    ...new Set(
+      (env.WEB_PUBLIC_URLS ?? "")
+        .split(",")
+        .map((url) => url.trim().replace(/\/+$/, ""))
+        .filter(Boolean),
+    ),
+  ];
+
   const webRequested = env.WEB_ENABLED !== "false";
-  const webComplete =
-    !!env.WEB_PUBLIC_URL && !!env.WEB_SESSION_SECRET && !!env.DISCORD_CLIENT_SECRET;
+  const webComplete = publicUrls.length > 0 && !!env.WEB_SESSION_SECRET && !!env.DISCORD_CLIENT_SECRET;
 
   let web: Config["web"];
   if (webRequested && webComplete) {
     web = {
       port: env.WEB_PORT ?? 3000,
-      publicUrl: env.WEB_PUBLIC_URL!,
+      publicUrls,
       sessionSecret: env.WEB_SESSION_SECRET!,
       clientSecret: env.DISCORD_CLIENT_SECRET!,
     };
   } else if (webRequested) {
     logger.warn(
-      "Dashboard not starting: WEB_PUBLIC_URL, WEB_SESSION_SECRET, and DISCORD_CLIENT_SECRET must all be set. " +
+      "Dashboard not starting: WEB_PUBLIC_URLS, WEB_SESSION_SECRET, and DISCORD_CLIENT_SECRET must all be set. " +
         "Set WEB_ENABLED=false to silence this warning if you don't want the dashboard.",
     );
   }

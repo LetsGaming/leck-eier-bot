@@ -30,12 +30,14 @@ The [dashboard](DASHBOARD.md) starts automatically once every variable below is 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `WEB_ENABLED` | no, default `true` | Set `false` to force the dashboard off even if the other variables below are present. |
-| `WEB_PORT` | no, default `3000` | Port the dashboard listens on inside the process/container. |
-| `WEB_PUBLIC_URL` | yes, to enable the dashboard | The externally-reachable base URL, e.g. `https://bot.example.com` or `http://localhost:3000`. Must exactly match the OAuth2 redirect registered on the Discord application (`<WEB_PUBLIC_URL>/auth/callback`) — see [DASHBOARD.md](DASHBOARD.md). |
+| `WEB_PORT` | no, default `3000` | Port the dashboard listens on inside the process/container. One port for every domain in `WEB_PUBLIC_URLS` — a reverse proxy (or your router, for a plain LAN name) is what maps each domain to it. |
+| `WEB_PUBLIC_URLS` | yes, to enable the dashboard | One or more externally-reachable origins, **comma-separated**, e.g. `http://eier.lan.net:3000,https://bot.example.com`. Each one is a distinct way to reach the *same* dashboard — a local LAN name and a public domain at once, for example. Every origin listed here needs its own `<origin>/auth/callback` redirect registered on the Discord application — see [Registering redirect URIs](DASHBOARD.md#registering-redirect-uris) in DASHBOARD.md, and don't skip it: login silently fails for any origin that isn't both listed here *and* registered there. |
 | `WEB_SESSION_SECRET` | yes, to enable the dashboard | Random secret (≥32 chars) used to sign session cookies. Generate one with e.g. `openssl rand -hex 32`; never reuse the bot token for this. |
 | `DISCORD_CLIENT_SECRET` | yes, to enable the dashboard | Your application's OAuth2 client secret (Developer Portal → OAuth2). Used for the dashboard login's code exchange. |
 
 If `WEB_ENABLED` isn't explicitly `false` but one of the other three is missing, the bot still starts — it just logs a warning and skips starting the HTTP server, same as if `WEB_ENABLED=false` had been set. `src/config/index.ts`'s `loadConfig()` is what decides this once, at startup; see [ARCHITECTURE.md](ARCHITECTURE.md#startup-sequence).
+
+Visiting the dashboard from a Host not listed in `WEB_PUBLIC_URLS` (scheme, hostname, *and* port must match one entry exactly) fails at `/auth/login` with a 400 explaining which origin was rejected — the app never guesses at a fallback origin, since sending Discord a `redirect_uri` for a domain the browser isn't actually on would just break the redirect. See [DASHBOARD.md](DASHBOARD.md#multiple-domains) for how this is enforced.
 
 ## Everything else lives in the database
 

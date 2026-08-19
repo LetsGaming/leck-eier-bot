@@ -61,7 +61,7 @@ export async function startWebServer(client: BotClient, config: Config): Promise
   const port = config.web.port;
   try {
     await app.listen({ port, host: "0.0.0.0" });
-    logger.info(`Web dashboard listening on port ${port} (public URL: ${config.web.publicUrl})`);
+    logger.info(`Web dashboard listening on port ${port} (public URLs: ${config.web.publicUrls.join(", ")})`);
   } catch (err) {
     logger.error(`Failed to start web dashboard: ${errorMessage(err)}`);
   }

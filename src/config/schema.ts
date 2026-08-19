@@ -21,8 +21,15 @@ export const EnvSchema = z.object({
    */
   WEB_ENABLED: z.enum(["true", "false"]).describe("true").optional(),
   WEB_PORT: z.coerce.number().int().describe("3000").optional(),
-  /** Must match the OAuth2 redirect registered on the Discord application, with `/auth/callback` appended. */
-  WEB_PUBLIC_URL: z.string().min(1).describe("http://localhost:3000").optional(),
+  /**
+   * One or more origins (scheme + host + optional port, no trailing slash)
+   * the dashboard is reachable at, comma-separated — e.g. a LAN name and a
+   * public domain at once: `http://eier.lan.net,https://bot.example.com`.
+   * Each one needs its own `<origin>/auth/callback` added as an OAuth2
+   * redirect on the Discord application (see docs/DASHBOARD.md). Login
+   * only works from an origin listed here; the bot rejects any other Host.
+   */
+  WEB_PUBLIC_URLS: z.string().min(1).describe("http://localhost:3000").optional(),
   WEB_SESSION_SECRET: z.string().min(32).describe("RANDOM_STRING_AT_LEAST_32_CHARS_LONG").optional(),
   /** Discord application's OAuth2 client secret — used for the dashboard login's code exchange. */
   DISCORD_CLIENT_SECRET: z.string().min(1).describe("YOUR_APPLICATION_SECRET").optional(),
@@ -32,7 +39,8 @@ export type Env = z.infer<typeof EnvSchema>;
 
 export interface WebConfig {
   port: number;
-  publicUrl: string;
+  /** Non-empty; each entry is a bare origin (no trailing slash) — see {@link EnvSchema}'s WEB_PUBLIC_URLS. */
+  publicUrls: string[];
   sessionSecret: string;
   clientSecret: string;
 }

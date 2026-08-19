@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "crypto";
 import { PermissionsBitField } from "discord.js";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createSession } from "../db/sessionsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import { getSessionFromRequest, logout, setSessionCookie } from "./session.js";
@@ -27,6 +27,24 @@ interface DiscordGuildMember {
   roles: string[];
 }
 
+/**
+ * Which of `web.publicUrls` (if any) the request actually came in on, so
+ * `redirect_uri` always matches an origin the app is genuinely reachable
+ * at — Discord requires the exact same `redirect_uri` at both the
+ * `/authorize` step and the token exchange, and rejects anything not
+ * registered on the application, so this can't be spoofed into an open
+ * redirect: an unlisted Host is simply refused, never guessed at.
+ * `request.protocol`/`request.host` already honor `X-Forwarded-*` (the app
+ * is started with `trustProxy: true` — see web/server.ts). Deliberately
+ * `request.host`, not `request.hostname` — the latter silently strips the
+ * port, which would never match a WEB_PUBLIC_URLS entry on a non-default
+ * port (e.g. `http://localhost:3000`).
+ */
+function resolveRequestOrigin(request: FastifyRequest, allowedOrigins: string[]): string | null {
+  const origin = `${request.protocol}://${request.host}`;
+  return allowedOrigins.find((allowed) => allowed.toLowerCase() === origin.toLowerCase()) ?? null;
+}
+
 /** Owner of the bot, owner of the guild, or holds a role with Administrator — the only three ways in. */
 function isAuthorized(client: BotClient, config: Config, userId: string, roleIds: string[]): boolean {
   if (userId === config.botOwnerId) return true;
@@ -44,19 +62,29 @@ function isAuthorized(client: BotClient, config: Config, userId: string, roleIds
 export function registerAuthRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
   const web = config.web!; // callers only invoke this once config.web is confirmed present
 
-  app.get("/auth/login", async (_request, reply) => {
+  app.get("/auth/login", async (request, reply) => {
+    const origin = resolveRequestOrigin(request, web.publicUrls);
+    if (!origin) {
+      return reply
+        .code(400)
+        .send(
+          `This dashboard isn't reachable at ${request.protocol}://${request.host} — add it to WEB_PUBLIC_URLS and restart the bot.`,
+        );
+    }
+
     const state = randomBytes(16).toString("hex");
     reply.setCookie(WEB_OAUTH_STATE_COOKIE_NAME, state, {
       signed: true,
       httpOnly: true,
       sameSite: "lax",
+      secure: request.protocol === "https",
       path: "/",
       maxAge: 300,
     });
 
     const params = new URLSearchParams({
       client_id: config.clientId,
-      redirect_uri: `${web.publicUrl}/auth/callback`,
+      redirect_uri: `${origin}/auth/callback`,
       response_type: "code",
       scope: "identify guilds.members.read",
       state,
@@ -75,6 +103,17 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       return reply.code(400).send(`Discord declined the login request: ${query.error}`);
     }
 
+    // Must resolve to the same origin /auth/login used — Discord redirects
+    // back to the exact redirect_uri it was given, so the Host here always
+    // matches the one the login attempt started from (unless it's been
+    // removed from WEB_PUBLIC_URLS since, which invalidates the login).
+    const origin = resolveRequestOrigin(request, web.publicUrls);
+    if (!origin) {
+      return reply
+        .code(400)
+        .send(`This dashboard isn't reachable at ${request.protocol}://${request.host}.`);
+    }
+
     const unsignedState = stateCookieRaw ? request.unsignCookie(stateCookieRaw) : null;
     if (!query.code || !query.state || !unsignedState?.valid || unsignedState.value !== query.state) {
       return reply.code(400).send("Invalid or expired login attempt. Please try again.");
@@ -90,7 +129,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
           client_secret: web.clientSecret,
           grant_type: "authorization_code",
           code: query.code,
-          redirect_uri: `${web.publicUrl}/auth/callback`,
+          redirect_uri: `${origin}/auth/callback`,
         }),
       });
       if (!tokenRes.ok) {
@@ -139,7 +178,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       isOwner: discordUser.id === config.botOwnerId,
       expiresAt: Date.now() + WEB_SESSION_TTL_MS,
     });
-    setSessionCookie(reply, sessionId, config);
+    setSessionCookie(reply, sessionId, request.protocol === "https");
 
     return reply.redirect("/");
   });

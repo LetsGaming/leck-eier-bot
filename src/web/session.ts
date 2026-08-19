@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getSession, deleteSession } from "../db/sessionsRepository.js";
 import { WEB_SESSION_COOKIE_NAME, WEB_SESSION_TTL_MS } from "../constants.js";
-import type { Config, WebSession } from "../types.js";
+import type { WebSession } from "../types.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -17,12 +17,13 @@ export function getSessionFromRequest(request: FastifyRequest): WebSession | nul
   return getSession(unsigned.value);
 }
 
-export function setSessionCookie(reply: FastifyReply, sessionId: string, config: Config): void {
+/** `secure` is decided per-request (`request.protocol === "https"`) rather than from static config, since a multi-domain dashboard can be reached over http on one origin and https on another. */
+export function setSessionCookie(reply: FastifyReply, sessionId: string, secure: boolean): void {
   reply.setCookie(WEB_SESSION_COOKIE_NAME, sessionId, {
     signed: true,
     httpOnly: true,
     sameSite: "lax",
-    secure: config.web?.publicUrl.startsWith("https://") ?? false,
+    secure,
     path: "/",
     maxAge: WEB_SESSION_TTL_MS / 1000,
   });

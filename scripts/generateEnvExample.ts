@@ -41,7 +41,7 @@ const lines: string[] = [
   "# Leave these unset (or set WEB_ENABLED=false) to run without it.",
   `WEB_ENABLED=${example("WEB_ENABLED", shape.WEB_ENABLED)}`,
   `WEB_PORT=${example("WEB_PORT", shape.WEB_PORT)}`,
-  `WEB_PUBLIC_URL=${example("WEB_PUBLIC_URL", shape.WEB_PUBLIC_URL)}`,
+  `WEB_PUBLIC_URLS=${example("WEB_PUBLIC_URLS", shape.WEB_PUBLIC_URLS)}`,
   `WEB_SESSION_SECRET=${example("WEB_SESSION_SECRET", shape.WEB_SESSION_SECRET)}`,
   `DISCORD_CLIENT_SECRET=${example("DISCORD_CLIENT_SECRET", shape.DISCORD_CLIENT_SECRET)}`,
   "",

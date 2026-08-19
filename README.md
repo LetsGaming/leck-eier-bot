@@ -26,6 +26,8 @@ npm run dev
 
 ## Documentation
 
+See [docs/README.md](docs/README.md) for a task-oriented index (e.g. "dashboard shows a login error", "adding a new command"). Full list:
+
 | Doc | Covers |
 | --- | --- |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Env vars, the zod schema, regenerating `.env.example` |
