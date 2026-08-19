@@ -28,16 +28,16 @@ services:
     environment:
       LOG_DIR: /app/logs
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
 ```
 
-- **`env_file: ./.env`**: loads every variable from `.env` into the container's environment. Nothing secret is baked into the image — it's only ever supplied at run time.
+- **`env_file: ./.env`**: loads every variable from `.env` into the *container's* environment. Nothing secret is baked into the image — it's only ever supplied at run time.
 - **`./data` → `/app/data`**: the SQLite database (see [DATABASE.md](DATABASE.md)). Persists across container recreation.
 - **`./logs` → `/app/logs`**: log files. `LOG_DIR` is explicitly set to `/app/logs` because the app's default (`<cwd>/../logs`) would otherwise resolve outside the container's writable area.
-- **`ports: 3000:3000`**: only relevant if the [dashboard](DASHBOARD.md) is enabled. The host port (left of the colon) must match `WEB_PORT`/`WEB_PUBLIC_URL` in `.env`; remove this block if you're not using the dashboard, or front it with a reverse proxy instead of publishing it directly.
+- **`ports: "${WEB_PORT:-3000}:${WEB_PORT:-3000}"`**: only relevant if the [dashboard](DASHBOARD.md) is enabled. This is Compose's *own* `${...}` substitution — separate from `env_file` above — which it does by reading the same `./.env` file directly (any `.env` in the same directory as `docker-compose.yml` is used for this automatically, no extra config needed). Both sides always match `WEB_PORT`, so changing it in `.env` and re-running `docker compose up -d` is enough — no need to touch this file. `WEB_PUBLIC_URL` should then point at that same port. Remove this block entirely if you're not using the dashboard, or front it with a reverse proxy instead of publishing it directly.
 
 Both `data/` and `logs/` directories are created on the host automatically by Docker if they don't already exist; the container also creates them internally if the volumes are empty.
 

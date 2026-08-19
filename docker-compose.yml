@@ -12,11 +12,13 @@ services:
       LOG_DIR: /app/logs
     ports:
       # Only needed when the dashboard is enabled (WEB_ENABLED != "false" in
-      # .env). Change the host side (left of the colon) if you're running
-      # something else on 3000, or remove this block entirely to keep the
-      # dashboard unreachable from outside the container. Must line up with
-      # WEB_PORT/WEB_PUBLIC_URL in .env — see docs/DASHBOARD.md.
-      - "3000:3000"
+      # .env). Both sides come from WEB_PORT in .env (Compose reads that same
+      # file for ${...} substitution here, separately from env_file above
+      # injecting it into the container) so the mapping always matches what
+      # the app actually listens on — no need to edit this file when you
+      # change WEB_PORT. Remove this block entirely to keep the dashboard
+      # unreachable from outside the container. See docs/DASHBOARD.md.
+      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
