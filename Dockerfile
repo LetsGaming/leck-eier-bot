@@ -27,7 +27,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# better-sqlite3 compiles a native addon at install time (node-gyp), which
+# needs Python + a C++ toolchain — node:lts-slim has neither by default.
+# Install them, run the install, then purge them in this same layer so the
+# final image doesn't carry a permanent build toolchain just for this.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && npm ci --omit=dev \
+  && apt-get purge -y --auto-remove python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/dist ./dist
 COPY --from=build-web /app/web/dist ./web/dist
