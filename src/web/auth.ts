@@ -9,6 +9,7 @@ import {
   DISCORD_OAUTH_AUTHORIZE_URL,
   DISCORD_OAUTH_TOKEN_URL,
   WEB_OAUTH_STATE_COOKIE_NAME,
+  WEB_OAUTH_STATE_TTL_SECONDS,
   WEB_SESSION_TTL_MS,
 } from "../constants.js";
 import type { BotClient, Config } from "../types.js";
@@ -79,7 +80,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       sameSite: "lax",
       secure: request.protocol === "https",
       path: "/",
-      maxAge: 300,
+      maxAge: WEB_OAUTH_STATE_TTL_SECONDS,
     });
 
     const params = new URLSearchParams({
@@ -116,6 +117,16 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
 
     const unsignedState = stateCookieRaw ? request.unsignCookie(stateCookieRaw) : null;
     if (!query.code || !query.state || !unsignedState?.valid || unsignedState.value !== query.state) {
+      // Same user-facing message either way, but the specific branch below
+      // is what actually distinguishes "cookie never arrived" (proxy/browser
+      // dropped it) from "signature invalid" (stale/rotated session secret)
+      // from "genuine replay/expiry" — worth knowing when this is reported.
+      let reason: string;
+      if (!query.code || !query.state) reason = "callback is missing code or state query parameter";
+      else if (!stateCookieRaw) reason = "no oauth state cookie was present on the request";
+      else if (!unsignedState?.valid) reason = "oauth state cookie failed signature verification";
+      else reason = "oauth state cookie value did not match the state query parameter";
+      logger.warn(`OAuth callback rejected: ${reason}.`);
       return reply.code(400).send("Invalid or expired login attempt. Please try again.");
     }
 

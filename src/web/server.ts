@@ -37,6 +37,15 @@ export async function startWebServer(client: BotClient, config: Config): Promise
 
   const app = Fastify({ logger: false, trustProxy: true });
 
+  // Chrome warns (harmlessly — it just falls back to site-keying) if some
+  // responses on an origin request origin-keyed process isolation and
+  // others don't. We don't rely on origin-keying for anything, but setting
+  // it uniformly on every response is exactly Chrome's own suggested fix
+  // and costs nothing.
+  app.addHook("onSend", async (_request, reply) => {
+    reply.header("Origin-Agent-Cluster", "?1");
+  });
+
   await app.register(fastifyCookie, { secret: config.web.sessionSecret });
   await app.register(fastifyFormbody);
 
