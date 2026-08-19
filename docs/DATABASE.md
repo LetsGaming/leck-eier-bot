@@ -22,7 +22,7 @@ for (let v = current; v < MIGRATIONS.length; v++) {
 }
 ```
 
-Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji).
+Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists.
 
 ## Schema
 
@@ -73,6 +73,7 @@ See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is a 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | |
+| `name` | `TEXT NOT NULL` | Admin-facing label for the dashboard's panel list and `/reactionroles list` — never rendered into the Discord message itself, unlike `title`. Added in v6; existing rows were backfilled from `title` (or a generic placeholder) at migration time. |
 | `channel_id` | `TEXT NOT NULL` | |
 | `message_id` | `TEXT` | `null` until a *managed* panel has been sent for the first time; set immediately at creation for an *unmanaged* one (see `managed`). Unique when non-null. |
 | `managed` | `INTEGER NOT NULL DEFAULT 1` | `1`: the bot owns the message — posts it, rebuilds it on every change. `0`: attached to a pre-existing message (e.g. an admin's rules post) instead, reactions-only — see [REACTION_ROLES.md § Attaching to an existing message](REACTION_ROLES.md#attaching-to-an-existing-message). Set once at creation via `createPanel()`'s `existingMessageId` and never changed afterward. |

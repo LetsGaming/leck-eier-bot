@@ -160,6 +160,22 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
         ON reaction_role_mappings(panel_id, emoji_id, emoji_name);
     `);
   },
+  // v6: a required, always-present panel name for identifying it in the
+  // dashboard/`/reactionroles list` — independent of `title`, which only
+  // ever applied to embed-type managed panels. Backfilled from `title`
+  // where one exists, else a generic placeholder.
+  (d) => {
+    d.exec(`ALTER TABLE reaction_role_panels ADD COLUMN name TEXT NOT NULL DEFAULT '';`);
+    d.exec(`
+      UPDATE reaction_role_panels
+      SET name = CASE
+        WHEN title IS NOT NULL AND title != '' THEN title
+        WHEN managed = 0 THEN 'Existing message'
+        ELSE 'Panel #' || id
+      END
+      WHERE name = '';
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

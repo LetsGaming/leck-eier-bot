@@ -503,7 +503,7 @@ function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
     });
   const description = [panel.description, lines.join("\n")].filter(Boolean).join("\n\n");
   return createEmbed({
-    title: panel.title ?? "Reaction Roles",
+    title: panel.title ?? panel.name,
     description: description || "No roles configured yet.",
     color: EmbedColor.Info,
   });

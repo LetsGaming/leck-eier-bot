@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
+import EmojiPicker from "../components/EmojiPicker";
 import type {
   Channel,
   CreatePanelInput,
@@ -11,6 +12,8 @@ import type {
 } from "../types";
 
 const MAX_OPTIONS = 25; // Discord's own cap, for buttons and dropdowns alike.
+
+type MessageSource = "simple" | "embed" | "existing";
 
 function selectionHint(selectionType: SelectionType): string {
   switch (selectionType) {
@@ -29,8 +32,15 @@ function multiRemovableHint(allowMultiple: boolean, removable: boolean): string 
   return `Members ${multi}, and ${remove}.`;
 }
 
+function parseMessageLink(link: string): { channelId: string; messageId: string } | null {
+  const match = link.trim().match(/discord(?:app)?\.com\/channels\/\d+\/(\d+)\/(\d+)/);
+  if (!match) return null;
+  return { channelId: match[1]!, messageId: match[2]! };
+}
+
 /** Local editable buffer — title/description are plain strings ("" instead of null) since that's what a text input needs. Converted back to string | null on save. */
 interface PanelFormState {
+  name: string;
   channelId: string;
   messageType: PanelMessageType;
   removeReaction: boolean;
@@ -43,6 +53,7 @@ interface PanelFormState {
 
 function emptyPanelForm(): PanelFormState {
   return {
+    name: "",
     channelId: "",
     messageType: "embed",
     removeReaction: false,
@@ -56,6 +67,7 @@ function emptyPanelForm(): PanelFormState {
 
 function panelToForm(panel: Panel): PanelFormState {
   return {
+    name: panel.name,
     channelId: panel.channelId,
     messageType: panel.messageType,
     removeReaction: panel.removeReaction,
@@ -89,7 +101,7 @@ export default function ReactionRoles() {
   // panel's lifetime afterward.
   const [selectionType, setSelectionType] = useState<SelectionType>("reactions");
   const [attachMode, setAttachMode] = useState<"new" | "existing">("new");
-  const [existingMessageId, setExistingMessageId] = useState("");
+  const [messageLink, setMessageLink] = useState("");
   const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -117,30 +129,34 @@ export default function ReactionRoles() {
   const optionCap = effectiveSelectionType === "reactions" ? null : MAX_OPTIONS;
   const atOptionCap = optionCap !== null && (selected?.mappings.length ?? 0) >= optionCap;
 
+  const messageSource: MessageSource = attachMode === "existing" ? "existing" : form.messageType === "text" ? "simple" : "embed";
+
   useEffect(() => {
     if (selectedId === "new") {
       setForm(emptyPanelForm());
       setSelectionType("reactions");
       setAttachMode("new");
-      setExistingMessageId("");
+      setMessageLink("");
     } else if (selected) {
       setForm(panelToForm(selected));
     }
     setMappingDraft(emptyMappingDraft());
   }, [selectedId, selected]);
 
-  // Buttons/dropdowns need a bot-owned message to attach components to —
-  // Discord has no way to add a component to someone else's message.
-  useEffect(() => {
-    if (selectedId === "new" && selectionType !== "reactions" && attachMode === "existing") {
-      setAttachMode("new");
-    }
-  }, [selectionType, attachMode, selectedId]);
-
   function selectPanel(id: number | "new") {
     setError(null);
     setNotice(null);
     setSelectedId(id);
+  }
+
+  function handleMessageSourceChange(source: MessageSource) {
+    if (source === "existing") {
+      setAttachMode("existing");
+      setSelectionType("reactions"); // only selection type existing messages support
+    } else {
+      setAttachMode("new");
+      setForm((f) => ({ ...f, messageType: source === "simple" ? "text" : "embed" }));
+    }
   }
 
   function toggleAllowedRole(roleId: string) {
@@ -153,13 +169,20 @@ export default function ReactionRoles() {
   }
 
   async function handleSavePanel() {
-    if (!form.channelId) {
-      setError("Pick a channel first.");
+    if (!form.name.trim()) {
+      setError("Give the panel a name.");
       return;
     }
     const attachingExisting = selectedId === "new" && attachMode === "existing";
-    if (attachingExisting && !existingMessageId.trim()) {
-      setError("Enter the message ID to attach to.");
+    let existingLocation: { channelId: string; messageId: string } | null = null;
+    if (attachingExisting) {
+      existingLocation = parseMessageLink(messageLink);
+      if (!existingLocation) {
+        setError("Paste a valid message link (right-click the message → Copy Message Link).");
+        return;
+      }
+    } else if (!form.channelId) {
+      setError("Pick a channel first.");
       return;
     }
     setBusy(true);
@@ -170,11 +193,12 @@ export default function ReactionRoles() {
       if (selectedId === "new") {
         const body: CreatePanelInput = {
           ...form,
+          channelId: attachingExisting ? existingLocation!.channelId : form.channelId,
           selectionType,
           title: attachingExisting || !form.title.trim() ? null : form.title,
           description: attachingExisting || !form.description.trim() ? null : form.description,
           allowedRoleIds: form.allowedRoleIds.length ? form.allowedRoleIds : null,
-          existingMessageId: attachingExisting ? existingMessageId.trim() : null,
+          existingMessageId: attachingExisting ? existingLocation!.messageId : null,
         };
         saved = await api.createPanel(body);
         setNotice("Panel created as a draft — add roles below, then click Send when ready.");
@@ -263,6 +287,10 @@ export default function ReactionRoles() {
       setError("Pick an emoji.");
       return;
     }
+    if (effectiveSelectionType !== "reactions" && !mappingDraft.label.trim()) {
+      setError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
+      return;
+    }
     if (atOptionCap) {
       setError(`Discord allows at most ${optionCap} options for this selection type.`);
       return;
@@ -346,7 +374,7 @@ export default function ReactionRoles() {
           </button>
           {panels.map((p) => (
             <button key={p.id} className={selectedId === p.id ? "active" : ""} onClick={() => selectPanel(p.id)}>
-              #{p.id} — {p.managed ? p.title || "Untitled" : "Existing message"}
+              #{p.id} — {p.name}
               {!p.sent && " (draft)"}
             </button>
           ))}
@@ -365,63 +393,40 @@ export default function ReactionRoles() {
               )}
 
               <div className="card">
-                <h2>Panel settings</h2>
+                <h2>Message</h2>
 
-                {selectedId === "new" && (
-                  <div className="field">
-                    <label htmlFor="rr-selection-type">Selection type</label>
-                    <select
-                      id="rr-selection-type"
-                      value={selectionType}
-                      onChange={(e) => setSelectionType(e.target.value as SelectionType)}
-                    >
-                      <option value="reactions">Reactions</option>
-                      <option value="buttons">Buttons</option>
-                      <option value="dropdown">Dropdown menu</option>
-                    </select>
-                    <div className="hint">{selectionHint(selectionType)}</div>
-                  </div>
-                )}
-                {typeof selectedId === "number" && selected && (
-                  <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
-                    Selection type: <strong>{selected.selectionType}</strong> (fixed for this panel)
-                  </p>
-                )}
+                <div className="field">
+                  <label htmlFor="rr-name">Name</label>
+                  <input
+                    id="rr-name"
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Enter a unique name"
+                  />
+                  <div className="hint">For your own reference in this list — not shown on the message itself.</div>
+                </div>
 
-                {selectedId === "new" && selectionType === "reactions" && (
+                {selectedId === "new" ? (
                   <div className="field">
-                    <label htmlFor="rr-attach-mode">Message</label>
+                    <label htmlFor="rr-message-source">Message type</label>
                     <select
-                      id="rr-attach-mode"
-                      value={attachMode}
-                      onChange={(e) => setAttachMode(e.target.value as "new" | "existing")}
+                      id="rr-message-source"
+                      value={messageSource}
+                      onChange={(e) => handleMessageSourceChange(e.target.value as MessageSource)}
                     >
-                      <option value="new">Bot posts and manages a new message</option>
-                      <option value="existing">Attach to an existing message</option>
+                      <option value="simple">Simple message</option>
+                      <option value="embed">Embedded message</option>
+                      <option value="existing">Existing message</option>
                     </select>
                     <div className="hint">
-                      {attachMode === "existing"
-                        ? "For a message an admin already wrote (e.g. server rules) — its content is never touched, only its reactions."
+                      {messageSource === "existing"
+                        ? "Attach to a message an admin already wrote (e.g. server rules) — its content is never touched, only its reactions. Reactions only."
                         : "The bot posts a message listing the roles below and keeps it updated."}
                     </div>
                   </div>
-                )}
-
-                {isExistingMessageMode ? (
-                  selectedId === "new" && (
-                    <div className="field">
-                      <label htmlFor="rr-existing-message-id">Message ID</label>
-                      <input
-                        id="rr-existing-message-id"
-                        type="text"
-                        value={existingMessageId}
-                        onChange={(e) => setExistingMessageId(e.target.value)}
-                        placeholder="Right-click the message → Copy Message ID (Developer Mode)"
-                      />
-                    </div>
-                  )
                 ) : (
-                  <>
+                  selected?.managed && (
                     <div className="field">
                       <label htmlFor="rr-message-type">Message type</label>
                       <select
@@ -429,130 +434,97 @@ export default function ReactionRoles() {
                         value={form.messageType}
                         onChange={(e) => setForm((f) => ({ ...f, messageType: e.target.value as PanelMessageType }))}
                       >
+                        <option value="text">Simple message</option>
                         <option value="embed">Embedded message</option>
-                        <option value="text">Simple text message</option>
+                      </select>
+                    </div>
+                  )
+                )}
+                {typeof selectedId === "number" && selected && !selected.managed && (
+                  <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
+                    Attached to an existing message — its content is never edited.
+                  </p>
+                )}
+
+                <div className="field">
+                  <label htmlFor="rr-selection-type">Selection type</label>
+                  <select
+                    id="rr-selection-type"
+                    value={effectiveSelectionType}
+                    disabled={selectedId !== "new" || attachMode === "existing"}
+                    onChange={(e) => setSelectionType(e.target.value as SelectionType)}
+                  >
+                    <option value="reactions">Reactions</option>
+                    <option value="buttons" disabled={selectedId === "new" && attachMode === "existing"}>
+                      Buttons
+                    </option>
+                    <option value="dropdown" disabled={selectedId === "new" && attachMode === "existing"}>
+                      Dropdown menu
+                    </option>
+                  </select>
+                  <div className="hint">
+                    {selectedId === "new" ? selectionHint(selectionType) : "Fixed for this panel."}
+                  </div>
+                </div>
+
+                {isExistingMessageMode ? (
+                  selectedId === "new" && (
+                    <div className="field">
+                      <label htmlFor="rr-message-link">Message link</label>
+                      <input
+                        id="rr-message-link"
+                        type="text"
+                        value={messageLink}
+                        onChange={(e) => setMessageLink(e.target.value)}
+                        placeholder="https://discord.com/channels/…/…/…"
+                      />
+                      <div className="hint">Right-click the message → Copy Message Link. No need to pick a channel separately.</div>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <div className="field">
+                      <label htmlFor="rr-channel">Channel</label>
+                      <select
+                        id="rr-channel"
+                        value={form.channelId}
+                        onChange={(e) => setForm((f) => ({ ...f, channelId: e.target.value }))}
+                      >
+                        <option value="">— pick a channel —</option>
+                        {channels.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            #{c.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     {form.messageType === "embed" && (
                       <div className="field">
-                        <label htmlFor="rr-title">Title</label>
+                        <label htmlFor="rr-title">Embed title</label>
                         <input
                           id="rr-title"
                           type="text"
                           value={form.title}
                           onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                          placeholder="Reaction Roles"
+                          placeholder={form.name || "Reaction Roles"}
                         />
                       </div>
                     )}
                     <div className="field">
-                      <label htmlFor="rr-description">Description</label>
+                      <label htmlFor="rr-description">Message text</label>
                       <textarea
                         id="rr-description"
                         value={form.description}
                         onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                         placeholder={
                           effectiveSelectionType === "reactions"
-                            ? "Optional text shown above the role list"
+                            ? "React to get a role!"
                             : "Optional text shown above the buttons/menu"
                         }
                       />
                     </div>
                   </>
                 )}
-
-                <div className="field">
-                  <label htmlFor="rr-channel">Channel</label>
-                  <select
-                    id="rr-channel"
-                    value={form.channelId}
-                    disabled={typeof selectedId === "number" && !!selected && !selected.managed}
-                    onChange={(e) => setForm((f) => ({ ...f, channelId: e.target.value }))}
-                  >
-                    <option value="">— pick a channel —</option>
-                    {channels.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        #{c.name}
-                      </option>
-                    ))}
-                  </select>
-                  {typeof selectedId === "number" && selected && !selected.managed && (
-                    <div className="hint">Fixed to wherever the attached message lives.</div>
-                  )}
-                </div>
-
-                <div className="field">
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={form.allowMultiple}
-                      onChange={(e) => setForm((f) => ({ ...f, allowMultiple: e.target.checked }))}
-                    />
-                    Allow members to get more than one role from this panel
-                  </label>
-                </div>
-                <div className="field">
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={form.removable}
-                      onChange={(e) => setForm((f) => ({ ...f, removable: e.target.checked }))}
-                    />
-                    Members can give a role back up once they have it
-                  </label>
-                  <div className="hint">{multiRemovableHint(form.allowMultiple, form.removable)}</div>
-                </div>
-
-                {effectiveSelectionType === "reactions" && (
-                  <div className="field">
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={form.removeReaction}
-                        onChange={(e) => setForm((f) => ({ ...f, removeReaction: e.target.checked }))}
-                      />
-                      Remove the user's reaction immediately after acting
-                    </label>
-                    <div className="hint">
-                      Keeps the reaction count at 1. With this on, re-reacting the same option flips the role on/off
-                      instead of un-reacting revoking it.
-                    </div>
-                  </div>
-                )}
-
-                <div className="field">
-                  <label>Allowed roles</label>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      background: "var(--bg-inset)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      padding: 8,
-                      maxHeight: 140,
-                      overflowY: "auto",
-                    }}
-                  >
-                    {roles.length === 0 && <span className="muted">No roles found.</span>}
-                    {roles.map((r) => (
-                      <label
-                        key={r.id}
-                        className="switch"
-                        style={{ fontSize: 13, background: "var(--bg-elevated)", padding: "2px 8px", borderRadius: 999 }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.allowedRoleIds.includes(r.id)}
-                          onChange={() => toggleAllowedRole(r.id)}
-                        />
-                        {r.name}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="hint">Only members holding one of these roles may use the panel. None selected = everyone.</div>
-                </div>
 
                 <button className="primary" onClick={handleSavePanel} disabled={busy}>
                   {selectedId === "new" ? "Create draft panel" : "Save changes"}
@@ -619,32 +591,14 @@ export default function ReactionRoles() {
                   </h2>
                   {!atOptionCap && (
                     <div className="mapping-row">
-                      <input
-                        type="text"
-                        style={{ width: 90 }}
-                        placeholder={effectiveSelectionType === "reactions" ? "🎉" : "🎉 (optional)"}
-                        value={mappingDraft.emojiId ? "" : mappingDraft.emojiName}
-                        onChange={(e) => setMappingDraft((d) => ({ ...d, emojiName: e.target.value, emojiId: null }))}
+                      <EmojiPicker
+                        value={{ emojiId: mappingDraft.emojiId, emojiName: mappingDraft.emojiName || null }}
+                        onChange={(v) =>
+                          setMappingDraft((d) => ({ ...d, emojiId: v.emojiId, emojiName: v.emojiName ?? "" }))
+                        }
+                        customEmojis={emojis}
+                        allowEmpty={effectiveSelectionType !== "reactions"}
                       />
-                      <select
-                        className="emoji-select"
-                        value={mappingDraft.emojiId ?? ""}
-                        onChange={(e) => {
-                          const emoji = emojis.find((em) => em.id === e.target.value);
-                          if (!emoji) {
-                            setMappingDraft((d) => ({ ...d, emojiId: null }));
-                          } else {
-                            setMappingDraft((d) => ({ ...d, emojiId: emoji.id, emojiName: emoji.name ?? emoji.id }));
-                          }
-                        }}
-                      >
-                        <option value="">or pick a server emoji…</option>
-                        {emojis.map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.name}
-                          </option>
-                        ))}
-                      </select>
                       <select
                         className="grow"
                         value={mappingDraft.roleId}
@@ -664,7 +618,7 @@ export default function ReactionRoles() {
                         placeholder={
                           effectiveSelectionType === "reactions"
                             ? "Label (optional)"
-                            : `${effectiveSelectionType === "buttons" ? "Button" : "Option"} text (defaults to role name)`
+                            : `${effectiveSelectionType === "buttons" ? "Button" : "Option"} text (required)`
                         }
                         value={mappingDraft.label}
                         onChange={(e) => setMappingDraft((d) => ({ ...d, label: e.target.value }))}
@@ -678,6 +632,93 @@ export default function ReactionRoles() {
               )}
 
               {selectedId === "new" && <p className="muted">Save the panel first, then add roles to it.</p>}
+
+              {selectedId !== null && (
+                <details className="card">
+                  <summary>Advanced options</summary>
+                  <div style={{ marginTop: 16 }}>
+                    <div className="field">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={form.allowMultiple}
+                          onChange={(e) => setForm((f) => ({ ...f, allowMultiple: e.target.checked }))}
+                        />
+                        Allow members to get more than one role from this panel
+                      </label>
+                    </div>
+                    <div className="field">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={form.removable}
+                          onChange={(e) => setForm((f) => ({ ...f, removable: e.target.checked }))}
+                        />
+                        Members can give a role back up once they have it
+                      </label>
+                      <div className="hint">{multiRemovableHint(form.allowMultiple, form.removable)}</div>
+                    </div>
+
+                    {effectiveSelectionType === "reactions" && (
+                      <div className="field">
+                        <label className="switch">
+                          <input
+                            type="checkbox"
+                            checked={form.removeReaction}
+                            onChange={(e) => setForm((f) => ({ ...f, removeReaction: e.target.checked }))}
+                          />
+                          Remove the user's reaction immediately after acting
+                        </label>
+                        <div className="hint">
+                          Keeps the reaction count at 1. With this on, re-reacting the same option flips the role
+                          on/off instead of un-reacting revoking it.
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="field">
+                      <label>Allowed roles</label>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          background: "var(--bg-inset)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--radius)",
+                          padding: 8,
+                          maxHeight: 140,
+                          overflowY: "auto",
+                        }}
+                      >
+                        {roles.length === 0 && <span className="muted">No roles found.</span>}
+                        {roles.map((r) => (
+                          <label
+                            key={r.id}
+                            className="switch"
+                            style={{ fontSize: 13, background: "var(--bg-elevated)", padding: "2px 8px", borderRadius: 999 }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.allowedRoleIds.includes(r.id)}
+                              onChange={() => toggleAllowedRole(r.id)}
+                            />
+                            {r.name}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="hint">
+                        Only members holding one of these roles may use the panel. None selected = everyone.
+                      </div>
+                    </div>
+
+                    <p className="hint">
+                      These are part of the same panel settings above —{" "}
+                      {selectedId === "new" ? "Create draft panel" : "Save changes"} saves them too.
+                    </p>
+                  </div>
+                </details>
+              )}
             </>
           )}
         </div>

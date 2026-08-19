@@ -4,7 +4,7 @@ Lets members self-assign roles — by reacting to a message, clicking a button, 
 
 ## Concepts
 
-A **panel** is one message (`reaction_role_panels`) in a chosen channel that members interact with to pick roles. Each **mapping** (`reaction_role_mappings`) attaches one option (an emoji, a button, or a dropdown entry) to one role on that panel, in a display order.
+A **panel** is one message (`reaction_role_panels`) in a chosen channel that members interact with to pick roles. Each panel has a required **name** — purely for identifying it in the dashboard's panel list and `/reactionroles list`, never shown on the Discord message itself. Each **mapping** (`reaction_role_mappings`) attaches one option (an emoji, a button, or a dropdown entry) to one role on that panel, in a display order.
 
 Every panel has, set once at creation and fixed afterward:
 
@@ -27,6 +27,10 @@ Panels also start as **drafts** and don't touch Discord at all until explicitly 
 | **Dropdown** | A single select menu with up to 25 options under the message. | Same as buttons. |
 
 Buttons and dropdowns are click/submit-based rather than persistent marks on the message, so `removeReaction` (below) doesn't apply to them — every click or menu submission is already a single, self-contained action.
+
+### Emoji vs. label
+
+A reaction has no text of its own — the emoji *is* the option — so it's required, and a mapping's label is just decorative extra text shown next to the role on the panel message. Buttons and dropdown options are the opposite: the label is what the member actually reads (an emoji-only button is easy to misread), so it's **required** for those two, and the emoji becomes a nice-to-have visual instead. Enforced both in the dashboard's mapping form and, authoritatively, by the API (`validateMappingForPanel()` in `src/web/routes/reactionRolePanels.ts`).
 
 For a **dropdown**, "allow multiple" controls how many options the menu lets you pick in one go (`maxValues`) — picking a new set replaces your previous selection from that panel in a single submission, rather than needing a separate un-pick step. Discord's select menus don't support showing a different "currently selected" state per viewer, so the menu always starts blank regardless of what you already hold; submitting it still applies correctly against your real roles.
 
@@ -52,7 +56,7 @@ This is the `sent` column on `reaction_role_panels`. Reaction/button/dropdown ev
 
 Instead of the bot posting its own message, a **reactions** panel can attach to one that already exists — the classic case being rules-acceptance: an admin writes the rules as a normal message, and reacting to it (e.g. with ✅) grants a "Member" role, typically with **removable off** so un-reacting doesn't revoke it.
 
-Pick "Attach to an existing message" when creating a panel on the dashboard (only offered for the Reactions selection type — see [Selection types](#selection-types) for why) and give it the message's ID (right-click the message in Discord → Copy Message ID, with Developer Mode enabled under User Settings → Advanced). The channel field is set from wherever that message is and can't be changed afterward — the message doesn't move, so neither does the panel that's watching it.
+Pick "Existing message" as the message type when creating a panel on the dashboard (this forces the selection type to Reactions — see [Selection types](#selection-types) for why) and paste the message's link (right-click the message in Discord → Copy Message Link, with Developer Mode enabled under User Settings → Advanced). There's no separate channel picker for this path — the link already encodes both the channel and message id, which the dashboard parses client-side before creating the panel. The channel is then fixed for the panel's lifetime — the message doesn't move, so neither does the panel watching it.
 
 This is the `managed` column on `reaction_role_panels` (`false` for an attached message, `true` for the default bot-posted kind — see [DATABASE.md](DATABASE.md#reaction_role_panels--reaction_role_mappings)) and it's fixed for the panel's lifetime: there's no "convert" path, only "create it this way from the start." Concretely, `managed: false` changes three things:
 
@@ -68,7 +72,19 @@ This is the `managed` column on `reaction_role_panels` (`false` for an attached 
 
 ## Dashboard workflow
 
-On `/reaction-roles`: pick **+ New panel**, choose the selection type, choose whether the bot posts a new message or [attaches to an existing one](#attaching-to-an-existing-message) (reactions only), set the rest of the panel's settings, and create it — this saves a **draft**, nothing posted yet. Add roles one at a time (emoji and/or role and/or label, depending on selection type); each add/remove/reorder immediately saves to the DB and, once the panel has been sent, also re-syncs the live Discord message. When you're happy with it, click **Send**.
+On `/reaction-roles`, pick **+ New panel**. The form follows a fixed order:
+
+1. **Name** it — for the panel list only, not shown on Discord.
+2. **Message type**: Simple message, Embedded message, or Existing message (only Existing skips the channel picker in favor of a pasted message link — see [Attaching to an existing message](#attaching-to-an-existing-message)).
+3. **Selection type**: Reactions, Buttons, or Dropdown (locked to Reactions if you picked Existing message).
+4. Channel (unless Existing) and the message text.
+5. Create — this saves a **draft**, nothing posted to Discord yet.
+
+Then add roles one at a time: pick an emoji from the picker (search box, this server's custom emoji, and a curated set of standard ones — required for Reactions, optional otherwise), a role, and a label (required for Buttons/Dropdown, optional decoration for Reactions). Each add/remove/reorder saves immediately and, once the panel has been sent, also re-syncs the live Discord message.
+
+Less-common settings — allow-multiple, removable, `removeReaction`, and the allowed-roles restriction — live in a collapsed **Advanced options** section rather than cluttering the main form; expand it when you need them. They're still just part of the same panel settings, saved by the same Create/Save button above.
+
+When you're happy with it, click **Send**.
 
 Deleting a panel also deletes its Discord message — but only for a bot-posted (`managed`) panel; deleting one attached to an existing message leaves that message alone (best-effort either way — a manually-deleted message doesn't block the DB delete).
 
@@ -91,3 +107,5 @@ Both require Admin permission, same as the birthday commands.
 - **Per-user serialization**: a promise-chain keyed by `messageId:userId` (`runSerialized()`) so rapid clicking/reacting can't interleave two concurrent grant/revoke operations for the same person.
 - **Building the message**: `buildPanelContent()` returns plain text or an embed depending on `messageType`, always specifying *both* `content` and `embeds` explicitly (even when one is empty/null) so switching type on an edit fully replaces the old content instead of Discord leaving a stale field in place. `buildComponents()` builds the button rows or the select-menu row for `selectionType: buttons | dropdown`; reactions get no components. `reconcilePanelReactions()` (reactions only) diffs the bot's own reactions against the current mapping list and adds/removes to match, in `position` order.
 - **Posting/syncing**: `syncPanelMessage()` branches on `panel.managed` (post/edit vs. just fetch-and-verify an attached message), then reconciles reactions if the selection type calls for it. Called on every panel/mapping write *once the panel is `sent`* (draft panels are skipped — see `trySync()` in `src/web/routes/reactionRolePanels.ts`), by the explicit `POST .../send` route (which also flips `sent`), by `/reactionroles sync`, and once for every sent panel on `clientReady` (so a restart self-heals any reactions someone removed while the bot was offline).
+- **Dashboard emoji picker**: `web/src/components/EmojiPicker.tsx` is a small self-contained popover (search + this server's custom emoji, fetched via `/api/discord/emojis`, + a curated static list in `web/src/emojiData.ts`) — no external picker dependency. It emits the same `{ emojiId, emojiName }` shape the API already expects, so it's a drop-in replacement for typing/selecting an emoji rather than a new data concept.
+- **Existing-message link parsing**: the dashboard never shows a channel picker for an attached panel — `parseMessageLink()` in `web/src/pages/ReactionRoles.tsx` extracts the channel and message id straight out of a pasted `discord.com/channels/<guild>/<channel>/<message>` link client-side, then sends both through the same `channelId`/`existingMessageId` fields the create API already accepted.

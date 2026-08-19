@@ -61,6 +61,8 @@ export interface ReactionRoleMapping {
 /** A message members interact with (react to, click a button on, or pick from a dropdown on) to self-assign roles. */
 export interface ReactionRolePanel {
   id: number;
+  /** Always-present admin-facing label — independent of `title`, which only ever applies to an embed-type managed panel. Shown in the dashboard's panel list and `/reactionroles list`. */
+  name: string;
   channelId: string;
   /** Null until the panel has been posted to Discord for the first time (managed panels only — set immediately for an attached-to-existing-message one). */
   messageId: string | null;

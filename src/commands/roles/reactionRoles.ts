@@ -71,9 +71,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           })
           .join("\n")
       : "_No roles configured_";
-    const title = panel.managed ? (panel.title ?? "Untitled panel") : "Existing message";
     return {
-      name: `#${panel.id} — ${title} (${panelBadges(panel)})`,
+      name: `#${panel.id} — ${panel.name} (${panelBadges(panel)})`,
       value: `<#${panel.channelId}> — ${jump}\n${mappingLines}`,
     };
   });

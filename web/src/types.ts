@@ -51,6 +51,7 @@ export interface Mapping {
 
 export interface Panel {
   id: number;
+  name: string;
   channelId: string;
   messageId: string | null;
   managed: boolean;
@@ -72,6 +73,7 @@ export interface Panel {
 }
 
 export interface PanelInput {
+  name: string;
   channelId: string;
   messageType: PanelMessageType;
   removeReaction: boolean;

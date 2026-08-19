@@ -5,6 +5,7 @@ import type { ReactionRoleMapping, ReactionRolePanel, ReactionRolePanelWithMappi
 
 interface PanelRow {
   id: number;
+  name: string;
   channel_id: string;
   message_id: string | null;
   managed: 0 | 1;
@@ -34,6 +35,7 @@ interface MappingRow {
 function rowToPanel(row: PanelRow): ReactionRolePanel {
   return {
     id: row.id,
+    name: row.name,
     channelId: row.channel_id,
     messageId: row.message_id,
     managed: row.managed === 1,
@@ -62,7 +64,7 @@ function rowToMapping(row: MappingRow): ReactionRoleMapping {
   };
 }
 
-const PANEL_COLUMNS = `id, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
+const PANEL_COLUMNS = `id, name, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
   allow_multiple, removable, allowed_role_ids, sent, title, description, created_at`;
 const MAPPING_COLUMNS = "id, panel_id, emoji_name, emoji_id, role_id, label, position";
 
@@ -76,6 +78,7 @@ const selectPanelByMessageIdStmt = db.prepare<[string], PanelRow>(
   `SELECT ${PANEL_COLUMNS} FROM reaction_role_panels WHERE message_id = ?`,
 );
 const insertPanelStmt = db.prepare<{
+  name: string;
   channelId: string;
   messageId: string | null;
   managed: 0 | 1;
@@ -90,14 +93,15 @@ const insertPanelStmt = db.prepare<{
   createdAt: string;
 }>(
   `INSERT INTO reaction_role_panels
-     (channel_id, message_id, managed, selection_type, message_type, remove_reaction,
+     (name, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
       allow_multiple, removable, allowed_role_ids, title, description, created_at)
    VALUES
-     (@channelId, @messageId, @managed, @selectionType, @messageType, @removeReaction,
+     (@name, @channelId, @messageId, @managed, @selectionType, @messageType, @removeReaction,
       @allowMultiple, @removable, @allowedRoleIds, @title, @description, @createdAt)`,
 );
 const updatePanelStmt = db.prepare<{
   id: number;
+  name: string;
   channelId: string;
   messageType: string;
   removeReaction: 0 | 1;
@@ -108,7 +112,7 @@ const updatePanelStmt = db.prepare<{
   description: string | null;
 }>(
   `UPDATE reaction_role_panels SET
-     channel_id = @channelId, message_type = @messageType, remove_reaction = @removeReaction,
+     name = @name, channel_id = @channelId, message_type = @messageType, remove_reaction = @removeReaction,
      allow_multiple = @allowMultiple, removable = @removable, allowed_role_ids = @allowedRoleIds,
      title = @title, description = @description
    WHERE id = @id`,
@@ -174,6 +178,7 @@ export function getPanelByMessageId(messageId: string): ReactionRolePanelWithMap
 }
 
 export interface CreatePanelInput {
+  name: string;
   channelId: string;
   selectionType: SelectionType;
   messageType: PanelMessageType;
@@ -199,6 +204,7 @@ export interface CreatePanelInput {
 export function createPanel(input: CreatePanelInput): ReactionRolePanel {
   const existingMessageId = input.existingMessageId ?? null;
   const info = insertPanelStmt.run({
+    name: input.name,
     channelId: input.channelId,
     messageId: existingMessageId,
     managed: existingMessageId ? 0 : 1,
@@ -219,6 +225,7 @@ export function createPanel(input: CreatePanelInput): ReactionRolePanel {
 }
 
 export interface UpdatePanelInput {
+  name: string;
   channelId: string;
   messageType: PanelMessageType;
   removeReaction: boolean;
@@ -235,6 +242,7 @@ export function updatePanel(id: number, input: UpdatePanelInput): ReactionRolePa
   const isManaged = current ? current.managed === 1 : true;
   updatePanelStmt.run({
     id,
+    name: input.name,
     channelId: input.channelId,
     messageType: input.messageType,
     removeReaction: input.removeReaction ? 1 : 0,

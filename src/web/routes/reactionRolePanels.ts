@@ -17,6 +17,7 @@ import { MAX_BUTTONS_PER_PANEL, MAX_DROPDOWN_OPTIONS_PER_PANEL, PanelMessageType
 import type { BotClient } from "../../types.js";
 
 const PanelBodySchema = z.object({
+  name: z.string().min(1).max(100),
   channelId: z.string().min(1),
   messageType: z.enum([PanelMessageType.Text, PanelMessageType.Embed]),
   removeReaction: z.boolean(),
@@ -59,6 +60,23 @@ function parsePanelId(request: { params: unknown }, reply: FastifyReply): number
     return null;
   }
   return id;
+}
+
+/**
+ * Reactions can only ever be identified by their emoji (there's no text on
+ * a reaction), so emoji is required and label is just decorative extra
+ * text. Buttons/dropdown options are the opposite: the emoji is a nice
+ * touch but the label is what the member actually reads, so it's required
+ * there and the emoji is optional.
+ */
+function validateMappingForPanel(
+  selectionType: SelectionType,
+  data: { emojiName: string | null; label: string | null },
+): string | null {
+  if (selectionType === SelectionType.Reactions) {
+    return data.emojiName ? null : "An emoji is required for a reactions panel.";
+  }
+  return data.label?.trim() ? null : "A label is required for buttons/dropdown options.";
 }
 
 function mappingCap(selectionType: SelectionType): number | null {
@@ -195,9 +213,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
 
     const body = MappingBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    if (panel.selectionType === SelectionType.Reactions && !body.data.emojiName) {
-      return reply.code(400).send({ error: "An emoji is required for a reactions panel." });
-    }
+    const validationError = validateMappingForPanel(panel.selectionType, body.data);
+    if (validationError) return reply.code(400).send({ error: validationError });
     const cap = mappingCap(panel.selectionType);
     if (cap !== null && panel.mappings.length >= cap) {
       return reply.code(400).send({ error: `Discord allows at most ${cap} options for this selection type.` });
@@ -220,9 +237,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
 
     const body = MappingBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    if (panel.selectionType === SelectionType.Reactions && !body.data.emojiName) {
-      return reply.code(400).send({ error: "An emoji is required for a reactions panel." });
-    }
+    const validationError = validateMappingForPanel(panel.selectionType, body.data);
+    if (validationError) return reply.code(400).send({ error: validationError });
 
     upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...body.data });
     await trySync(client, reply, id);
