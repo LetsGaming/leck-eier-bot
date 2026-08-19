@@ -127,6 +127,22 @@ h3 {
   padding-top: 12px;
 }
 
+/* Mobile nav (hamburger + off-canvas drawer) — inert on desktop, activated
+   by the shell breakpoint below. Declared here, next to .sidebar, since
+   they're the same nav in two states; the responsive behavior itself lives
+   in the @media blocks at the end of this file. */
+.mobile-topbar {
+  display: none;
+}
+
+.menu-toggle {
+  display: none;
+}
+
+.nav-backdrop {
+  display: none;
+}
+
 .main {
   flex: 1;
   min-width: 0;
@@ -312,6 +328,14 @@ button + button {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+/* Lets a wide table scroll horizontally within its own box instead of
+   forcing the whole page wider — every <table> in the app is wrapped in
+   this on the React side. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
 }
 
 table {
@@ -893,4 +917,142 @@ th {
   color: var(--text-muted);
   padding: 40px 0;
   text-align: center;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Responsive layout                                                      */
+/* ---------------------------------------------------------------------- */
+
+/* Shell: below this, the sidebar can't sit alongside content anymore — it
+   becomes an off-canvas drawer (Layout.tsx toggles the .open class and a
+   backdrop; closes itself on navigation). */
+@media (max-width: 860px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    padding: 0 16px;
+    flex-shrink: 0;
+    background: var(--bg-inset);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    flex-shrink: 0;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .menu-toggle:hover {
+    background: var(--bg-elevated);
+  }
+
+  .menu-toggle svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Same sidebar as desktop, just repositioned — .sidebar's own width/
+     padding/nav-link styles are untouched, only how it's placed changes. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 210;
+    height: 100%;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Content: form rows, card grids, and the reaction-roles two-pane layout
+   all need to stack before the shell breakpoint above actually bites, since
+   a phone in portrait is much narrower than 860px. */
+@media (max-width: 700px) {
+  .main-inner {
+    padding: 18px 14px 32px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rr-layout {
+    flex-direction: column;
+  }
+
+  .rr-list {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .rr-list button {
+    width: auto;
+    flex: 1 1 140px;
+    margin: 0;
+  }
+
+  /* Sibling buttons still wrap like inline content below the width that
+     fits them all in one row; the added top margin keeps a wrapped row
+     from butting up against the one above it (margin-left alone reads oddly
+     once a button is no longer first-on-its-line). */
+  button + button {
+    margin-top: 8px;
+  }
+}
+
+/* Narrow phones: a couple of fixed-width things that fit fine down to ~400px
+   need an explicit floor below that. */
+@media (max-width: 420px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+
+  .emoji-picker-popover,
+  .searchable-select-popover {
+    max-width: calc(100vw - 32px);
+  }
+
+  .login-card {
+    padding: 28px 20px;
+  }
 }

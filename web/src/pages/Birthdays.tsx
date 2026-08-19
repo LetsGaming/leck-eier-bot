@@ -293,32 +293,34 @@ export default function Birthdays() {
             {upcoming.length === 0 ? (
               <p className="muted">No birthdays parsed yet.</p>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Person</th>
-                    <th>Source</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {upcoming.flatMap((b) =>
-                    b.entries.map((entry, i) => (
-                      <tr key={`${b.dateKey}-${i}`}>
-                        <td>{b.dateKey}</td>
-                        <td>{entryLabel(entry)}</td>
-                        <td>
-                          <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
-                            {entry.source === "self" ? "self-registered" : "list"}
-                          </span>
-                        </td>
-                        <td className="muted">{relativeDay(b.daysUntil)}</td>
-                      </tr>
-                    )),
-                  )}
-                </tbody>
-              </table>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Person</th>
+                      <th>Source</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upcoming.flatMap((b) =>
+                      b.entries.map((entry, i) => (
+                        <tr key={`${b.dateKey}-${i}`}>
+                          <td>{b.dateKey}</td>
+                          <td>{entryLabel(entry)}</td>
+                          <td>
+                            <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
+                              {entry.source === "self" ? "self-registered" : "list"}
+                            </span>
+                          </td>
+                          <td className="muted">{relativeDay(b.daysUntil)}</td>
+                        </tr>
+                      )),
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>

@@ -37,42 +37,44 @@ export default function Commands() {
         {!commands ? (
           <div className="loading">Loading…</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Command</th>
-                <th>Description</th>
-                <th>Permission</th>
-                <th>Enabled</th>
-                <th>Guild only</th>
-              </tr>
-            </thead>
-            <tbody>
-              {commands.map((c) => (
-                <tr key={c.name}>
-                  <td>/{c.name}</td>
-                  <td className="muted">{c.description}</td>
-                  <td>{c.permission ?? "none"}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={c.enabled}
-                      disabled={pending === c.name}
-                      onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={c.guildOnly}
-                      disabled={pending === c.name}
-                      onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
-                    />
-                  </td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Description</th>
+                  <th>Permission</th>
+                  <th>Enabled</th>
+                  <th>Guild only</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {commands.map((c) => (
+                  <tr key={c.name}>
+                    <td>/{c.name}</td>
+                    <td className="muted">{c.description}</td>
+                    <td>{c.permission ?? "none"}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={c.enabled}
+                        disabled={pending === c.name}
+                        onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={c.guildOnly}
+                        disabled={pending === c.name}
+                        onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

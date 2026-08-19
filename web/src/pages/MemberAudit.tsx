@@ -36,24 +36,26 @@ function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boo
 function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showLeft: boolean }) {
   if (entries.length === 0) return <p className="muted">Nobody here.</p>;
   return (
-    <table>
-      <thead>
-        <tr>
-          <th></th>
-          <th>Display name</th>
-          <th>Username</th>
-          <th>ID</th>
-          <th>Joined</th>
-          <th>Rules accepted</th>
-          {showLeft && <th>Left</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map((entry) => (
-          <MemberRow key={entry.userId} entry={entry} showLeft={showLeft} />
-        ))}
-      </tbody>
-    </table>
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Display name</th>
+            <th>Username</th>
+            <th>ID</th>
+            <th>Joined</th>
+            <th>Rules accepted</th>
+            {showLeft && <th>Left</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <MemberRow key={entry.userId} entry={entry} showLeft={showLeft} />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
