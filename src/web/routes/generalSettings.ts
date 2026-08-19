@@ -1,22 +1,38 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
+import { isValidFontMap } from "../../utils/font.js";
 
 const PatchBodySchema = z.object({
-  leaveNotificationsEnabled: z.boolean(),
+  leaveNotificationsEnabled: z.boolean().optional(),
+  fontMap: z.string().nullable().optional(),
 });
 
+function serialize(settings: ReturnType<typeof getSettings>) {
+  return {
+    leaveNotificationsEnabled: settings.leaveNotificationsEnabled,
+    fontMap: settings.fontMap,
+  };
+}
+
 export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
-  app.get("/settings/general", async () => {
-    const settings = getSettings();
-    return { leaveNotificationsEnabled: settings.leaveNotificationsEnabled };
-  });
+  app.get("/settings/general", async () => serialize(getSettings()));
 
   app.patch("/settings/general", async (request, reply) => {
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
-    const settings = updateSettings({ leaveNotificationsEnabled: body.data.leaveNotificationsEnabled });
-    return { leaveNotificationsEnabled: settings.leaveNotificationsEnabled };
+    const { leaveNotificationsEnabled, fontMap } = body.data;
+    if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
+      return reply
+        .code(400)
+        .send({ error: "Font must be exactly 52 characters, matching AaBbCc...XxYyZz one for one." });
+    }
+
+    const settings = updateSettings({
+      ...(leaveNotificationsEnabled !== undefined && { leaveNotificationsEnabled }),
+      ...(fontMap !== undefined && { fontMap: fontMap || null }),
+    });
+    return serialize(settings);
   });
 }

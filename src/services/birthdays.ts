@@ -6,6 +6,7 @@ import {
   replaceAllBirthdays,
 } from "../db/birthdaysRepository.js";
 import { getSettings, updateSettings } from "../db/settingsRepository.js";
+import { applyFont } from "../utils/font.js";
 import type { BirthdayEntry, BirthdaysByDate } from "../types.js";
 import {
   BIRTHDAY_LIST_MARKER,
@@ -14,6 +15,7 @@ import {
   DISCORD_FETCH_PAGE_SIZE,
   MEMBER_FETCH_DELAY_MS,
   MESSAGE_DELETE_DELAY_MS,
+  SELF_BIRTHDAY_DATE_REGEX,
 } from "../constants.js";
 
 const blockRegex = new RegExp(`${BIRTHDAY_LIST_MARKER}\\s*(\\d{2}\\.\\d{2})\\s*:\\s*([^\\n⎯]+)`, "g");
@@ -46,6 +48,7 @@ export function parseBirthdayMessage(text: string): BirthdaysByDate {
             mention,
             userId: extractIdFromMention(mention),
             name,
+            source: "list",
           });
         }
         continue;
@@ -55,7 +58,7 @@ export function parseBirthdayMessage(text: string): BirthdaysByDate {
       const userId = extractIdFromMention(mention);
       if (name === "") name = null;
       result[date] = result[date] || [];
-      result[date]!.push({ mention, userId, name });
+      result[date]!.push({ mention, userId, name, source: "list" });
     }
   }
   return result;
@@ -211,7 +214,7 @@ export function getNextBirthday(): UpcomingBirthday | null {
 
 export function renderBirthdayTemplate(
   template: string,
-  b: BirthdayEntry,
+  b: Pick<BirthdayEntry, "mention" | "userId" | "name">,
   pingEveryone = true,
 ): string {
   const userMention = b.mention || (b.userId ? `<@${b.userId}>` : "");
@@ -224,10 +227,12 @@ export function renderBirthdayTemplate(
 }
 
 export function buildBirthdayMessage(
-  b: BirthdayEntry,
+  b: Pick<BirthdayEntry, "mention" | "userId" | "name">,
   pingEveryone = true,
 ): string {
-  return renderBirthdayTemplate(getCurrentTemplate(), b, pingEveryone);
+  const settings = getSettings();
+  const rendered = renderBirthdayTemplate(settings.birthdayTemplate, b, pingEveryone);
+  return settings.birthdayAnnouncementUseFont ? applyFont(rendered, settings.fontMap) : rendered;
 }
 
 export async function sendBirthdayMessages(
@@ -328,4 +333,159 @@ export function getBirthdayListLocation(): { channelId: string; messageId: strin
   const { birthdayListChannelId, birthdayListMessageId } = getSettings();
   if (!birthdayListChannelId || !birthdayListMessageId) return null;
   return { channelId: birthdayListChannelId, messageId: birthdayListMessageId };
+}
+
+/** Also used by `/setmybirthday` to validate its day/month options before storing them. */
+export function isValidCalendarDate(day: number, month: number): boolean {
+  if (month < 1 || month > 12) return false;
+  const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= daysInMonth[month - 1]!;
+}
+
+/** `DD.MM`, zero-padded, as stored in the `birthdays` table — used by both `/setmybirthday` and the free-text channel parser below. */
+export function toDateKey(day: number, month: number): string {
+  return `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}`;
+}
+
+/**
+ * Pulls a `DD.MM`-shaped date out of free text, for the birthday-channel
+ * auto-detector (see `events/birthdayWatcher.ts`) — a real registration is
+ * just a member typing their birthday, not the structured
+ * `BIRTHDAY_LIST_MARKER` format the admin-maintained list uses.
+ */
+export function parseSelfRegistrationDate(text: string): string | null {
+  const match = text.match(SELF_BIRTHDAY_DATE_REGEX);
+  if (!match) return null;
+  const day = parseInt(match[1]!, 10);
+  const month = parseInt(match[2]!, 10);
+  if (!isValidCalendarDate(day, month)) return null;
+  return toDateKey(day, month);
+}
+
+/**
+ * Posts a heads-up to the configured `birthdayModChannelId` whenever a
+ * member registers their own birthday, so mods keep visibility even though
+ * no admin action was involved. A no-op if that channel isn't configured.
+ */
+export async function notifyBirthdayRegistration(
+  client: Client,
+  entry: { mention: string; name: string | null; dateKey: string },
+  via: "command" | "message",
+): Promise<void> {
+  const { birthdayModChannelId } = getSettings();
+  if (!birthdayModChannelId) return;
+
+  try {
+    const channel = await client.channels.fetch(birthdayModChannelId);
+    if (!channel || !channel.isTextBased() || !("send" in channel)) return;
+    const viaText = via === "command" ? "via `/setmybirthday`" : "by posting in the birthday channel";
+    await channel.send(
+      `🎂 ${entry.mention} (${entry.name ?? "unknown"}) registered their birthday for **${entry.dateKey}** ${viaText}.`,
+    );
+  } catch (err) {
+    logger.warn(`Failed to post birthday registration notice: ${errorMessage(err)}`);
+  }
+}
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/**
+ * Builds the full bot-managed anchor message content from the current
+ * birthday list — grouped by calendar month (skipping months with no
+ * entries), each rendered through `template`'s `{month}`/`{entries}`
+ * placeholders. `{month}` is passed through `applyFont()` first; `{entries}`
+ * deliberately never is, so mentions and dates always render literally no
+ * matter what font is configured. Pure function of its arguments — never
+ * touches Discord itself; see `syncAnchorMessage()` for that part.
+ */
+export function renderAnchorMessage(entries: BirthdaysByDate, template: string, fontMap: string | null): string {
+  const byMonth = new Map<number, Array<{ dateKey: string; day: number; list: BirthdayEntry[] }>>();
+  for (const [dateKey, list] of Object.entries(entries)) {
+    const [dd, mm] = dateKey.split(".").map((x) => parseInt(x, 10));
+    const bucket = byMonth.get(mm!) ?? [];
+    bucket.push({ dateKey, day: dd!, list });
+    byMonth.set(mm!, bucket);
+  }
+
+  const blocks: string[] = [];
+  for (let month = 1; month <= 12; month++) {
+    const days = byMonth.get(month);
+    if (!days || days.length === 0) continue;
+    days.sort((a, b) => a.day - b.day);
+
+    const entryLines = days
+      .map((d) => `${BIRTHDAY_LIST_MARKER} ${d.dateKey}: ${d.list.map((e) => e.mention).join(", ")}`)
+      .join("\n");
+    const monthHeading = applyFont(MONTH_NAMES[month - 1]!, fontMap);
+
+    blocks.push(
+      template.includes("{entries}")
+        ? template.replace(/{month}/g, monthHeading).replace("{entries}", entryLines)
+        : `${template.replace(/{month}/g, monthHeading)}\n${entryLines}`,
+    );
+  }
+
+  return blocks.length > 0 ? blocks.join("\n\n") : "_No birthdays registered yet._";
+}
+
+/**
+ * Posts the bot-managed anchor message for the first time, or edits it in
+ * place on every call after — called after every self-registration and
+ * once at startup, so the message always reflects the current birthday
+ * list. A no-op unless `birthdayBotManagesAnchor` is on, so call sites don't
+ * need to duplicate that check.
+ */
+export async function syncAnchorMessage(client: Client): Promise<void> {
+  const settings = getSettings();
+  if (!settings.birthdayBotManagesAnchor) return;
+  if (!settings.birthdayListChannelId) {
+    logger.warn("Bot-managed birthday anchor is enabled but no channel is configured yet — skipping.");
+    return;
+  }
+
+  const content = renderAnchorMessage(
+    getAllBirthdaysByDate(),
+    settings.birthdayAnchorTemplate,
+    settings.birthdayAnchorUseFont ? settings.fontMap : null,
+  );
+
+  try {
+    const channel = await client.channels.fetch(settings.birthdayListChannelId);
+    if (!channel || !channel.isTextBased() || channel.isDMBased() || !("send" in channel)) {
+      logger.warn(
+        `Bot-managed birthday anchor: channel ${settings.birthdayListChannelId} isn't a postable text channel.`,
+      );
+      return;
+    }
+
+    if (settings.birthdayListMessageId) {
+      try {
+        const message = await channel.messages.fetch(settings.birthdayListMessageId);
+        await message.edit(content);
+        return;
+      } catch (err) {
+        logger.warn(
+          `Bot-managed birthday anchor: couldn't edit the existing message (${errorMessage(err)}) — posting a new one.`,
+        );
+      }
+    }
+
+    const posted = await channel.send(content);
+    updateSettings({ birthdayListMessageId: posted.id });
+  } catch (err) {
+    logger.error(`Failed to sync the bot-managed birthday anchor message: ${errorMessage(err)}`);
+  }
 }

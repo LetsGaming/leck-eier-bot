@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getSession, deleteSession } from "../db/sessionsRepository.js";
 import { WEB_SESSION_COOKIE_NAME, WEB_SESSION_TTL_MS } from "../constants.js";
-import type { WebSession } from "../types.js";
+import type { WebRole, WebSession } from "../types.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -34,19 +34,29 @@ export function clearSessionCookie(reply: FastifyReply): void {
 }
 
 /**
- * Gate for every `/api/*` route except `/api/me`. Named for what it
- * enforces conceptually — in practice a valid session *is* an admin
- * session, since `/auth/callback` only ever creates one after confirming
- * the user is the bot owner or has Administrator in the guild.
+ * RBAC gate factory — pass the roles (see WebRole in types.ts) allowed to
+ * use a given route. `requireAdmin` (below) is the blanket "any logged-in
+ * dashboard user" gate every route uses today; narrowing an individual
+ * route to e.g. `requireRole("bot-owner")` later needs no schema change,
+ * since the role is already resolved and stored on the session at login.
  */
-export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const session = getSessionFromRequest(request);
-  if (!session) {
-    reply.code(401).send({ error: "Not authenticated" });
-    return;
-  }
-  request.session = session;
+export function requireRole(...allowed: WebRole[]) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      reply.code(401).send({ error: "Not authenticated" });
+      return;
+    }
+    if (!allowed.includes(session.role)) {
+      reply.code(403).send({ error: "You don't have permission to do that." });
+      return;
+    }
+    request.session = session;
+  };
 }
+
+/** Gate for every `/api/*` route except `/api/me` — any authenticated dashboard user, regardless of tier. */
+export const requireAdmin = requireRole("bot-owner", "guild-owner", "admin");
 
 export function logout(request: FastifyRequest, reply: FastifyReply): void {
   const session = getSessionFromRequest(request);

@@ -9,6 +9,8 @@ export const DISCORD_API_VERSION = "10";
 export const DISCORD_FETCH_PAGE_SIZE = 100;
 export const BIRTHDAY_LIST_SCAN_LIMIT = 50;
 export const FIND_USER_RESULT_LIMIT = 15;
+/** Cap on the dashboard's Find User page when listing everyone (no search query yet) — a real search is still capped at FIND_USER_RESULT_LIMIT. */
+export const FIND_USER_LIST_LIMIT = 500;
 /** Discord error code for "message is too old to bulk delete". */
 export const DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE = 50034;
 
@@ -36,6 +38,21 @@ export const DEFAULT_BIRTHDAY_TEMPLATE =
   "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}";
 /** Runs every day at midnight server time. Also the default for the DB-stored `birthdayCron` setting. */
 export const DAILY_MIDNIGHT_CRON = "0 0 * * *";
+
+// --- Self-service birthday registration ---
+/** Matches a `D.M`/`DD.MM` (optionally `/` or `-` separated, optional trailing year) date anywhere in free text — see `parseSelfRegistrationDate` in services/birthdays.ts. */
+export const SELF_BIRTHDAY_DATE_REGEX = /\b(\d{1,2})[.\/-](\d{1,2})\.?(?:[.\/-]\d{2,4})?\b/;
+/**
+ * Messages longer than this in the birthday channel are left alone even if
+ * they contain something date-shaped — keeps casual chat ("see you at
+ * 20.30") from being misread as a birthday registration. A real submission
+ * is just the date, maybe with a couple of words around it.
+ */
+export const SELF_BIRTHDAY_MESSAGE_MAX_LENGTH = 50;
+
+// --- Bot-managed birthday anchor message ---
+/** `{month}` is the (optionally font-styled — see utils/font.ts) month name; `{entries}` is the marker-formatted date/mention lines for that month — see `renderAnchorMessage()`. */
+export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
 
 // --- Reaction roles ---
 /**
@@ -81,6 +98,7 @@ export enum CommandName {
   RefreshBirthdays = "refreshbirthdays",
   SetBirthdayMessage = "setbirthdaymessage",
   TestBirthdayMessage = "testbirthdaymessage",
+  SetMyBirthday = "setmybirthday",
   ClearDm = "cleardm",
   Clear = "clear",
   FindUser = "finduser",

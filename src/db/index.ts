@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { DEFAULT_BIRTHDAY_TEMPLATE, DAILY_MIDNIGHT_CRON } from "../constants.js";
+import { DEFAULT_BIRTHDAY_TEMPLATE, DAILY_MIDNIGHT_CRON, DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE } from "../constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,6 +174,72 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
         ELSE 'Panel #' || id
       END
       WHERE name = '';
+    `);
+  },
+  // v7: self-service birthday registration (`/setmybirthday` and posting a
+  // date directly in the birthday channel), alongside the existing
+  // manually-maintained announcement list. `source` distinguishes a row
+  // parsed from that list ('list') from one a member registered themselves
+  // ('self') so a list re-scan (`replaceAllBirthdays`) never wipes out a
+  // self-registration — see birthdaysRepository.ts. `idx_birthdays_user` is
+  // a plain (non-partial) unique index: SQLite already treats every NULL as
+  // distinct for uniqueness purposes, so list-parsed entries without a
+  // resolvable user_id (free-text @name that didn't match a member) can
+  // still coexist as multiple NULLs, while self-registration can upsert by
+  // user_id via a plain `ON CONFLICT(user_id)` target — a partial index
+  // would additionally require the ON CONFLICT clause's WHERE to
+  // syntactically match the index's, which just adds fragility for no
+  // benefit here. birthday_mod_channel_id is where the bot posts a
+  // heads-up for each new registration.
+  (d) => {
+    d.exec(`
+      ALTER TABLE birthdays ADD COLUMN source TEXT NOT NULL DEFAULT 'list';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_birthdays_user ON birthdays(user_id);
+      ALTER TABLE settings ADD COLUMN birthday_mod_channel_id TEXT;
+    `);
+  },
+  // v8: dashboard RBAC — a session now carries a `role`
+  // ('bot-owner' | 'guild-owner' | 'admin', see WebRole in types.ts)
+  // instead of just an `is_owner` flag, resolved at login time in
+  // web/auth.ts. `is_owner` is left in place unused rather than dropped
+  // (SQLite migrations here are additive-only — see the note
+  // above); sessions are short-lived (7-day TTL) so old rows age out on
+  // their own instead of needing a backfill.
+  (d) => {
+    d.exec(`ALTER TABLE web_sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';`);
+  },
+  // v9: lets the bot own the birthday announcement message end to end
+  // instead of an admin hand-maintaining it — see services/birthdays.ts's
+  // renderAnchorMessage()/syncAnchorMessage(). birthday_self_registration_enabled
+  // gates both self-registration paths from v7 (previously always on) and is
+  // a prerequisite for birthday_bot_manages_anchor (enforced in
+  // web/routes/birthdaySettings.ts, not the DB): with self-registration off,
+  // nothing but the configured list message's own author ever adds an
+  // entry, so the bot has no business rewriting that message. The heading
+  // template lets that part be restyled without a code change and ships
+  // with a working default; its font comes from the global font_map added
+  // in v10 below.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN birthday_self_registration_enabled INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE settings ADD COLUMN birthday_bot_manages_anchor INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN birthday_anchor_template TEXT NOT NULL DEFAULT '${DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE}';
+    `);
+  },
+  // v10: a single global "font" (a pasted stylized Unicode alphabet — see
+  // utils/font.ts) set once on the dashboard's Settings page, instead of
+  // each message-generating feature needing its own pasted copy. Each
+  // feature that can render through it keeps its own opt-in flag — the
+  // birthday anchor message's `{month}` heading, the daily birthday
+  // announcement, and (on `reaction_role_panels`) a given panel's
+  // title/text/labels — so a font can be set once and forgotten while
+  // still being off by default everywhere it hasn't been turned on.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN font_map TEXT;
+      ALTER TABLE settings ADD COLUMN birthday_anchor_use_font INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN birthday_announcement_use_font INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE reaction_role_panels ADD COLUMN use_font INTEGER NOT NULL DEFAULT 0;
     `);
   },
 ];

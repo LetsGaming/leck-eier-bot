@@ -26,6 +26,7 @@ import {
   getBirthdayListLocation,
   getTodaysBirthdays,
   sendBirthdayMessages,
+  syncAnchorMessage,
   updateBirthdayListFromMessage,
 } from "./services/birthdays.js";
 import { syncAllPanels } from "./services/reactionRoles.js";
@@ -177,11 +178,18 @@ client.on("interactionCreate", async (interaction) => {
       const guild = client.guilds.cache.get(config.guildId);
       if (guild) await initMemberCache(guild);
 
-      const location = getBirthdayListLocation();
-      if (location) {
-        await updateBirthdayListFromMessage(client, location.channelId, location.messageId);
+      if (getSettings().birthdayBotManagesAnchor) {
+        // Owns the message end to end — creates it on first run, otherwise
+        // re-renders it from the current DB state (syncAnchorMessage warns
+        // itself if the channel isn't configured yet).
+        await syncAnchorMessage(client);
       } else {
-        logger.warn("Birthday list channel/message not configured yet — set it via the dashboard.");
+        const location = getBirthdayListLocation();
+        if (location) {
+          await updateBirthdayListFromMessage(client, location.channelId, location.messageId);
+        } else {
+          logger.warn("Birthday list channel/message not configured yet — set it via the dashboard.");
+        }
       }
 
       // Re-post/edit every reaction-role panel so seed reactions survive a

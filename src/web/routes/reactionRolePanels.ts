@@ -27,6 +27,7 @@ const PanelBodySchema = z.object({
   allowedRoleIds: z.array(z.string().min(1)).nullable(),
   title: z.string().min(1).max(256).nullable(),
   description: z.string().max(2048).nullable(),
+  useFont: z.boolean(),
 });
 
 // selectionType/existingMessageId only make sense at creation — see

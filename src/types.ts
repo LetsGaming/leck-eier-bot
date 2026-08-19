@@ -24,6 +24,8 @@ export interface BirthdayEntry {
   mention: string;
   userId: string | null;
   name: string | null;
+  /** 'list' = parsed from the manually-maintained announcement message; 'self' = registered via `/setmybirthday` or a message in the birthday channel. */
+  source: "list" | "self";
 }
 
 export type BirthdaysByDate = Record<string, BirthdayEntry[]>;
@@ -36,6 +38,26 @@ export interface Settings {
   birthdayListMessageId: string | null;
   /** node-cron expression for the daily birthday-announcement job. */
   birthdayCron: string;
+  /** Channel the bot posts a heads-up to whenever someone self-registers their birthday. Null = no notification posted. */
+  birthdayModChannelId: string | null;
+  /** Gates both self-registration paths (`/setmybirthday` and posting a date in the birthday channel). Off = the anchor message's author must edit it themselves, same as before that feature existed. */
+  birthdaySelfRegistrationEnabled: boolean;
+  /** When true, the bot renders and owns the anchor message itself (posting/editing it) instead of an admin hand-maintaining it — only meaningful (and only settable) while birthdaySelfRegistrationEnabled is also true. */
+  birthdayBotManagesAnchor: boolean;
+  /** Per-month heading template for the bot-managed anchor message — `{month}` and `{entries}` placeholders. See DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE. */
+  birthdayAnchorTemplate: string;
+  /**
+   * Pasted 52-character stylized alphabet (matching FONT_REFERENCE in
+   * utils/font.ts position for position) — set once from the dashboard's
+   * Settings page, then reused by any feature below with its own
+   * `*UseFont` flag turned on, so nothing has to paste it more than once.
+   * Null = no font configured.
+   */
+  fontMap: string | null;
+  /** Whether the bot-managed anchor message's `{month}` heading is rendered through `fontMap`. */
+  birthdayAnchorUseFont: boolean;
+  /** Whether the daily birthday announcement message is rendered through `fontMap`. */
+  birthdayAnnouncementUseFont: boolean;
   leaveNotificationsEnabled: boolean;
 }
 
@@ -84,6 +106,8 @@ export interface ReactionRolePanel {
   sent: boolean;
   title: string | null;
   description: string | null;
+  /** Renders the title, message text, and button/dropdown labels through `settings.fontMap`, if one's configured — see utils/font.ts. */
+  useFont: boolean;
   createdAt: string;
 }
 
@@ -97,12 +121,27 @@ export interface EmojiKey {
   id: string | null;
 }
 
+/**
+ * Dashboard RBAC role, resolved at login (`resolveDashboardRole()` in
+ * web/auth.ts) and carried on the session for its lifetime — a Discord-side
+ * ownership/role change takes effect on the next login, not live. Strict
+ * hierarchy, highest first:
+ *   - 'bot-owner' — `config.botOwnerId`. Always total access.
+ *   - 'guild-owner' — owns the configured guild, but isn't the bot owner.
+ *   - 'admin' — holds Discord's Administrator permission in that guild
+ *     (directly or via @everyone), but is neither of the above.
+ * Every route is currently gated to allow all three (see requireRole() in
+ * web/session.ts) — the tiers exist so a route can be narrowed to e.g.
+ * 'bot-owner'-only later without a schema change.
+ */
+export type WebRole = "bot-owner" | "guild-owner" | "admin";
+
 /** A logged-in dashboard session, backed by the `web_sessions` table. */
 export interface WebSession {
   id: string;
   userId: string;
   username: string;
   avatar: string | null;
-  isOwner: boolean;
+  role: WebRole;
   expiresAt: number;
 }

@@ -11,12 +11,9 @@ export default function FindUser() {
   const [searching, setSearching] = useState(false);
   const { showError } = useToast();
 
+  const trimmed = query.trim();
+
   useEffect(() => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setResults(null);
-      return;
-    }
     setSearching(true);
     const timer = setTimeout(() => {
       api
@@ -26,13 +23,13 @@ export default function FindUser() {
         .finally(() => setSearching(false));
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [query, showError]);
+  }, [trimmed, showError]);
 
   return (
     <div>
       <h2>Find User</h2>
       <p className="muted">
-        Search cached guild members by username, global name, nickname, or display name — same matching as{" "}
+        Every cached guild member, or search by username, global name, nickname, or display name — same matching as{" "}
         <code>/finduser</code> (handles stylized/lookalike Unicode names too).
       </p>
 
@@ -52,7 +49,7 @@ export default function FindUser() {
         {searching && <div className="loading">Searching…</div>}
 
         {!searching && results && results.length === 0 && (
-          <p className="muted">No members found matching "{query.trim()}".</p>
+          <p className="muted">{trimmed ? `No members found matching "${trimmed}".` : "No cached members yet."}</p>
         )}
 
         {!searching && results && results.length > 0 && (

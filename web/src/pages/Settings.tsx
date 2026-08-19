@@ -3,14 +3,30 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import type { GeneralSettings, Me } from "../types";
 
+const FONT_REFERENCE = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
+
+/** Mirrors applyFont() in src/utils/font.ts, for the live preview below — spreads by code point so a supplementary-plane alphabet (e.g. Mathematical Bold) previews correctly instead of splitting a surrogate pair. */
+function applyFontPreview(text: string, fontMap: string): string {
+  const styled = [...fontMap];
+  if (styled.length !== FONT_REFERENCE.length) return text;
+  const table = new Map<string, string>();
+  [...FONT_REFERENCE].forEach((ch, i) => table.set(ch, styled[i]!));
+  return [...text].map((ch) => table.get(ch) ?? ch).join("");
+}
+
 export default function Settings({ me }: { me: Me }) {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
+  const [fontMap, setFontMap] = useState("");
+  const [savingFont, setSavingFont] = useState(false);
   const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     api
       .generalSettings()
-      .then(setSettings)
+      .then((s) => {
+        setSettings(s);
+        setFontMap(s.fontMap ?? "");
+      })
       .catch((err) => showError(errorMessage(err)));
   }, [showError]);
 
@@ -21,6 +37,19 @@ export default function Settings({ me }: { me: Me }) {
       showSuccess("Saved.");
     } catch (err) {
       showError(errorMessage(err));
+    }
+  }
+
+  async function handleSaveFont() {
+    setSavingFont(true);
+    try {
+      const updated = await api.updateGeneralSettings({ fontMap: fontMap || null });
+      setSettings(updated);
+      showSuccess("Saved.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingFont(false);
     }
   }
 
@@ -46,9 +75,45 @@ export default function Settings({ me }: { me: Me }) {
         </div>
 
         <div className="card">
+          <h2>Font</h2>
+          <p className="muted small">
+            A "fancy text" font the bot can use when generating messages — set it once here, then turn it on
+            per-feature wherever it applies (the birthday announcement and anchor message, a reaction-role panel's
+            text). Leave blank to never style anything.
+          </p>
+          <div className="field">
+            <label htmlFor="fontMap">Font</label>
+            <input
+              id="fontMap"
+              type="text"
+              value={fontMap}
+              onChange={(e) => setFontMap(e.target.value)}
+              placeholder={FONT_REFERENCE}
+            />
+            <div className="hint">
+              Paste a stylized alphabet matching <code>{FONT_REFERENCE}</code> character for character (52 total)
+              from any "fancy text" generator.
+            </div>
+            {fontMap &&
+              ([...fontMap].length === FONT_REFERENCE.length ? (
+                <div className="preview-box" style={{ marginTop: 8 }}>
+                  Preview: {applyFontPreview("The quick brown fox", fontMap)}
+                </div>
+              ) : (
+                <div className="preview-box" style={{ marginTop: 8 }}>
+                  <span className="muted">Needs exactly 52 characters (currently {[...fontMap].length}).</span>
+                </div>
+              ))}
+          </div>
+          <button className="primary" onClick={handleSaveFont} disabled={savingFont}>
+            {savingFont ? "Saving…" : "Save"}
+          </button>
+        </div>
+
+        <div className="card">
           <h2>Session</h2>
           <p>
-            Signed in as <strong>{me.username}</strong> ({me.userId}){me.isOwner ? " — bot owner" : ""}
+            Signed in as <strong>{me.username}</strong> ({me.userId}) — role: <strong>{me.role}</strong>
           </p>
         </div>
       </div>

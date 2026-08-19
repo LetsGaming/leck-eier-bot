@@ -48,7 +48,7 @@ src/
   web/                        Dashboard backend (Fastify) — see DASHBOARD.md
     server.ts                   Bootstraps Fastify, static file serving + SPA fallback
     auth.ts                     Discord OAuth2 login/callback/logout, GET /api/me
-    session.ts                   Cookie helpers, the requireAdmin preHandler
+    session.ts                   Cookie helpers, requireRole()/requireAdmin preHandlers (dashboard RBAC — see DASHBOARD.md)
     routes/                      One file per API resource; all delegate to db/services, no logic of
                                    their own
 

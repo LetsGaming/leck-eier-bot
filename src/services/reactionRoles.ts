@@ -19,8 +19,10 @@ import {
   type User,
 } from "discord.js";
 import { getPanel, listPanels, setPanelMessageId } from "../db/reactionRolesRepository.js";
+import { getSettings } from "../db/settingsRepository.js";
 import { settingsBus, SettingsEvent } from "./settingsBus.js";
 import { createEmbed } from "../utils/embedUtils.js";
+import { applyFont } from "../utils/font.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import {
   EmbedColor,
@@ -494,6 +496,16 @@ function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
   return guild.roles.cache.get(mapping.roleId)?.name ?? "Unknown role";
 }
 
+/**
+ * Applies the global font (`settings.fontMap`) if this panel opted into it —
+ * safe to call on a fully-composed string (role mentions, emoji, and all),
+ * since `applyFont` only ever substitutes plain Latin letters. See
+ * utils/font.ts.
+ */
+function styled(panel: ReactionRolePanelWithMappings, text: string): string {
+  return panel.useFont ? applyFont(text, getSettings().fontMap) : text;
+}
+
 function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
   const lines = [...panel.mappings]
     .sort((a, b) => a.position - b.position)
@@ -503,8 +515,8 @@ function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
     });
   const description = [panel.description, lines.join("\n")].filter(Boolean).join("\n\n");
   return createEmbed({
-    title: panel.title ?? panel.name,
-    description: description || "No roles configured yet.",
+    title: styled(panel, panel.title ?? panel.name),
+    description: styled(panel, description || "No roles configured yet."),
     color: EmbedColor.Info,
   });
 }
@@ -523,7 +535,7 @@ function buildPanelText(panel: ReactionRolePanelWithMappings): string {
             return `${emoji ? `${emoji} — ` : ""}<@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`;
           })
       : [];
-  return [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "React to get a role!";
+  return styled(panel, [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "React to get a role!");
 }
 
 /** Always returns both fields explicitly (never partial) so editing a message that's switching type fully replaces the old content instead of Discord leaving stale fields in place. */
@@ -543,7 +555,7 @@ function buildButtonRows(panel: ReactionRolePanelWithMappings, guild: Guild): Ac
       const button = new ButtonBuilder()
         .setCustomId(buttonCustomId(panel.id, mapping.id))
         .setStyle(ButtonStyle.Secondary)
-        .setLabel(roleLabel(mapping, guild));
+        .setLabel(styled(panel, roleLabel(mapping, guild)));
       if (mapping.emojiId) {
         button.setEmoji({ id: mapping.emojiId, name: mapping.emojiName ?? undefined });
       } else if (mapping.emojiName) {
@@ -571,7 +583,7 @@ function buildDropdownRow(
 
   for (const mapping of sorted) {
     const option = new StringSelectMenuOptionBuilder()
-      .setLabel(roleLabel(mapping, guild))
+      .setLabel(styled(panel, roleLabel(mapping, guild)))
       .setValue(String(mapping.id));
     if (mapping.emojiId) {
       option.setEmoji({ id: mapping.emojiId, name: mapping.emojiName ?? undefined });

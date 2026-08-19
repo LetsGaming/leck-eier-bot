@@ -8,7 +8,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 
 | Level | Who can run it |
 | --- | --- |
-| `None` | Anyone (not currently used by any command below). |
+| `None` | Anyone. |
 | `Admin` | The bot owner (`botOwnerId`), or a member with the Discord **Administrator** permission. |
 | `Owner` | The bot owner only. |
 
@@ -21,6 +21,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | [`/refreshbirthdays`](#refreshbirthdays) | Admin | yes | Re-parse the birthday announcement message(s) into the database. |
 | [`/setbirthdaymessage`](#setbirthdaymessage) | Admin | yes | Change the birthday announcement template. |
 | [`/testbirthdaymessage`](#testbirthdaymessage) | Admin | yes | Preview the template rendered for yourself. |
+| [`/setmybirthday`](#setmybirthday) | None | yes | Register your own birthday. |
 | [`/cleardm`](#cleardm) | **Owner** | no | Delete the bot's own DM messages to you, optionally backing them up first. |
 | [`/clear`](#clear) | Admin | yes | Bulk-delete a given number of messages in the current channel, batching past Discord's 100-per-request limit. |
 | [`/finduser`](#finduser) | Admin | yes | Search cached guild members by name (handles fancy/unicode names). |
@@ -59,6 +60,17 @@ Must include at least `{userMention}` and `{userNick}`; `{everyoneMention}` is o
 ### `/testbirthdaymessage`
 
 Renders the current template using your own account as the birthday person, so you can sanity-check formatting without waiting for an actual birthday.
+
+### `/setmybirthday`
+
+| Option | Type | Required | Description |
+| --- | --- | --- | --- |
+| `day` | integer (1–31) | yes | Day of month. |
+| `month` | integer (1–12) | yes | Month. |
+
+Registers (or updates) your own birthday, stored separately from the manually-maintained announcement list so re-scanning that list never overwrites it — see [DATABASE.md](DATABASE.md#birthdays). Posting a bare date (e.g. `15.03`) directly as a message in the configured birthday channel does the same thing: the bot parses it, saves it, and deletes the message. Either way, if a notifications channel is configured on the dashboard's Birthdays page, the bot posts a heads-up there, and if the bot is set to manage the anchor message itself, that message is re-rendered immediately — see [DASHBOARD.md](DASHBOARD.md#self-registration--the-bot-managed-anchor-message).
+
+Replies with an error if self-registration has been turned off from the dashboard.
 
 ### `/cleardm`
 

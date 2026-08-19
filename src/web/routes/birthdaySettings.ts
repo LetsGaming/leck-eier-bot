@@ -5,6 +5,7 @@ import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import {
   getBirthdayListLocation,
   renderBirthdayTemplate,
+  syncAnchorMessage,
   updateBirthdayListFromMessage,
 } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
@@ -15,34 +16,67 @@ const PatchBodySchema = z.object({
   channelId: z.string().min(1).nullable().optional(),
   messageId: z.string().min(1).nullable().optional(),
   cron: z.string().min(1).optional(),
+  modChannelId: z.string().min(1).nullable().optional(),
+  selfRegistrationEnabled: z.boolean().optional(),
+  botManagesAnchor: z.boolean().optional(),
+  anchorTemplate: z.string().min(1).max(500).optional(),
+  anchorUseFont: z.boolean().optional(),
+  announcementUseFont: z.boolean().optional(),
 });
 
 const PreviewBodySchema = z.object({
   template: z.string().min(1).max(2000),
 });
 
+function serializeBirthdaySettings(settings: ReturnType<typeof getSettings>) {
+  return {
+    template: settings.birthdayTemplate,
+    channelId: settings.birthdayListChannelId,
+    messageId: settings.birthdayListMessageId,
+    cron: settings.birthdayCron,
+    modChannelId: settings.birthdayModChannelId,
+    selfRegistrationEnabled: settings.birthdaySelfRegistrationEnabled,
+    botManagesAnchor: settings.birthdayBotManagesAnchor,
+    anchorTemplate: settings.birthdayAnchorTemplate,
+    anchorUseFont: settings.birthdayAnchorUseFont,
+    announcementUseFont: settings.birthdayAnnouncementUseFont,
+  };
+}
+
 export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: BotClient): void {
-  app.get("/settings/birthday", async () => {
-    const settings = getSettings();
-    return {
-      template: settings.birthdayTemplate,
-      channelId: settings.birthdayListChannelId,
-      messageId: settings.birthdayListMessageId,
-      cron: settings.birthdayCron,
-    };
-  });
+  app.get("/settings/birthday", async () => serializeBirthdaySettings(getSettings()));
 
   app.patch("/settings/birthday", async (request, reply) => {
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
-    const { template, channelId, messageId, cron: cronExpression } = body.data;
+    const {
+      template,
+      channelId,
+      messageId,
+      cron: cronExpression,
+      modChannelId,
+      selfRegistrationEnabled,
+      botManagesAnchor,
+      anchorTemplate,
+      anchorUseFont,
+      announcementUseFont,
+    } = body.data;
 
     if (template !== undefined && (!template.includes("{userMention}") || !template.includes("{userNick}"))) {
       return reply.code(400).send({ error: "Template must include {userMention} and {userNick}." });
     }
     if (cronExpression !== undefined && !cron.validate(cronExpression)) {
       return reply.code(400).send({ error: "Invalid cron expression." });
+    }
+
+    const current = getSettings();
+    const nextSelfRegistrationEnabled = selfRegistrationEnabled ?? current.birthdaySelfRegistrationEnabled;
+    const nextBotManagesAnchor = botManagesAnchor ?? current.birthdayBotManagesAnchor;
+    if (nextBotManagesAnchor && !nextSelfRegistrationEnabled) {
+      return reply
+        .code(400)
+        .send({ error: "The bot can only manage the anchor message while self-registration is enabled." });
     }
 
     // updateSettings emits SettingsEvent.Settings, which src/index.ts listens
@@ -53,14 +87,22 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
       ...(channelId !== undefined && { birthdayListChannelId: channelId }),
       ...(messageId !== undefined && { birthdayListMessageId: messageId }),
       ...(cronExpression !== undefined && { birthdayCron: cronExpression }),
+      ...(modChannelId !== undefined && { birthdayModChannelId: modChannelId }),
+      ...(selfRegistrationEnabled !== undefined && { birthdaySelfRegistrationEnabled: selfRegistrationEnabled }),
+      ...(botManagesAnchor !== undefined && { birthdayBotManagesAnchor: botManagesAnchor }),
+      ...(anchorTemplate !== undefined && { birthdayAnchorTemplate: anchorTemplate }),
+      ...(anchorUseFont !== undefined && { birthdayAnchorUseFont: anchorUseFont }),
+      ...(announcementUseFont !== undefined && { birthdayAnnouncementUseFont: announcementUseFont }),
     });
 
-    return {
-      template: settings.birthdayTemplate,
-      channelId: settings.birthdayListChannelId,
-      messageId: settings.birthdayListMessageId,
-      cron: settings.birthdayCron,
-    };
+    // Bring the anchor message up to date immediately (e.g. bot-managed mode
+    // just got turned on, or the template/font changed) rather than waiting
+    // for the next registration — syncAnchorMessage no-ops if it's off.
+    syncAnchorMessage(client).catch((err) =>
+      logger.error(`Failed to sync birthday anchor after a settings change: ${errorMessage(err)}`),
+    );
+
+    return serializeBirthdaySettings(settings);
   });
 
   app.post("/settings/birthday/preview", async (request, reply) => {
@@ -85,6 +127,25 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
     } catch (err) {
       logger.error(`Dashboard-triggered birthday refresh failed: ${errorMessage(err)}`);
       return reply.code(502).send({ error: "Failed to re-scan the birthday list message." });
+    }
+    return { ok: true };
+  });
+
+  /** Manually regenerates the bot-managed anchor message — the bot-managed-mode counterpart to /refresh above. */
+  app.post("/settings/birthday/sync-anchor", async (_request, reply) => {
+    const settings = getSettings();
+    if (!settings.birthdayBotManagesAnchor) {
+      return reply.code(400).send({ error: "Bot-managed anchor messages aren't enabled." });
+    }
+    if (!settings.birthdayListChannelId) {
+      return reply.code(400).send({ error: "Pick a channel for the announcement list first." });
+    }
+
+    try {
+      await syncAnchorMessage(client);
+    } catch (err) {
+      logger.error(`Dashboard-triggered anchor sync failed: ${errorMessage(err)}`);
+      return reply.code(502).send({ error: "Failed to update the anchor message." });
     }
     return { ok: true };
   });

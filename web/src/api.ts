@@ -84,6 +84,7 @@ export const api = {
   previewBirthday: (template: string) =>
     request<{ rendered: string }>("/settings/birthday/preview", { method: "POST", ...json({ template }) }),
   refreshBirthdayList: () => request<{ ok: boolean }>("/settings/birthday/refresh", { method: "POST" }),
+  syncBirthdayAnchor: () => request<{ ok: boolean }>("/settings/birthday/sync-anchor", { method: "POST" }),
   birthdays: () => request<BirthdaysByDate>("/birthdays"),
   upcomingBirthdays: () => request<UpcomingBirthday[]>("/birthdays/upcoming"),
 
@@ -92,7 +93,7 @@ export const api = {
     request<CommandDef>(`/commands/${name}`, { method: "PATCH", ...json(body) }),
 
   generalSettings: () => request<GeneralSettings>("/settings/general"),
-  updateGeneralSettings: (body: GeneralSettings) =>
+  updateGeneralSettings: (body: Partial<GeneralSettings>) =>
     request<GeneralSettings>("/settings/general", { method: "PATCH", ...json(body) }),
 };
 

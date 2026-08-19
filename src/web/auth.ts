@@ -12,7 +12,7 @@ import {
   WEB_OAUTH_STATE_TTL_SECONDS,
   WEB_SESSION_TTL_MS,
 } from "../constants.js";
-import type { BotClient, Config } from "../types.js";
+import type { BotClient, Config, WebRole } from "../types.js";
 
 interface DiscordTokenResponse {
   access_token: string;
@@ -62,18 +62,26 @@ function resolveRequestOrigin(request: FastifyRequest, allowedOrigins: string[])
   return allowedOrigins.find((allowed) => allowed.toLowerCase() === origin.toLowerCase()) ?? null;
 }
 
-/** Owner of the bot, owner of the guild, or holds a role with Administrator — the only three ways in. */
-function isAuthorized(client: BotClient, config: Config, userId: string, roleIds: string[]): boolean {
-  if (userId === config.botOwnerId) return true;
+/**
+ * Resolves the dashboard RBAC role (see WebRole in types.ts) a logging-in
+ * user gets, or null if none of the three ways in apply — strictly
+ * hierarchical, checked highest first: the bot owner gets 'bot-owner'; the
+ * configured guild's owner (if not also the bot owner) gets 'guild-owner';
+ * anyone else who holds Administrator in that guild (directly or via
+ * @everyone) gets 'admin'.
+ */
+function resolveDashboardRole(client: BotClient, config: Config, userId: string, roleIds: string[]): WebRole | null {
+  if (userId === config.botOwnerId) return "bot-owner";
 
   const guild = client.guilds.cache.get(config.guildId);
-  if (!guild) return false;
-  if (guild.ownerId === userId) return true;
+  if (!guild) return null;
+  if (guild.ownerId === userId) return "guild-owner";
 
-  if (guild.roles.everyone.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
-  return roleIds.some((roleId) =>
+  if (guild.roles.everyone.permissions.has(PermissionsBitField.Flags.Administrator)) return "admin";
+  const hasAdminRole = roleIds.some((roleId) =>
     guild.roles.cache.get(roleId)?.permissions.has(PermissionsBitField.Flags.Administrator),
   );
+  return hasAdminRole ? "admin" : null;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
@@ -190,10 +198,11 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       return reply.code(502).send("Failed to fetch your Discord profile. Please try again.");
     }
 
-    if (!isAuthorized(client, config, discordUser.id, roleIds)) {
+    const role = resolveDashboardRole(client, config, discordUser.id, roleIds);
+    if (!role) {
       return reply
         .code(403)
-        .send("You need Administrator permission in the server (or be the bot owner) to use the dashboard.");
+        .send("You need Administrator permission in the server (or be the bot/guild owner) to use the dashboard.");
     }
 
     const sessionId = randomUUID();
@@ -202,7 +211,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       userId: discordUser.id,
       username: discordUser.username,
       avatar: discordUser.avatar,
-      isOwner: discordUser.id === config.botOwnerId,
+      role,
       expiresAt: Date.now() + WEB_SESSION_TTL_MS,
     });
     setSessionCookie(reply, sessionId, request.protocol === "https");
@@ -222,7 +231,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       userId: session.userId,
       username: session.username,
       avatar: session.avatar,
-      isOwner: session.isOwner,
+      role: session.role,
     };
   });
 }

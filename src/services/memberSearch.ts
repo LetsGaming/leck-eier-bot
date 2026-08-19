@@ -55,3 +55,10 @@ export function searchCachedMembers(query: string, limit: number = FIND_USER_RES
 
   return [...matched.values()].slice(0, limit);
 }
+
+/** Every cached member, alphabetical by display name — powers the dashboard's Find User page before anyone's typed a query. */
+export function listCachedMembers(limit: number): GuildMember[] {
+  return [...getCachedMembers().values()]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    .slice(0, limit);
+}

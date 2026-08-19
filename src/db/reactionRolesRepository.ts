@@ -18,6 +18,7 @@ interface PanelRow {
   sent: 0 | 1;
   title: string | null;
   description: string | null;
+  use_font: 0 | 1;
   created_at: string;
 }
 
@@ -48,6 +49,7 @@ function rowToPanel(row: PanelRow): ReactionRolePanel {
     sent: row.sent === 1,
     title: row.title,
     description: row.description,
+    useFont: row.use_font === 1,
     createdAt: row.created_at,
   };
 }
@@ -65,7 +67,7 @@ function rowToMapping(row: MappingRow): ReactionRoleMapping {
 }
 
 const PANEL_COLUMNS = `id, name, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
-  allow_multiple, removable, allowed_role_ids, sent, title, description, created_at`;
+  allow_multiple, removable, allowed_role_ids, sent, title, description, use_font, created_at`;
 const MAPPING_COLUMNS = "id, panel_id, emoji_name, emoji_id, role_id, label, position";
 
 const selectAllPanelsStmt = db.prepare<[], PanelRow>(
@@ -90,14 +92,15 @@ const insertPanelStmt = db.prepare<{
   allowedRoleIds: string | null;
   title: string | null;
   description: string | null;
+  useFont: 0 | 1;
   createdAt: string;
 }>(
   `INSERT INTO reaction_role_panels
      (name, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
-      allow_multiple, removable, allowed_role_ids, title, description, created_at)
+      allow_multiple, removable, allowed_role_ids, title, description, use_font, created_at)
    VALUES
      (@name, @channelId, @messageId, @managed, @selectionType, @messageType, @removeReaction,
-      @allowMultiple, @removable, @allowedRoleIds, @title, @description, @createdAt)`,
+      @allowMultiple, @removable, @allowedRoleIds, @title, @description, @useFont, @createdAt)`,
 );
 const updatePanelStmt = db.prepare<{
   id: number;
@@ -110,11 +113,12 @@ const updatePanelStmt = db.prepare<{
   allowedRoleIds: string | null;
   title: string | null;
   description: string | null;
+  useFont: 0 | 1;
 }>(
   `UPDATE reaction_role_panels SET
      name = @name, channel_id = @channelId, message_type = @messageType, remove_reaction = @removeReaction,
      allow_multiple = @allowMultiple, removable = @removable, allowed_role_ids = @allowedRoleIds,
-     title = @title, description = @description
+     title = @title, description = @description, use_font = @useFont
    WHERE id = @id`,
 );
 const setPanelMessageIdStmt = db.prepare<{ id: number; messageId: string | null }>(
@@ -188,6 +192,7 @@ export interface CreatePanelInput {
   allowedRoleIds: string[] | null;
   title: string | null;
   description: string | null;
+  useFont: boolean;
   /**
    * When set, the panel attaches to this pre-existing message (e.g. a rules
    * post an admin already wrote) instead of the bot posting/managing its
@@ -218,6 +223,7 @@ export function createPanel(input: CreatePanelInput): ReactionRolePanel {
     // admin's, untouched by us), so there's nothing meaningful to store.
     title: existingMessageId ? null : input.title,
     description: existingMessageId ? null : input.description,
+    useFont: input.useFont ? 1 : 0,
     createdAt: new Date().toISOString(),
   });
   settingsBus.emit(SettingsEvent.ReactionRoles);
@@ -234,6 +240,7 @@ export interface UpdatePanelInput {
   allowedRoleIds: string[] | null;
   title: string | null;
   description: string | null;
+  useFont: boolean;
 }
 
 /** `selectionType`/`managed`/the attached message id are immutable — only set at creation. */
@@ -251,6 +258,7 @@ export function updatePanel(id: number, input: UpdatePanelInput): ReactionRolePa
     allowedRoleIds: input.allowedRoleIds && input.allowedRoleIds.length ? JSON.stringify(input.allowedRoleIds) : null,
     title: isManaged ? input.title : null,
     description: isManaged ? input.description : null,
+    useFont: input.useFont ? 1 : 0,
   });
   settingsBus.emit(SettingsEvent.ReactionRoles);
   return rowToPanel(selectPanelByIdStmt.get(id)!);

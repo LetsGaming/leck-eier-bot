@@ -22,21 +22,22 @@ for (let v = current; v < MIGRATIONS.length; v++) {
 }
 ```
 
-Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists.
+Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists; v7 adds `source` to `birthdays` and `birthday_mod_channel_id` to `settings` for self-service birthday registration (see below); v8 adds `role` to `web_sessions` for dashboard RBAC; v9 adds the bot-managed-anchor-message columns to `settings` (see below); v10 adds the global `font_map` on `settings` plus each feature's own `*_use_font`/`use_font` opt-in column (see below).
 
 ## Schema
 
 ### `birthdays`
 
-One row per person per date. Repopulated wholesale on every re-scan (see below) — never partially updated.
+One row per person per date. `source = 'list'` rows are repopulated wholesale on every re-scan of the announcement message (see below); `source = 'self'` rows (registered via `/setmybirthday` or a message in the birthday channel) are individually upserted by `user_id` instead, and survive a list re-scan untouched.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | |
 | `date` | `TEXT NOT NULL` | `DD.MM` format, e.g. `"25.12"`. Indexed (`idx_birthdays_date`). |
 | `mention` | `TEXT NOT NULL` | The raw `<@id>` mention or `@name` text as parsed from the announcement. |
-| `user_id` | `TEXT` | Discord user ID, if the entry was a real mention (`null` for free-text `@name` entries that didn't resolve to an ID). |
+| `user_id` | `TEXT` | Discord user ID, if the entry was a real mention (`null` for free-text `@name` entries that didn't resolve to an ID). Uniquely indexed where non-null (`idx_birthdays_user`) so a self-registration can upsert by user. |
 | `name` | `TEXT` | Display name — the live Discord display name if the user was successfully resolved, otherwise whatever name text was parsed from the announcement. |
+| `source` | `TEXT NOT NULL DEFAULT 'list'` | `'list'` (parsed from the announcement message) or `'self'` (registered directly by the member — see [COMMANDS.md](COMMANDS.md#setmybirthday)). |
 
 ### `settings`
 
@@ -50,9 +51,16 @@ A single-row table (`id` is `CHECK`-constrained to `1`) rather than a generic ke
 | `birthday_list_channel_id` | `TEXT` | Channel containing the birthday announcement list. `null` on a fresh install until set from the [dashboard](DASHBOARD.md). |
 | `birthday_list_message_id` | `TEXT` | Anchor message id within that channel. Same null-until-set/seed behavior as above. |
 | `birthday_cron` | `TEXT NOT NULL` | `node-cron` expression for the daily announcement job. Defaults to `DAILY_MIDNIGHT_CRON` (`0 0 * * *`). Changing it live reschedules the job in `src/index.ts` via `settingsBus`. |
+| `birthday_mod_channel_id` | `TEXT` | Channel the bot posts a heads-up to whenever someone self-registers their birthday (`notifyBirthdayRegistration()`). `null` = no notification posted. |
+| `birthday_self_registration_enabled` | `INTEGER NOT NULL` (0/1) | Gates both self-registration paths (`/setmybirthday`, posting a date in the birthday channel). Defaults to `1`. Off = the anchor message's own author has to edit it themselves. |
+| `birthday_bot_manages_anchor` | `INTEGER NOT NULL` (0/1) | When true, the bot posts/edits the anchor message itself (`syncAnchorMessage()`) instead of an admin hand-maintaining it. Defaults to `0`. Only meaningful — and only settable, enforced in `web/routes/birthdaySettings.ts`, not here — while `birthday_self_registration_enabled` is also true. |
+| `birthday_anchor_template` | `TEXT NOT NULL` | `{month}`/`{entries}` placeholder template for each month's heading in the bot-managed anchor message. Defaults to `DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE`. |
+| `font_map` | `TEXT` | A pasted 52-character stylized alphabet (matching `FONT_REFERENCE` in `utils/font.ts` position for position), set once from the dashboard's Settings page and reused by any feature below with its own opt-in flag on — see `applyFont()`. `null` = no font configured. |
+| `birthday_anchor_use_font` | `INTEGER NOT NULL` (0/1) | Whether the bot-managed anchor message's `{month}` heading renders through `font_map`. Defaults to `0`. |
+| `birthday_announcement_use_font` | `INTEGER NOT NULL` (0/1) | Whether the daily birthday announcement message renders through `font_map`. Defaults to `0`. |
 | `leave_notifications_enabled` | `INTEGER NOT NULL` (0/1) | Whether `memberEvents.ts` DMs the guild owner on a voluntary leave. Defaults to `1`. |
 
-`getBirthdayListLocation()` (`src/services/birthdays.ts`) wraps the two `birthday_list_*` columns and returns `null` if either is unset — every call site (the cron job, `/refreshbirthdays`, `/clearbirthdaychannel`, `birthdayWatcher`) handles that case explicitly instead of assuming they're always present.
+`getBirthdayListLocation()` (`src/services/birthdays.ts`) wraps the two `birthday_list_*` columns and returns `null` if either is unset — every call site (the cron job, `/refreshbirthdays`, `/clearbirthdaychannel`, manual-mode `birthdayWatcher` rescans) handles that case explicitly instead of assuming they're always present. `syncAnchorMessage()` (bot-managed mode) only needs `birthday_list_channel_id` — it creates `birthday_list_message_id` itself on first use.
 
 ### `command_settings`
 
@@ -85,6 +93,7 @@ See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is a 
 | `allowed_role_ids` | `TEXT` | JSON array of role id strings; `null`/empty means everyone may use the panel. Parsed/serialized in `reactionRolesRepository.ts` — there's no separate join table, since it's a small, panel-scoped, order-independent set. |
 | `sent` | `INTEGER NOT NULL DEFAULT 0` | Off: a draft — no writes are pushed to Discord (see [REACTION_ROLES.md § Draft, then send](REACTION_ROLES.md#draft-then-send)). Flipped on by `setPanelSent()`, called from the dashboard's/`/reactionroles`'s explicit send action once the first sync succeeds. |
 | `title` / `description` | `TEXT` | Both nullable; rendered into the panel's message for a managed panel (title only used for `message_type: embed`). Always `null` for an unmanaged one — there's no message content to render them into, since it's someone else's. |
+| `use_font` | `INTEGER NOT NULL DEFAULT 0` | Whether the title, message text, and button/dropdown labels render through `settings.font_map` — see `utils/font.ts` and [DATABASE.md § settings](#settings). |
 | `created_at` | `TEXT NOT NULL` | ISO timestamp. |
 
 **`reaction_role_mappings`**
@@ -103,7 +112,7 @@ Unique on `(panel_id, emoji_id, emoji_name)` — one mapping per emoji per panel
 
 ### `web_sessions`
 
-Server-side dashboard login sessions (see [DASHBOARD.md](DASHBOARD.md#who-can-log-in)), referenced by a signed cookie. Every row that exists already passed the owner/guild-owner/Administrator check at login — there's no separate "authenticated but unauthorized" state stored here.
+Server-side dashboard login sessions (see [DASHBOARD.md](DASHBOARD.md#who-can-log-in--rbac)), referenced by a signed cookie. Every row that exists already passed the owner/guild-owner/Administrator check at login — there's no separate "authenticated but unauthorized" state stored here.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -111,7 +120,8 @@ Server-side dashboard login sessions (see [DASHBOARD.md](DASHBOARD.md#who-can-lo
 | `user_id` | `TEXT NOT NULL` | Discord user id. |
 | `username` | `TEXT NOT NULL` | Discord username at login time — not kept live-updated. |
 | `avatar` | `TEXT` | Avatar hash, or `null`. |
-| `is_owner` | `INTEGER NOT NULL` (0/1) | Whether this user is `config.botOwnerId`. |
+| `is_owner` | `INTEGER NOT NULL` (0/1) | Unused since v8 (kept rather than dropped — see the migration notes above); superseded by `role`. |
+| `role` | `TEXT NOT NULL DEFAULT 'admin'` | `'bot-owner'`, `'guild-owner'`, or `'admin'` — see `WebRole` in `src/types.ts` and [DASHBOARD.md](DASHBOARD.md#who-can-log-in--rbac). Resolved once at login and fixed for the session's lifetime. |
 | `expires_at` | `INTEGER NOT NULL` | Unix ms timestamp. `getSession()` treats an expired row as absent and deletes it lazily; `sweepExpiredSessions()` also runs once at startup. |
 
 ## Access pattern
@@ -119,7 +129,7 @@ Server-side dashboard login sessions (see [DASHBOARD.md](DASHBOARD.md#who-can-lo
 Raw SQL lives in `src/db/`:
 
 - `src/db/index.ts` — opens the connection, runs migrations (see above).
-- `src/db/birthdaysRepository.ts` — `getBirthdaysForDate(date)`, `getAllBirthdaysByDate()`, `replaceAllBirthdays(data)` (transactional delete-then-insert).
+- `src/db/birthdaysRepository.ts` — `getBirthdaysForDate(date)`, `getAllBirthdaysByDate()`, `replaceAllBirthdays(data)` (transactional delete-then-insert of `source = 'list'` rows), `upsertSelfBirthday(entry)` (insert/update a single `source = 'self'` row by `user_id`).
 - `src/db/settingsRepository.ts` — `getSettings()`/`updateSettings(patch)`, `getCommandOverride(name)`/`getAllCommandOverrides()`/`setCommandOverride(name, override)`.
 - `src/db/reactionRolesRepository.ts` — panel/mapping CRUD (`listPanels`, `getPanel`, `createPanel`, `updatePanel`, `deletePanel`, `setPanelMessageId`, `upsertMapping`, `deleteMapping`, `reorderMappings`).
 - `src/db/sessionsRepository.ts` — `createSession`, `getSession`, `deleteSession`, `sweepExpiredSessions`.

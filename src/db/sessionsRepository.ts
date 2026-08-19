@@ -1,12 +1,12 @@
 import { db } from "./index.js";
-import type { WebSession } from "../types.js";
+import type { WebRole, WebSession } from "../types.js";
 
 interface SessionRow {
   id: string;
   user_id: string;
   username: string;
   avatar: string | null;
-  is_owner: 0 | 1;
+  role: WebRole;
   expires_at: number;
 }
 
@@ -16,7 +16,7 @@ function rowToSession(row: SessionRow): WebSession {
     userId: row.user_id,
     username: row.username,
     avatar: row.avatar,
-    isOwner: row.is_owner === 1,
+    role: row.role,
     expiresAt: row.expires_at,
   };
 }
@@ -26,11 +26,11 @@ const insertStmt = db.prepare<{
   userId: string;
   username: string;
   avatar: string | null;
-  isOwner: 0 | 1;
+  role: WebRole;
   expiresAt: number;
 }>(
-  `INSERT INTO web_sessions (id, user_id, username, avatar, is_owner, expires_at)
-   VALUES (@id, @userId, @username, @avatar, @isOwner, @expiresAt)`,
+  `INSERT INTO web_sessions (id, user_id, username, avatar, role, expires_at)
+   VALUES (@id, @userId, @username, @avatar, @role, @expiresAt)`,
 );
 const selectStmt = db.prepare<[string], SessionRow>("SELECT * FROM web_sessions WHERE id = ?");
 const deleteStmt = db.prepare<[string]>("DELETE FROM web_sessions WHERE id = ?");
@@ -42,7 +42,7 @@ export function createSession(session: WebSession): void {
     userId: session.userId,
     username: session.username,
     avatar: session.avatar,
-    isOwner: session.isOwner ? 1 : 0,
+    role: session.role,
     expiresAt: session.expiresAt,
   });
 }

@@ -52,6 +52,7 @@ interface PanelFormState {
   allowedRoleIds: string[];
   title: string;
   description: string;
+  useFont: boolean;
 }
 
 function emptyPanelForm(): PanelFormState {
@@ -65,6 +66,7 @@ function emptyPanelForm(): PanelFormState {
     allowedRoleIds: [],
     title: "",
     description: "",
+    useFont: false,
   };
 }
 
@@ -79,6 +81,7 @@ function panelToForm(panel: Panel): PanelFormState {
     allowedRoleIds: panel.allowedRoleIds ?? [],
     title: panel.title ?? "",
     description: panel.description ?? "",
+    useFont: panel.useFont,
   };
 }
 
@@ -519,6 +522,18 @@ export default function ReactionRoles() {
                             : "Optional text shown above the buttons/menu"
                         }
                       />
+                    </div>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={form.useFont}
+                        onChange={(e) => setForm((f) => ({ ...f, useFont: e.target.checked }))}
+                      />
+                      Use font
+                    </label>
+                    <div className="hint">
+                      Styles the title/text/labels above with the font set on the{" "}
+                      <a href="/settings">Settings page</a>, if one's configured.
                     </div>
                   </>
                 )}
