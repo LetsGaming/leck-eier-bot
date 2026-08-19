@@ -76,7 +76,7 @@ Sessions are server-side rows in the `web_sessions` table (see [DATABASE.md](DAT
 | Route | What it does |
 | --- | --- |
 | `/` | Bot status (uptime, guild, member/cache counts, panel count) and quick links. |
-| `/reaction-roles` | Create/edit/delete reaction-role panels and their emoji→role mappings; manual re-sync. See [REACTION_ROLES.md](REACTION_ROLES.md#dashboard-workflow). |
+| `/reaction-roles` | Create/edit/delete reaction-role panels (reactions, buttons, or a dropdown) and their role mappings as a draft, then send them; manual re-sync afterward. See [REACTION_ROLES.md](REACTION_ROLES.md#dashboard-workflow). |
 | `/birthdays` | Edit the message template (with live preview), the announcement channel/anchor message, the cron schedule, and a read-only table of currently-parsed birthdays. |
 | `/commands` | Table of every command on disk (including currently-disabled ones) with `enabled`/`guildOnly` switches. |
 | `/settings` | The leave-notification toggle and current session info. |

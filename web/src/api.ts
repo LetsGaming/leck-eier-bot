@@ -3,6 +3,7 @@ import type {
   BirthdaysByDate,
   Channel,
   CommandDef,
+  CreatePanelInput,
   EmojiOption,
   GeneralSettings,
   Mapping,
@@ -58,11 +59,12 @@ export const api = {
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
-  createPanel: (body: PanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),
+  createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),
   updatePanel: (id: number, body: PanelInput) =>
     request<Panel>(`/reaction-roles/panels/${id}`, { method: "PATCH", ...json(body) }),
   deletePanel: (id: number) => request<void>(`/reaction-roles/panels/${id}`, { method: "DELETE" }),
   syncPanel: (id: number) => request<Panel>(`/reaction-roles/panels/${id}/sync`, { method: "POST" }),
+  sendPanel: (id: number) => request<Panel>(`/reaction-roles/panels/${id}/send`, { method: "POST" }),
   addMapping: (panelId: number, body: MappingInput) =>
     request<Panel>(`/reaction-roles/panels/${panelId}/mappings`, { method: "POST", ...json(body) }),
   updateMapping: (panelId: number, mappingId: number, body: MappingInput) =>

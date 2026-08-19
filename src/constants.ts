@@ -12,6 +12,15 @@ export const FIND_USER_RESULT_LIMIT = 15;
 /** Discord error code for "message is too old to bulk delete". */
 export const DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE = 50034;
 
+/**
+ * Upper bound for `/clear`'s `amount` option. `bulkDelete` handles most of
+ * the work in batches of 100, but messages older than 14 days must fall
+ * back to one delete call each with a throttling delay — at that worst
+ * case, this cap keeps the command comfortably inside the ~15 minutes an
+ * interaction's follow-up token stays valid for.
+ */
+export const MAX_CLEAR_AMOUNT = 1000;
+
 // --- Rate-limit friendly delays (ms) ---
 export const MEMBER_FETCH_DELAY_MS = 120;
 export const MESSAGE_DELETE_DELAY_MS = 250;
@@ -73,16 +82,25 @@ export enum CommandName {
   SetBirthdayMessage = "setbirthdaymessage",
   TestBirthdayMessage = "testbirthdaymessage",
   ClearDm = "cleardm",
+  Clear = "clear",
   FindUser = "finduser",
   ReactionRoles = "reactionroles",
 }
 
-/** How reacting/un-reacting affects role membership for a panel. See docs/REACTION_ROLES.md. */
-export enum ReactionRoleMode {
-  /** React grants the role, un-react revokes it. */
-  Toggle = "toggle",
-  /** Only one mapping in the panel may be held at a time; picking a new one revokes the previous. */
-  Unique = "unique",
-  /** React grants the role; un-reacting never revokes it. */
-  Verify = "verify",
+/** How members interact with a panel to pick roles. See docs/REACTION_ROLES.md. Immutable after a panel is created. */
+export enum SelectionType {
+  Reactions = "reactions",
+  Buttons = "buttons",
+  Dropdown = "dropdown",
 }
+
+/** Only meaningful for a `managed` panel — an unmanaged (attached-to-existing-message) panel never touches message content. */
+export enum PanelMessageType {
+  Text = "text",
+  Embed = "embed",
+}
+
+/** Discord hard caps: 5 buttons per action row, 5 rows per message. */
+export const MAX_BUTTONS_PER_PANEL = 25;
+/** Discord hard cap on a single select menu's option count. */
+export const MAX_DROPDOWN_OPTIONS_PER_PANEL = 25;

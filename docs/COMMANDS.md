@@ -22,6 +22,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | [`/setbirthdaymessage`](#setbirthdaymessage) | Admin | yes | Change the birthday announcement template. |
 | [`/testbirthdaymessage`](#testbirthdaymessage) | Admin | yes | Preview the template rendered for yourself. |
 | [`/cleardm`](#cleardm) | **Owner** | no | Delete the bot's own DM messages to you, optionally backing them up first. |
+| [`/clear`](#clear) | Admin | yes | Bulk-delete a given number of messages in the current channel, batching past Discord's 100-per-request limit. |
 | [`/finduser`](#finduser) | Admin | yes | Search cached guild members by name (handles fancy/unicode names). |
 | [`/reactionroles`](#reactionroles) | Admin | yes | List reaction-role panels, or re-sync them with Discord. Full editing lives on the [dashboard](DASHBOARD.md). |
 
@@ -68,6 +69,14 @@ Renders the current template using your own account as the birthday person, so y
 
 Owner-only because it operates on the *command invoker's own DM channel* with the bot — there's no guild context to restrict it to.
 
+### `/clear`
+
+| Option | Type | Required | Description |
+| --- | --- | --- | --- |
+| `amount` | integer (1–1000) | yes | How many messages to delete in the channel the command was run in. |
+
+Discord's own bulk-delete endpoint caps out at 100 messages per call and refuses to touch anything older than 14 days. `/clear` works around both: it fetches and bulk-deletes in batches of up to 100 until `amount` is reached, and falls back to deleting messages older than 14 days one at a time (rate-limited) since those can't be bulk-deleted at all. Requires the bot to have **Manage Messages** in that channel — checked upfront with a clear error if missing, rather than failing partway through.
+
 ### `/finduser`
 
 | Option | Type | Required | Description |
@@ -83,4 +92,4 @@ Searches username, global display name, server nickname, and server display name
 | `list` | Ephemeral embed of every panel — mode, channel, jump link, and its emoji→role mappings. |
 | `sync` | Re-posts/edits every panel's message and reconciles its seed reactions with Discord. |
 
-Panels themselves (channel, mode, `removeReaction`, and their mappings) are created and edited on the [dashboard](DASHBOARD.md#reaction-roles) — see [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself.
+Panels themselves (selection type, channel, allow-multiple/removable, `removeReaction`, allowed roles, and their mappings) are created and edited on the [dashboard](DASHBOARD.md#reaction-roles) — see [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself.

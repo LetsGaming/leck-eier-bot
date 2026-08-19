@@ -22,7 +22,7 @@ for (let v = current; v < MIGRATIONS.length; v++) {
 }
 ```
 
-Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`.
+Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji).
 
 ## Schema
 
@@ -66,7 +66,7 @@ Per-command `enabled`/`guildOnly` overrides, set from the dashboard's Commands p
 
 ### `reaction_role_panels` / `reaction_role_mappings`
 
-See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is one bot-managed message; its mappings are the emoji→role options shown on it, deleted automatically when the panel is (`ON DELETE CASCADE`).
+See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is a message members interact with to pick roles — either one the bot posts and owns, or one it's attached to after the fact (`managed`, below). Mappings are the options (emoji/button/dropdown entry) shown on it, deleted automatically when the panel is (`ON DELETE CASCADE`).
 
 **`reaction_role_panels`**
 
@@ -74,11 +74,16 @@ See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is on
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | |
 | `channel_id` | `TEXT NOT NULL` | |
-| `message_id` | `TEXT` | `null` until the panel has been posted for the first time. Unique when non-null. |
-| `managed` | `INTEGER NOT NULL DEFAULT 1` | Reserved for a possible future "attach to an existing message" mode — always `1` today. |
-| `mode` | `TEXT NOT NULL DEFAULT 'toggle'` | `CHECK`-constrained to `toggle` / `unique` / `verify` (`ReactionRoleMode` in `constants.ts`). |
-| `remove_reaction` | `INTEGER NOT NULL DEFAULT 0` | |
-| `title` / `description` | `TEXT` | Both nullable; rendered into the panel's embed. |
+| `message_id` | `TEXT` | `null` until a *managed* panel has been sent for the first time; set immediately at creation for an *unmanaged* one (see `managed`). Unique when non-null. |
+| `managed` | `INTEGER NOT NULL DEFAULT 1` | `1`: the bot owns the message — posts it, rebuilds it on every change. `0`: attached to a pre-existing message (e.g. an admin's rules post) instead, reactions-only — see [REACTION_ROLES.md § Attaching to an existing message](REACTION_ROLES.md#attaching-to-an-existing-message). Set once at creation via `createPanel()`'s `existingMessageId` and never changed afterward. |
+| `selection_type` | `TEXT NOT NULL DEFAULT 'reactions'` | `reactions` / `buttons` / `dropdown` (`SelectionType` in `constants.ts`). Set once at creation, immutable — buttons/dropdown need a bot-owned message, so this can't combine with `managed: 0`. See [REACTION_ROLES.md § Selection types](REACTION_ROLES.md#selection-types). |
+| `message_type` | `TEXT NOT NULL DEFAULT 'embed'` | `text` / `embed` (`PanelMessageType` in `constants.ts`). Ignored for an unmanaged panel — there's no message content to render it into. |
+| `remove_reaction` | `INTEGER NOT NULL DEFAULT 0` | Reactions-only — see [REACTION_ROLES.md § removeReaction](REACTION_ROLES.md#removereaction-reactions-only). |
+| `allow_multiple` | `INTEGER NOT NULL DEFAULT 0` | Off: only one of the panel's roles may be held at a time (picking a new one revokes the previous). On: no limit. Replaces the old `mode` column (still present, unused — see [Migrations](#migrations)). |
+| `removable` | `INTEGER NOT NULL DEFAULT 1` | Off: a granted role can never be given up through this panel again (rules-acceptance style). |
+| `allowed_role_ids` | `TEXT` | JSON array of role id strings; `null`/empty means everyone may use the panel. Parsed/serialized in `reactionRolesRepository.ts` — there's no separate join table, since it's a small, panel-scoped, order-independent set. |
+| `sent` | `INTEGER NOT NULL DEFAULT 0` | Off: a draft — no writes are pushed to Discord (see [REACTION_ROLES.md § Draft, then send](REACTION_ROLES.md#draft-then-send)). Flipped on by `setPanelSent()`, called from the dashboard's/`/reactionroles`'s explicit send action once the first sync succeeds. |
+| `title` / `description` | `TEXT` | Both nullable; rendered into the panel's message for a managed panel (title only used for `message_type: embed`). Always `null` for an unmanaged one — there's no message content to render them into, since it's someone else's. |
 | `created_at` | `TEXT NOT NULL` | ISO timestamp. |
 
 **`reaction_role_mappings`**
@@ -87,13 +92,13 @@ See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself. A panel is on
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | |
 | `panel_id` | `INTEGER NOT NULL REFERENCES reaction_role_panels(id) ON DELETE CASCADE` | |
-| `emoji_name` | `TEXT NOT NULL` | The unicode character itself for standard emoji, or the custom emoji's name. |
-| `emoji_id` | `TEXT` | `null` for unicode emoji; the snowflake for custom (guild) emoji. `emoji_id ?? emoji_name` is used throughout as the lookup key, matching discord.js's own `reaction.emoji.id ?? reaction.emoji.name`. |
+| `emoji_name` | `TEXT` | The unicode character itself for standard emoji, or the custom emoji's name. `null` for a buttons/dropdown option with no emoji — a reaction always has one, so this is effectively required only for `selection_type: reactions` (enforced in the API route, not the schema). |
+| `emoji_id` | `TEXT` | `null` for unicode emoji, or no emoji at all; the snowflake for custom (guild) emoji. `emoji_id ?? emoji_name` is used throughout as the lookup key, matching discord.js's own `reaction.emoji.id ?? reaction.emoji.name`. |
 | `role_id` | `TEXT NOT NULL` | |
-| `label` | `TEXT` | Optional text shown next to the role in the panel embed. |
+| `label` | `TEXT` | Shown next to the role in a reactions panel's message; used as the button/dropdown-option text otherwise (falling back to the role's name if unset). |
 | `position` | `INTEGER NOT NULL DEFAULT 0` | Display/seed-reaction order within the panel. |
 
-Unique on `(panel_id, emoji_id, emoji_name)` — one mapping per emoji per panel.
+Unique on `(panel_id, emoji_id, emoji_name)` — one mapping per emoji per panel. SQL `NULL` is never equal to another `NULL` even under a unique index, so this doesn't stop a panel from having any number of emoji-less button/dropdown mappings.
 
 ### `web_sessions`
 

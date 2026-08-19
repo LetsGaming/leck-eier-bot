@@ -6,7 +6,7 @@
 src/
   index.ts                  Entry point: client setup, cron job, interaction dispatch, startup
   constants.ts               All magic numbers/strings + the CommandPermission/CommandName/EmbedColor/
-                               ReactionRoleMode enums
+                               SelectionType/PanelMessageType enums
   types.ts                   Shared TypeScript types (Command, BotClient, BirthdayEntry, Settings,
                                ReactionRolePanel/Mapping, WebSession, ...)
 
@@ -125,12 +125,12 @@ This means individual command files never re-implement permission checks — the
 
 ## Data flow: reaction roles
 
-See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature-level explanation (modes, `removeReaction` semantics, requirements). Architecturally:
+See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature-level explanation (selection types, allow-multiple/removable, `removeReaction` semantics, the draft-then-send workflow, requirements). Architecturally:
 
 1. A panel and its mappings are created/edited via the dashboard's API (`src/web/routes/reactionRolePanels.ts`) or, read-only, via `/reactionroles list`.
-2. Every panel write calls `syncPanelMessage()` (`services/reactionRoles.ts`), which posts/edits the panel's embed and reconciles its seed reactions to match the current mappings.
-3. `events/reactionRoleEvents.ts` wires `messageReactionAdd`/`Remove` to `handleReactionAdd`/`handleReactionRemove` in the same service. Both resolve any partial reaction/message/user first, look the message up in an in-memory panel cache (invalidated via `settingsBus`, see above), and apply the mode-specific grant/revoke logic described in REACTION_ROLES.md.
-4. A short-lived self-echo suppression map and a per-user promise-chain (also in `services/reactionRoles.ts`) keep bot-initiated reaction removals and rapid repeated clicks from double-processing.
+2. Every panel write auto-resyncs via `syncPanelMessage()` (`services/reactionRoles.ts`) — but only once the panel is `sent`; a draft only ever touches the database. The explicit `POST .../send` route performs the first sync and flips `sent`.
+3. `events/reactionRoleEvents.ts` wires `messageReactionAdd`/`Remove`, plus a second `interactionCreate` listener (alongside the slash-command dispatcher in `index.ts`) for button clicks and dropdown submissions whose `customId` is prefixed `rr:`. All resolve any partial reaction/message/user first, look the message up in an in-memory panel cache (invalidated via `settingsBus`, see above), and apply the allow-multiple/removable grant/revoke logic described in REACTION_ROLES.md — reactions and buttons share `applyMappingSelection()`; dropdowns, which submit a complete new selection each time rather than one option at a time, use the separate `applyDropdownSelection()`.
+4. A short-lived self-echo suppression map (reactions only) and a per-user promise-chain (also in `services/reactionRoles.ts`) keep bot-initiated reaction removals and rapid repeated clicks/reactions from double-processing.
 
 ## Dashboard
 

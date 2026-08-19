@@ -110,6 +110,56 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       );
     `);
   },
+  // v5: selection mechanism (reactions/buttons/dropdown), plain-text vs
+  // embed messages, a simpler allow_multiple/removable model replacing
+  // `mode`, per-panel allowed-role gating, and the draft-until-sent
+  // workflow. `mode`/`remove_reaction` are left in place rather than
+  // dropped — remove_reaction is still meaningful (reactions-only), and
+  // dropping columns is more failure-prone than just not reading `mode`
+  // anymore.
+  (d) => {
+    d.exec(`
+      ALTER TABLE reaction_role_panels ADD COLUMN selection_type TEXT NOT NULL DEFAULT 'reactions';
+      ALTER TABLE reaction_role_panels ADD COLUMN message_type TEXT NOT NULL DEFAULT 'embed';
+      ALTER TABLE reaction_role_panels ADD COLUMN allow_multiple INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE reaction_role_panels ADD COLUMN removable INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE reaction_role_panels ADD COLUMN allowed_role_ids TEXT;
+      ALTER TABLE reaction_role_panels ADD COLUMN sent INTEGER NOT NULL DEFAULT 0;
+    `);
+    // Carry existing panels' behavior forward under the new model, and
+    // treat anything already posted as already "sent" so upgrading doesn't
+    // pull a live panel back into an unsent draft state.
+    d.exec(`
+      UPDATE reaction_role_panels SET
+        allow_multiple = CASE WHEN mode = 'toggle' THEN 1 ELSE 0 END,
+        removable = CASE WHEN mode = 'verify' THEN 0 ELSE 1 END,
+        sent = CASE WHEN message_id IS NOT NULL THEN 1 ELSE 0 END;
+    `);
+
+    // Buttons/dropdown options don't require an emoji (a plain labeled
+    // button is valid), but emoji_name was NOT NULL from v3. SQLite has no
+    // ALTER COLUMN, so relax it the standard way: rebuild the table. Safe
+    // to do with foreign_keys as-is — mappings is the child side of the FK
+    // (references reaction_role_panels), so recreating it never orphans a
+    // parent row.
+    d.exec(`
+      CREATE TABLE reaction_role_mappings_v5 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        panel_id INTEGER NOT NULL REFERENCES reaction_role_panels(id) ON DELETE CASCADE,
+        emoji_name TEXT,
+        emoji_id TEXT,
+        role_id TEXT NOT NULL,
+        label TEXT,
+        position INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO reaction_role_mappings_v5
+        SELECT id, panel_id, emoji_name, emoji_id, role_id, label, position FROM reaction_role_mappings;
+      DROP TABLE reaction_role_mappings;
+      ALTER TABLE reaction_role_mappings_v5 RENAME TO reaction_role_mappings;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rr_map_emoji
+        ON reaction_role_mappings(panel_id, emoji_id, emoji_name);
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

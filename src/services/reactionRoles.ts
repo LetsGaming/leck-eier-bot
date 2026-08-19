@@ -1,30 +1,42 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   EmbedBuilder,
+  MessageFlags,
   PermissionsBitField,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  type ButtonInteraction,
   type Client,
   type Guild,
+  type GuildMember,
   type Message,
   type MessageReaction,
   type PartialMessageReaction,
   type PartialUser,
+  type StringSelectMenuInteraction,
   type User,
 } from "discord.js";
-import {
-  getPanel,
-  listPanels,
-  setPanelMessageId,
-} from "../db/reactionRolesRepository.js";
+import { getPanel, listPanels, setPanelMessageId } from "../db/reactionRolesRepository.js";
 import { settingsBus, SettingsEvent } from "./settingsBus.js";
 import { createEmbed } from "../utils/embedUtils.js";
 import logger, { errorMessage } from "../utils/logger.js";
-import { EmbedColor, REACTION_SELF_ECHO_TTL_MS, ReactionRoleMode } from "../constants.js";
+import {
+  EmbedColor,
+  MAX_BUTTONS_PER_PANEL,
+  MAX_DROPDOWN_OPTIONS_PER_PANEL,
+  PanelMessageType,
+  REACTION_SELF_ECHO_TTL_MS,
+  SelectionType,
+} from "../constants.js";
 import type { ReactionRoleMapping, ReactionRolePanelWithMappings } from "../types.js";
 
 // --- Panel cache -----------------------------------------------------------
-// Reactions can arrive many times a second; hitting SQLite on every one of
-// them is wasteful when the panel set changes rarely. Rebuilt lazily and
-// invalidated whenever a panel/mapping write happens (repository emits
-// SettingsEvent.ReactionRoles) or a panel is (re)posted (message id changes).
+// Reactions/component interactions can arrive many times a second; hitting
+// SQLite on every one of them is wasteful when the panel set changes
+// rarely. Rebuilt lazily and invalidated whenever a panel/mapping write
+// happens (repository emits SettingsEvent.ReactionRoles).
 
 let panelCache: Map<string, ReactionRolePanelWithMappings> | null = null;
 
@@ -45,12 +57,12 @@ settingsBus.on(SettingsEvent.ReactionRoles, () => {
   panelCache = null;
 });
 
-// --- Self-echo suppression --------------------------------------------------
-// Removing a user's reaction on their behalf (unique-mode swaps, the
-// `removeReaction` panel option) fires a real messageReactionRemove event
-// for that user. We already applied whatever effect that removal should
-// have as part of handling the add, so the follow-up remove must be a
-// no-op — tracked here for a short window per (message, user, emoji).
+// --- Self-echo suppression (reactions only) ---------------------------------
+// Removing a user's reaction on their behalf (single-role swaps, the
+// `removeReaction` option) fires a real messageReactionRemove event for
+// that user. We already applied whatever effect that removal should have
+// as part of handling the add, so the follow-up remove must be a no-op —
+// tracked here for a short window per (message, user, emoji).
 
 const selfInitiatedRemovals = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -84,15 +96,21 @@ function consumeSelfInitiatedRemoval(messageId: string, userId: string, emojiKey
 
 const userTaskQueues = new Map<string, Promise<void>>();
 
-async function runSerialized(messageId: string, userId: string, task: () => Promise<void>): Promise<void> {
+async function runSerialized<T>(messageId: string, userId: string, task: () => Promise<T>): Promise<T | undefined> {
   const key = `${messageId}:${userId}`;
   const previous = userTaskQueues.get(key) ?? Promise.resolve();
-  const next = previous.then(task, task).catch((err) => {
-    logger.error(`Reaction role handler failed: ${errorMessage(err)}`);
-  });
+  let result: T | undefined;
+  const next = previous
+    .then(async () => {
+      result = await task();
+    })
+    .catch((err) => {
+      logger.error(`Reaction role handler failed: ${errorMessage(err)}`);
+    });
   userTaskQueues.set(key, next);
   await next;
   if (userTaskQueues.get(key) === next) userTaskQueues.delete(key);
+  return result;
 }
 
 // --- Permission checks -------------------------------------------------------
@@ -102,7 +120,7 @@ export interface Manageability {
   reason?: string;
 }
 
-/** Can the bot currently grant/revoke `roleId` in `guild`? Used both when handling a reaction and by the dashboard to warn before saving a mapping. */
+/** Can the bot currently grant/revoke `roleId` in `guild`? Used both when handling a selection and by the dashboard to warn before saving a mapping. */
 export function canManageRole(guild: Guild, roleId: string): Manageability {
   const me = guild.members.me;
   if (!me) return { ok: false, reason: "Bot member not cached for this guild" };
@@ -127,14 +145,21 @@ function canRemoveReactionsIn(message: Message): boolean {
   return me.permissionsIn(message.channelId).has(PermissionsBitField.Flags.ManageMessages);
 }
 
-// --- Reaction lookup / removal helpers --------------------------------------
+/** Only members holding at least one of `panel.allowedRoleIds` may use it. Empty/null means everyone. */
+function isAllowedToUsePanel(member: GuildMember, panel: ReactionRolePanelWithMappings): boolean {
+  if (!panel.allowedRoleIds || panel.allowedRoleIds.length === 0) return true;
+  return panel.allowedRoleIds.some((roleId) => member.roles.cache.has(roleId));
+}
+
+// --- Reaction lookup / removal helpers (reactions only) ---------------------
 
 function findReaction(
   message: Message,
   emojiId: string | null,
-  emojiName: string,
+  emojiName: string | null,
 ): MessageReaction | undefined {
   const key = emojiId ?? emojiName;
+  if (!key) return undefined;
   return message.reactions.cache.find((r) => (r.emoji.id ?? r.emoji.name) === key);
 }
 
@@ -152,13 +177,141 @@ async function clearUserReactionForMapping(
     );
     return;
   }
-  markSelfInitiatedRemoval(message.id, userId, mapping.emojiId ?? mapping.emojiName);
+  const emojiKey = mapping.emojiId ?? mapping.emojiName;
+  if (!emojiKey) return;
+  markSelfInitiatedRemoval(message.id, userId, emojiKey);
   await reaction.users.remove(userId).catch((err) =>
     logger.warn(`Failed to remove reaction for user ${userId}: ${errorMessage(err)}`),
   );
 }
 
-// --- Event handlers ----------------------------------------------------------
+// --- Core role application ---------------------------------------------------
+// Shared by reactions, buttons, and (in a different shape — see
+// applyDropdownSelection) dropdowns, so the grant/revoke/allowMultiple/
+// removable rules only live in one place.
+
+interface SelectionResult {
+  ok: boolean;
+  message: string;
+}
+
+interface ApplyOptions {
+  /** Buttons always flip; reactions only flip when `removeReaction` is set (otherwise reacting is grant-only, and un-reacting is handled separately by `revokeMappingSelection`). */
+  flip: boolean;
+  /** Reactions only — lets a single-role swap also clear the other reactions the member is holding. */
+  message?: Message;
+}
+
+async function applyMappingSelection(
+  guild: Guild,
+  member: GuildMember,
+  panel: ReactionRolePanelWithMappings,
+  mapping: ReactionRoleMapping,
+  opts: ApplyOptions,
+): Promise<SelectionResult> {
+  const manageability = canManageRole(guild, mapping.roleId);
+  if (!manageability.ok) {
+    logger.warn(`Reaction role skipped (panel ${panel.id}, role ${mapping.roleId}): ${manageability.reason}`);
+    return { ok: false, message: "Sorry, I can't currently assign that role — an admin needs to check my permissions." };
+  }
+
+  const hasRole = member.roles.cache.has(mapping.roleId);
+
+  if (hasRole) {
+    if (!opts.flip) return { ok: true, message: `You already have <@&${mapping.roleId}>.` };
+    if (!panel.removable) return { ok: true, message: `<@&${mapping.roleId}> can't be removed.` };
+    await member.roles.remove(mapping.roleId).catch((err) =>
+      logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
+    );
+    return { ok: true, message: `Removed <@&${mapping.roleId}>.` };
+  }
+
+  if (!panel.allowMultiple) {
+    for (const other of panel.mappings) {
+      if (other.id === mapping.id) continue;
+      if (member.roles.cache.has(other.roleId) && canManageRole(guild, other.roleId).ok) {
+        await member.roles.remove(other.roleId).catch((err) =>
+          logger.warn(`Failed to revoke role ${other.roleId} while enforcing single-role selection: ${errorMessage(err)}`),
+        );
+        if (opts.message) await clearUserReactionForMapping(opts.message, other, member.id);
+      }
+    }
+  }
+
+  await member.roles.add(mapping.roleId).catch((err) =>
+    logger.warn(`Failed to grant role ${mapping.roleId}: ${errorMessage(err)}`),
+  );
+  return { ok: true, message: `Gave you <@&${mapping.roleId}>.` };
+}
+
+/** Un-react equivalent — only meaningful when `removable`; a flip-style interaction (buttons, `removeReaction` panels) never calls this, it's handled inline by `applyMappingSelection`. */
+async function revokeMappingSelection(
+  guild: Guild,
+  member: GuildMember,
+  panel: ReactionRolePanelWithMappings,
+  mapping: ReactionRoleMapping,
+): Promise<void> {
+  if (!panel.removable || !member.roles.cache.has(mapping.roleId)) return;
+  const manageability = canManageRole(guild, mapping.roleId);
+  if (!manageability.ok) {
+    logger.warn(`Reaction role revoke skipped (panel ${panel.id}, role ${mapping.roleId}): ${manageability.reason}`);
+    return;
+  }
+  await member.roles.remove(mapping.roleId).catch((err) =>
+    logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
+  );
+}
+
+/**
+ * Dropdown selections submit the member's *complete* new set of chosen
+ * options every time (not one option at a time like a reaction/button
+ * click), so it's reconciled against current role membership in one pass
+ * instead of reusing `applyMappingSelection`'s single-mapping flip.
+ */
+async function applyDropdownSelection(
+  guild: Guild,
+  member: GuildMember,
+  panel: ReactionRolePanelWithMappings,
+  selectedMappingIds: number[],
+): Promise<SelectionResult> {
+  const targetRoleIds = new Set(
+    panel.mappings.filter((m) => selectedMappingIds.includes(m.id)).map((m) => m.roleId),
+  );
+
+  const granted: string[] = [];
+  const revoked: string[] = [];
+  const kept: string[] = [];
+
+  for (const mapping of panel.mappings) {
+    if (!canManageRole(guild, mapping.roleId).ok) continue;
+    const hasRole = member.roles.cache.has(mapping.roleId);
+    const wantsRole = targetRoleIds.has(mapping.roleId);
+
+    if (wantsRole && !hasRole) {
+      await member.roles.add(mapping.roleId).catch((err) =>
+        logger.warn(`Failed to grant role ${mapping.roleId}: ${errorMessage(err)}`),
+      );
+      granted.push(mapping.roleId);
+    } else if (!wantsRole && hasRole) {
+      if (panel.removable) {
+        await member.roles.remove(mapping.roleId).catch((err) =>
+          logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
+        );
+        revoked.push(mapping.roleId);
+      } else {
+        kept.push(mapping.roleId);
+      }
+    }
+  }
+
+  const parts: string[] = [];
+  if (granted.length) parts.push(`Gave you: ${granted.map((id) => `<@&${id}>`).join(", ")}`);
+  if (revoked.length) parts.push(`Removed: ${revoked.map((id) => `<@&${id}>`).join(", ")}`);
+  if (kept.length) parts.push(`Kept (not removable): ${kept.map((id) => `<@&${id}>`).join(", ")}`);
+  return { ok: true, message: parts.length ? parts.join("\n") : "No changes." };
+}
+
+// --- Reaction event handlers ---------------------------------------------------
 
 async function resolvePartials(
   reaction: MessageReaction | PartialMessageReaction,
@@ -188,7 +341,7 @@ export async function handleReactionAdd(
   if (!emojiKey) return;
 
   const panel = getCachedPanel(message.id);
-  if (!panel) return;
+  if (!panel || panel.selectionType !== SelectionType.Reactions || !panel.sent) return;
 
   const mapping = panel.mappings.find((m) => (m.emojiId ?? m.emojiName) === emojiKey);
   if (!mapping) {
@@ -206,38 +359,12 @@ export async function handleReactionAdd(
     const member = await guild.members.fetch(user.id).catch(() => null);
     if (!member) return;
 
-    const manageability = canManageRole(guild, mapping.roleId);
-    if (!manageability.ok) {
-      logger.warn(
-        `Reaction role skipped (panel ${panel.id}, role ${mapping.roleId}): ${manageability.reason}`,
-      );
+    if (!isAllowedToUsePanel(member, panel)) {
+      if (canRemoveReactionsIn(message)) await reaction.users.remove(user.id).catch(() => undefined);
       return;
     }
 
-    if (panel.mode === ReactionRoleMode.Unique) {
-      for (const other of panel.mappings) {
-        if (other.id === mapping.id) continue;
-        if (member.roles.cache.has(other.roleId) && canManageRole(guild, other.roleId).ok) {
-          await member.roles.remove(other.roleId).catch((err) =>
-            logger.warn(`Failed to revoke role ${other.roleId} during unique-mode swap: ${errorMessage(err)}`),
-          );
-        }
-        await clearUserReactionForMapping(message, other, user.id);
-      }
-    }
-
-    const hasRole = member.roles.cache.has(mapping.roleId);
-    const shouldFlip = panel.removeReaction && panel.mode !== ReactionRoleMode.Verify;
-
-    if (shouldFlip && hasRole) {
-      await member.roles.remove(mapping.roleId).catch((err) =>
-        logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
-      );
-    } else if (!hasRole) {
-      await member.roles.add(mapping.roleId).catch((err) =>
-        logger.warn(`Failed to grant role ${mapping.roleId}: ${errorMessage(err)}`),
-      );
-    }
+    await applyMappingSelection(guild, member, panel, mapping, { flip: panel.removeReaction, message });
 
     if (panel.removeReaction) {
       await clearUserReactionForMapping(message, mapping, user.id);
@@ -260,42 +387,120 @@ export async function handleReactionRemove(
   if (consumeSelfInitiatedRemoval(message.id, user.id, emojiKey)) return;
 
   const panel = getCachedPanel(message.id);
-  if (!panel || panel.removeReaction) return; // removeReaction panels never expect a persisted reaction to remove.
+  // removeReaction panels never expect a persisted reaction to remove — the
+  // bot already stripped it as part of handling the add.
+  if (!panel || panel.selectionType !== SelectionType.Reactions || panel.removeReaction || !panel.sent) return;
 
   const mapping = panel.mappings.find((m) => (m.emojiId ?? m.emojiName) === emojiKey);
-  if (!mapping || panel.mode === ReactionRoleMode.Verify) return;
+  if (!mapping) return;
 
   const guild = message.guild;
   if (!guild) return;
 
   await runSerialized(message.id, user.id, async () => {
     const member = await guild.members.fetch(user.id).catch(() => null);
-    if (!member || !member.roles.cache.has(mapping.roleId)) return;
-
-    const manageability = canManageRole(guild, mapping.roleId);
-    if (!manageability.ok) {
-      logger.warn(
-        `Reaction role revoke skipped (panel ${panel.id}, role ${mapping.roleId}): ${manageability.reason}`,
-      );
-      return;
-    }
-
-    await member.roles.remove(mapping.roleId).catch((err) =>
-      logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
-    );
+    if (!member) return;
+    if (!isAllowedToUsePanel(member, panel)) return;
+    await revokeMappingSelection(guild, member, panel, mapping);
   });
 }
 
-// --- Posting / syncing panel messages ---------------------------------------
+// --- Button / dropdown interaction handlers ---------------------------------
+
+const COMPONENT_ID_PREFIX = "rr";
+
+function buttonCustomId(panelId: number, mappingId: number): string {
+  return `${COMPONENT_ID_PREFIX}:${panelId}:${mappingId}`;
+}
+
+function dropdownCustomId(panelId: number): string {
+  return `${COMPONENT_ID_PREFIX}:${panelId}`;
+}
+
+export async function handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
+  const parts = interaction.customId.split(":");
+  if (parts[0] !== COMPONENT_ID_PREFIX) return;
+  const panelId = Number(parts[1]);
+  const mappingId = Number(parts[2]);
+
+  const panel = getCachedPanel(interaction.message.id);
+  if (!panel || panel.id !== panelId || !panel.sent) {
+    await interaction.reply({ content: "This button is no longer active.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const mapping = panel.mappings.find((m) => m.id === mappingId);
+  if (!mapping) {
+    await interaction.reply({ content: "This option no longer exists.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const guild = interaction.guild;
+  if (!guild) return;
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  await runSerialized(interaction.message.id, interaction.user.id, async () => {
+    const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+    if (!member) return interaction.editReply({ content: "Couldn't find your membership in this server." });
+
+    if (!isAllowedToUsePanel(member, panel)) {
+      return interaction.editReply({ content: "You don't have permission to use this." });
+    }
+
+    const result = await applyMappingSelection(guild, member, panel, mapping, { flip: true });
+    await interaction.editReply({ content: result.message }).catch(() => undefined);
+  });
+}
+
+export async function handleSelectMenuInteraction(interaction: StringSelectMenuInteraction): Promise<void> {
+  const parts = interaction.customId.split(":");
+  if (parts[0] !== COMPONENT_ID_PREFIX) return;
+  const panelId = Number(parts[1]);
+
+  const panel = getCachedPanel(interaction.message.id);
+  if (!panel || panel.id !== panelId || !panel.sent) {
+    await interaction.reply({ content: "This menu is no longer active.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const guild = interaction.guild;
+  if (!guild) return;
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  await runSerialized(interaction.message.id, interaction.user.id, async () => {
+    const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+    if (!member) return interaction.editReply({ content: "Couldn't find your membership in this server." });
+
+    if (!isAllowedToUsePanel(member, panel)) {
+      return interaction.editReply({ content: "You don't have permission to use this." });
+    }
+
+    const selectedMappingIds = interaction.values.map(Number);
+    const result = await applyDropdownSelection(guild, member, panel, selectedMappingIds);
+    await interaction.editReply({ content: result.message }).catch(() => undefined);
+  });
+}
+
+// --- Building the panel message ---------------------------------------------
 
 function emojiDisplay(mapping: ReactionRoleMapping): string {
-  return mapping.emojiId ? `<:${mapping.emojiName}:${mapping.emojiId}>` : mapping.emojiName;
+  if (mapping.emojiId) return `<:${mapping.emojiName}:${mapping.emojiId}>`;
+  return mapping.emojiName ?? "";
+}
+
+function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
+  if (mapping.label) return mapping.label;
+  return guild.roles.cache.get(mapping.roleId)?.name ?? "Unknown role";
 }
 
 function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
   const lines = [...panel.mappings]
     .sort((a, b) => a.position - b.position)
-    .map((m) => `${emojiDisplay(m)} — <@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`);
+    .map((m) => {
+      const emoji = emojiDisplay(m);
+      return `${emoji ? `${emoji} — ` : ""}<@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`;
+    });
   const description = [panel.description, lines.join("\n")].filter(Boolean).join("\n\n");
   return createEmbed({
     title: panel.title ?? "Reaction Roles",
@@ -304,9 +509,98 @@ function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
   });
 }
 
+/** Plain-text equivalent of {@link buildPanelEmbed} — no title concept outside an embed. */
+function buildPanelText(panel: ReactionRolePanelWithMappings): string {
+  // Buttons/dropdown are self-describing (each option carries its own
+  // label), so the option list is only spelled out in the message body for
+  // reactions, where the emoji-to-role mapping isn't otherwise visible.
+  const lines =
+    panel.selectionType === SelectionType.Reactions
+      ? [...panel.mappings]
+          .sort((a, b) => a.position - b.position)
+          .map((m) => {
+            const emoji = emojiDisplay(m);
+            return `${emoji ? `${emoji} — ` : ""}<@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`;
+          })
+      : [];
+  return [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "React to get a role!";
+}
+
+/** Always returns both fields explicitly (never partial) so editing a message that's switching type fully replaces the old content instead of Discord leaving stale fields in place. */
+function buildPanelContent(panel: ReactionRolePanelWithMappings): { content: string | null; embeds: EmbedBuilder[] } {
+  if (panel.messageType === PanelMessageType.Text) {
+    return { content: buildPanelText(panel), embeds: [] };
+  }
+  return { content: null, embeds: [buildPanelEmbed(panel)] };
+}
+
+function buildButtonRows(panel: ReactionRolePanelWithMappings, guild: Guild): ActionRowBuilder<ButtonBuilder>[] {
+  const sorted = [...panel.mappings].sort((a, b) => a.position - b.position).slice(0, MAX_BUTTONS_PER_PANEL);
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let i = 0; i < sorted.length; i += 5) {
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    for (const mapping of sorted.slice(i, i + 5)) {
+      const button = new ButtonBuilder()
+        .setCustomId(buttonCustomId(panel.id, mapping.id))
+        .setStyle(ButtonStyle.Secondary)
+        .setLabel(roleLabel(mapping, guild));
+      if (mapping.emojiId) {
+        button.setEmoji({ id: mapping.emojiId, name: mapping.emojiName ?? undefined });
+      } else if (mapping.emojiName) {
+        button.setEmoji(mapping.emojiName);
+      }
+      row.addComponents(button);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+function buildDropdownRow(
+  panel: ReactionRolePanelWithMappings,
+  guild: Guild,
+): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const sorted = [...panel.mappings].sort((a, b) => a.position - b.position).slice(0, MAX_DROPDOWN_OPTIONS_PER_PANEL);
+  if (sorted.length === 0) return [];
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(dropdownCustomId(panel.id))
+    .setPlaceholder(panel.allowMultiple ? "Select your roles…" : "Select a role…")
+    .setMinValues(0)
+    .setMaxValues(panel.allowMultiple ? sorted.length : 1);
+
+  for (const mapping of sorted) {
+    const option = new StringSelectMenuOptionBuilder()
+      .setLabel(roleLabel(mapping, guild))
+      .setValue(String(mapping.id));
+    if (mapping.emojiId) {
+      option.setEmoji({ id: mapping.emojiId, name: mapping.emojiName ?? undefined });
+    } else if (mapping.emojiName) {
+      option.setEmoji(mapping.emojiName);
+    }
+    menu.addOptions(option);
+  }
+
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
+}
+
+function buildComponents(
+  panel: ReactionRolePanelWithMappings,
+  guild: Guild,
+): (ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>)[] {
+  switch (panel.selectionType) {
+    case SelectionType.Buttons:
+      return buildButtonRows(panel, guild);
+    case SelectionType.Dropdown:
+      return buildDropdownRow(panel, guild);
+    case SelectionType.Reactions:
+      return [];
+  }
+}
+
 async function reconcilePanelReactions(message: Message, panel: ReactionRolePanelWithMappings): Promise<void> {
   const desired = [...panel.mappings].sort((a, b) => a.position - b.position);
-  const desiredKeys = new Set(desired.map((m) => m.emojiId ?? m.emojiName));
+  const desiredKeys = new Set(desired.map((m) => m.emojiId ?? m.emojiName).filter((k): k is string => !!k));
 
   for (const reaction of message.reactions.cache.values()) {
     const key = reaction.emoji.id ?? reaction.emoji.name;
@@ -319,16 +613,23 @@ async function reconcilePanelReactions(message: Message, panel: ReactionRolePane
 
   for (const mapping of desired) {
     const key = mapping.emojiId ?? mapping.emojiName;
+    if (!key) continue;
     const already = message.reactions.cache.find((r) => r.me && (r.emoji.id ?? r.emoji.name) === key);
     if (already) continue;
-    const identifier = mapping.emojiId ? `${mapping.emojiName}:${mapping.emojiId}` : mapping.emojiName;
+    const identifier = mapping.emojiId ? `${mapping.emojiName}:${mapping.emojiId}` : key;
     await message.react(identifier).catch((err) =>
       logger.warn(`Failed to add panel reaction ${identifier}: ${errorMessage(err)}`),
     );
   }
 }
 
-/** Posts the panel (first sync) or edits it in place, then reconciles its seed reactions. */
+/**
+ * Posts the panel (first sync) or edits it in place, then reconciles its
+ * seed reactions (reactions selection type only — buttons/dropdown are
+ * static components, nothing to reconcile per-user). For an unmanaged panel
+ * (attached to a pre-existing message) the message content is never
+ * touched — it's someone else's message, not ours to overwrite.
+ */
 export async function syncPanelMessage(client: Client, panelId: number): Promise<void> {
   const panel = getPanel(panelId);
   if (!panel) throw new Error(`Reaction role panel ${panelId} not found`);
@@ -338,26 +639,41 @@ export async function syncPanelMessage(client: Client, panelId: number): Promise
     throw new Error(`Channel ${panel.channelId} is not a usable guild text channel`);
   }
 
-  const embed = buildPanelEmbed(panel);
   let message: Message | null = null;
 
-  if (panel.messageId) {
+  if (!panel.managed) {
+    if (!panel.messageId) throw new Error(`Panel ${panel.id} is unmanaged but has no attached message id`);
     message = await channel.messages.fetch(panel.messageId).catch(() => null);
-    if (message) {
-      message = await message.edit({ embeds: [embed] });
+    if (!message) {
+      throw new Error(
+        `Attached message ${panel.messageId} not found in channel ${panel.channelId} (deleted, or the panel's channel was changed after attaching).`,
+      );
+    }
+  } else {
+    const body = buildPanelContent(panel);
+    const components = buildComponents(panel, channel.guild);
+
+    if (panel.messageId) {
+      message = await channel.messages.fetch(panel.messageId).catch(() => null);
+      // edit() accepts `content: null` to explicitly clear stale text when
+      // switching message types; send() (below) does not, hence the split.
+      if (message) message = await message.edit({ ...body, components });
+    }
+    if (!message) {
+      message = await channel.send({ ...body, content: body.content ?? undefined, components });
+      setPanelMessageId(panel.id, message.id);
     }
   }
 
-  if (!message) {
-    message = await channel.send({ embeds: [embed] });
-    setPanelMessageId(panel.id, message.id);
+  if (panel.selectionType === SelectionType.Reactions) {
+    await reconcilePanelReactions(message, panel);
   }
-
-  await reconcilePanelReactions(message, panel);
 }
 
+/** Re-syncs every *sent* panel — draft panels stay untouched until explicitly sent. */
 export async function syncAllPanels(client: Client): Promise<void> {
   for (const panel of listPanels()) {
+    if (!panel.sent) continue;
     try {
       await syncPanelMessage(client, panel.id);
     } catch (err) {

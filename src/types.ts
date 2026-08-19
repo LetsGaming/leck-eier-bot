@@ -4,7 +4,7 @@ import type {
   Collection,
   SlashCommandBuilder,
 } from "discord.js";
-import type { CommandPermission, ReactionRoleMode } from "./constants.js";
+import type { CommandPermission, PanelMessageType, SelectionType } from "./constants.js";
 
 export type { Config } from "./config/schema.js";
 
@@ -45,29 +45,41 @@ export interface CommandSetting {
   guildOnly: boolean;
 }
 
-/** A single emoji -> role mapping within a reaction-role panel. */
+/** A single option within a reaction-role panel — an emoji, a button, or a dropdown entry, mapped to a role. */
 export interface ReactionRoleMapping {
   id: number;
   panelId: number;
-  /** Unicode emoji character, or a custom emoji's name. */
-  emojiName: string;
-  /** Set only for custom (guild) emoji; null for unicode emoji. */
+  /** Unicode emoji character, or a custom emoji's name. Null for a buttons/dropdown mapping with no emoji — a reaction always has one. */
+  emojiName: string | null;
+  /** Set only for custom (guild) emoji; null for unicode emoji or no emoji at all. */
   emojiId: string | null;
   roleId: string;
   label: string | null;
   position: number;
 }
 
-/** A message the bot posts/maintains whose reactions grant roles. */
+/** A message members interact with (react to, click a button on, or pick from a dropdown on) to self-assign roles. */
 export interface ReactionRolePanel {
   id: number;
   channelId: string;
-  /** Null until the panel has been posted to Discord for the first time. */
+  /** Null until the panel has been posted to Discord for the first time (managed panels only — set immediately for an attached-to-existing-message one). */
   messageId: string | null;
-  /** Whether the bot owns and re-renders the message (always true for now; reserved for a future "attach to an existing message" mode). */
+  /** Whether the bot owns and re-renders the message, vs. being attached to a pre-existing one it never edits — see docs/REACTION_ROLES.md#attaching-to-an-existing-message. Immutable after creation. */
   managed: boolean;
-  mode: ReactionRoleMode;
+  /** How members interact with it. Immutable after creation — buttons/dropdowns require a bot-owned message, so this can't combine with `managed: false`. */
+  selectionType: SelectionType;
+  /** Ignored (and always null-backed) for an unmanaged panel — there's no message content to render it into. */
+  messageType: PanelMessageType;
+  /** Reactions-only: strip the user's own reaction immediately after acting, so re-reacting flips the role instead of un-reacting revoking it. */
   removeReaction: boolean;
+  /** If false, only one mapping's role may be held at a time — picking/reacting to a new one revokes the previous. */
+  allowMultiple: boolean;
+  /** If false, a granted role can never be given up through this panel once acquired (rules-acceptance style). */
+  removable: boolean;
+  /** Only members holding at least one of these roles may use the panel. Null/empty = everyone. */
+  allowedRoleIds: string[] | null;
+  /** Panels start as drafts (no writes are pushed to Discord) until explicitly sent — see docs/REACTION_ROLES.md#draft-then-send. */
+  sent: boolean;
   title: string | null;
   description: string | null;
   createdAt: string;
