@@ -2,13 +2,21 @@ services:
   bot:
     build: .
     restart: unless-stopped
+    env_file:
+      # Secrets/bootstrap config — see .env.example / docs/CONFIGURATION.md.
+      # Not baked into the image; only ever supplied at run time.
+      - ./.env
     environment:
       # LOG_DIR defaults to "<cwd>/../logs"; override so logs land inside
       # the mounted volume instead of outside the container's filesystem.
       LOG_DIR: /app/logs
+    ports:
+      # Only needed when the dashboard is enabled (WEB_ENABLED != "false" in
+      # .env). Change the host side (left of the colon) if you're running
+      # something else on 3000, or remove this block entirely to keep the
+      # dashboard unreachable from outside the container. Must line up with
+      # WEB_PORT/WEB_PUBLIC_URL in .env — see docs/DASHBOARD.md.
+      - "3000:3000"
     volumes:
-      # config.json lives next to whichever code is running — in the
-      # production image that's dist/, not src/.
-      - ./config.json:/app/dist/config.json:ro
       - ./data:/app/data
       - ./logs:/app/logs

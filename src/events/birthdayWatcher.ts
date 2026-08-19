@@ -1,17 +1,18 @@
 import type { Message, PartialMessage } from "discord.js";
-import { updateBirthdayListFromMessage } from "../services/birthdays.js";
-import logger from "../utils/logger.js";
-import type { BotClient, Config } from "../types.js";
+import { getBirthdayListLocation, updateBirthdayListFromMessage } from "../services/birthdays.js";
+import logger, { errorMessage } from "../utils/logger.js";
+import type { BotClient } from "../types.js";
 
-export default function registerBirthdayWatcher(client: BotClient, config: Config): void {
+export default function registerBirthdayWatcher(client: BotClient): void {
   const triggerUpdate = async (message: Message | PartialMessage) => {
-    if (message.channelId === config.birthdayListChannelId) {
-      logger.info(`Birthday channel activity (Msg: ${message.id})`);
-      await updateBirthdayListFromMessage(
-        client,
-        config.birthdayListChannelId,
-        config.birthdayListMessageId,
-      );
+    const location = getBirthdayListLocation();
+    if (!location || message.channelId !== location.channelId) return;
+
+    logger.info(`Birthday channel activity (Msg: ${message.id})`);
+    try {
+      await updateBirthdayListFromMessage(client, location.channelId, location.messageId);
+    } catch (err) {
+      logger.error(`Failed to update birthday list from message: ${errorMessage(err)}`);
     }
   };
 

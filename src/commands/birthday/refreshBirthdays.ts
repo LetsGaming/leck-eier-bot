@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
-import { updateBirthdayListFromMessage } from "../../services/birthdays.js";
-import { loadConfig } from "../../config/index.js";
-import { createSuccessEmbed } from "../../utils/embedUtils.js";
+import { updateBirthdayListFromMessage, getBirthdayListLocation } from "../../services/birthdays.js";
+import { createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { CommandName, CommandPermission } from "../../constants.js";
 
 export const permission = CommandPermission.Admin;
@@ -13,12 +12,17 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const config = loadConfig();
+  const location = getBirthdayListLocation();
+  if (!location) {
+    return interaction.editReply({
+      embeds: [createErrorEmbed("Birthday list channel/message not configured yet. Set it via the dashboard.")],
+    });
+  }
 
   await updateBirthdayListFromMessage(
     interaction.client,
-    config.birthdayListChannelId,
-    config.birthdayListMessageId,
+    location.channelId,
+    location.messageId,
   );
 
   const successEmbd = createSuccessEmbed("Birthday list refreshed.");

@@ -177,18 +177,25 @@ export function getNextBirthday(): { date: Date; entries: BirthdayEntry[] } | nu
   return allDates.length > 0 ? allDates[0]! : null;
 }
 
-export function buildBirthdayMessage(
+export function renderBirthdayTemplate(
+  template: string,
   b: BirthdayEntry,
   pingEveryone = true,
 ): string {
   const userMention = b.mention || (b.userId ? `<@${b.userId}>` : "");
   const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
   const everyoneMention = pingEveryone ? "@everyone" : "";
-  const template = getCurrentTemplate();
   return template
     .replace(/{userMention}/g, userMention)
     .replace(/{everyoneMention}/g, everyoneMention)
     .replace(/{userNick}/g, userNick);
+}
+
+export function buildBirthdayMessage(
+  b: BirthdayEntry,
+  pingEveryone = true,
+): string {
+  return renderBirthdayTemplate(getCurrentTemplate(), b, pingEveryone);
 }
 
 export async function sendBirthdayMessages(
@@ -277,4 +284,16 @@ export function getCurrentTemplate(): string {
 
 export function setCurrentTemplate(newTemplate: string): void {
   updateSettings({ birthdayTemplate: newTemplate });
+}
+
+/**
+ * Channel/message id of the manually-maintained birthday announcement list,
+ * configured via the dashboard. Returns null on a fresh install until an
+ * admin sets it, so every call site must handle the unconfigured case
+ * explicitly rather than assuming it's always present.
+ */
+export function getBirthdayListLocation(): { channelId: string; messageId: string } | null {
+  const { birthdayListChannelId, birthdayListMessageId } = getSettings();
+  if (!birthdayListChannelId || !birthdayListMessageId) return null;
+  return { channelId: birthdayListChannelId, messageId: birthdayListMessageId };
 }

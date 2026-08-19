@@ -25,8 +25,24 @@ export const PAGINATION_TIMEOUT_MS = 60_000;
 export const BIRTHDAY_LIST_MARKER = "ღ:";
 export const DEFAULT_BIRTHDAY_TEMPLATE =
   "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}";
-/** Runs every day at midnight server time. */
+/** Runs every day at midnight server time. Also the default for the DB-stored `birthdayCron` setting. */
 export const DAILY_MIDNIGHT_CRON = "0 0 * * *";
+
+// --- Reaction roles ---
+/**
+ * How long a bot-initiated reaction removal (unique-mode swaps,
+ * `removeReaction` panels) is remembered before the corresponding
+ * `messageReactionRemove` event is treated as user-initiated again.
+ */
+export const REACTION_SELF_ECHO_TTL_MS = 10_000;
+
+// --- Web dashboard ---
+export const WEB_SESSION_COOKIE_NAME = "leb_session";
+export const WEB_OAUTH_STATE_COOKIE_NAME = "leb_oauth_state";
+export const WEB_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const DISCORD_OAUTH_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
+export const DISCORD_OAUTH_TOKEN_URL = "https://discord.com/oauth2/token";
+export const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 
 // --- Logging ---
 export const LOG_RETENTION_DAYS = "14d";
@@ -56,4 +72,15 @@ export enum CommandName {
   TestBirthdayMessage = "testbirthdaymessage",
   ClearDm = "cleardm",
   FindUser = "finduser",
+  ReactionRoles = "reactionroles",
+}
+
+/** How reacting/un-reacting affects role membership for a panel. See docs/REACTION_ROLES.md. */
+export enum ReactionRoleMode {
+  /** React grants the role, un-react revokes it. */
+  Toggle = "toggle",
+  /** Only one mapping in the panel may be held at a time; picking a new one revokes the previous. */
+  Unique = "unique",
+  /** React grants the role; un-reacting never revokes it. */
+  Verify = "verify",
 }

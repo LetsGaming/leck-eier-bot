@@ -1,6 +1,6 @@
 # Commands
 
-All commands are slash commands, registered globally against `clientId` on startup (see [ARCHITECTURE.md](ARCHITECTURE.md#startup-sequence)). Whether a command is *registered at all*, and whether it's restricted to the configured guild, is controlled per-command in `config.json` — see [CONFIGURATION.md](CONFIGURATION.md#commands-overrides).
+All commands are slash commands, registered globally against `clientId` on startup (see [ARCHITECTURE.md](ARCHITECTURE.md#startup-sequence)). Whether a command is *registered at all*, and whether it's restricted to the configured guild, is controlled per-command from the [dashboard's Commands page](DASHBOARD.md#pages) (`command_settings` table — see [DATABASE.md](DATABASE.md#command_settings)).
 
 ## Permission levels
 
@@ -23,8 +23,9 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | [`/testbirthdaymessage`](#testbirthdaymessage) | Admin | yes | Preview the template rendered for yourself. |
 | [`/cleardm`](#cleardm) | **Owner** | no | Delete the bot's own DM messages to you, optionally backing them up first. |
 | [`/finduser`](#finduser) | Admin | yes | Search cached guild members by name (handles fancy/unicode names). |
+| [`/reactionroles`](#reactionroles) | Admin | yes | List reaction-role panels, or re-sync them with Discord. Full editing lives on the [dashboard](DASHBOARD.md). |
 
-"Guild-only by default" means the command only works inside `guildId` unless overridden via `commands.<name>.guildOnly` in `config.json`.
+"Guild-only by default" means the command only works inside `guildId` unless overridden from the dashboard's Commands page.
 
 ---
 
@@ -74,3 +75,12 @@ Owner-only because it operates on the *command invoker's own DM channel* with th
 | `servername` | string | yes | Name (or partial name) to search for. |
 
 Searches username, global display name, server nickname, and server display name from the in-memory member cache (populated on startup — see [ARCHITECTURE.md](ARCHITECTURE.md#member-cache)). Normalizes fancy Unicode lookalike characters (e.g. mathematical bold/italic letters) and transliterates before comparing, so stylized names still match. Returns up to 15 results. If the cache hasn't finished populating yet, replies saying so instead of searching a partial cache.
+
+### `/reactionroles`
+
+| Subcommand | Description |
+| --- | --- |
+| `list` | Ephemeral embed of every panel — mode, channel, jump link, and its emoji→role mappings. |
+| `sync` | Re-posts/edits every panel's message and reconciles its seed reactions with Discord. |
+
+Panels themselves (channel, mode, `removeReaction`, and their mappings) are created and edited on the [dashboard](DASHBOARD.md#reaction-roles) — see [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself.

@@ -1,51 +1,60 @@
-import { readFileSync } from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 import logger from "../utils/logger.js";
-import { ConfigSchema, type Config } from "./schema.js";
-
-/**
- * Resolve __dirname in ESM
- */
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * Root of the directory currently executing (src in dev, dist in prod) —
- * config.json lives alongside whichever one is actually running.
- */
-const RUN_ROOT = path.resolve(__dirname, "..");
+import { EnvSchema, type Config } from "./schema.js";
 
 let cachedConfig: Config | null = null;
 
 /**
- * Loads and validates config.json against {@link ConfigSchema}.
+ * Loads and validates process.env (via `.env` at the current working
+ * directory — `npm run dev`/`npm start`/the Docker image all run with cwd
+ * at the project root, so one `.env` file covers every mode; no more
+ * src/-vs-dist/ path juggling like the old config.json had).
+ *
+ * `dotenv` never overwrites variables already set in the environment, so
+ * real env vars (e.g. injected by Docker/systemd) always win over `.env`.
  */
 export function loadConfig(): Config {
   if (cachedConfig) return cachedConfig;
 
-  const configPath = path.resolve(RUN_ROOT, "config.json");
+  loadDotenv();
 
-  let raw: string;
-  try {
-    raw = readFileSync(configPath, "utf8");
-  } catch (err) {
-    const message = `❌ Failed to read config.json at: ${configPath}`;
-    logger.error(message);
-    throw new Error(message, { cause: err });
-  }
-
-  const parsed = ConfigSchema.safeParse(JSON.parse(raw));
+  const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = z.prettifyError(parsed.error);
-    const message = `❌ config.json at ${configPath} is invalid:\n${issues}`;
+    const message = `❌ Environment configuration is invalid:\n${issues}\n\nCopy .env.example to .env and fill in real values (see docs/CONFIGURATION.md).`;
     logger.error(message);
     throw new Error(message);
   }
+  const env = parsed.data;
 
-  cachedConfig = parsed.data;
+  const webRequested = env.WEB_ENABLED !== "false";
+  const webComplete =
+    !!env.WEB_PUBLIC_URL && !!env.WEB_SESSION_SECRET && !!env.DISCORD_CLIENT_SECRET;
+
+  let web: Config["web"];
+  if (webRequested && webComplete) {
+    web = {
+      port: env.WEB_PORT ?? 3000,
+      publicUrl: env.WEB_PUBLIC_URL!,
+      sessionSecret: env.WEB_SESSION_SECRET!,
+      clientSecret: env.DISCORD_CLIENT_SECRET!,
+    };
+  } else if (webRequested) {
+    logger.warn(
+      "Dashboard not starting: WEB_PUBLIC_URL, WEB_SESSION_SECRET, and DISCORD_CLIENT_SECRET must all be set. " +
+        "Set WEB_ENABLED=false to silence this warning if you don't want the dashboard.",
+    );
+  }
+
+  cachedConfig = {
+    token: env.DISCORD_TOKEN,
+    clientId: env.DISCORD_CLIENT_ID,
+    botOwnerId: env.DISCORD_BOT_OWNER_ID,
+    guildId: env.DISCORD_GUILD_ID,
+    web,
+  };
   return cachedConfig;
 }
 
-export type { Config, CommandConfig } from "./schema.js";
+export type { Config } from "./schema.js";

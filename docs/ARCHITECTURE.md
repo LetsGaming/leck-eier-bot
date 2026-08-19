@@ -5,22 +5,31 @@
 ```
 src/
   index.ts                  Entry point: client setup, cron job, interaction dispatch, startup
-  constants.ts               All magic numbers/strings + the CommandPermission/CommandName/EmbedColor enums
-  types.ts                   Shared TypeScript types (Command, BotClient, BirthdayEntry, Settings, ...)
+  constants.ts               All magic numbers/strings + the CommandPermission/CommandName/EmbedColor/
+                               ReactionRoleMode enums
+  types.ts                   Shared TypeScript types (Command, BotClient, BirthdayEntry, Settings,
+                               ReactionRolePanel/Mapping, WebSession, ...)
 
   config/
-    schema.ts                 zod schema for config.json — the single source of truth for its shape
-    index.ts                   Loads + validates config.json, caches the result
+    schema.ts                 zod schema for the .env-backed environment — the single source of truth
+                                for its shape (EnvSchema, the raw process.env shape) and the Config type
+                                the rest of the app actually consumes
+    index.ts                   Loads .env (via dotenv) + validates it, caches the result
 
   db/
-    index.ts                   Opens the SQLite connection, creates tables, seeds default settings
+    index.ts                   Opens the SQLite connection, runs migrations (PRAGMA user_version)
     birthdaysRepository.ts     Birthday CRUD (get by date, get all grouped by date, replace-all)
-    settingsRepository.ts      Settings singleton-row CRUD
+    settingsRepository.ts      Settings singleton-row CRUD, command_settings CRUD
+    reactionRolesRepository.ts  Reaction-role panel/mapping CRUD
+    sessionsRepository.ts       Dashboard login session CRUD
 
   services/
     birthdays.ts                Business logic: parsing the announcement message, resolving Discord
                                   members, building/sending birthday messages, cleanup
     memberCache.ts               In-memory Collection<id, GuildMember> cache for /finduser
+    reactionRoles.ts             Reaction-role event handling, panel cache, posting/syncing panels
+    settingsBus.ts               EventEmitter that decouples DB writes from their live-reconfiguration
+                                   effects (cron rescheduling, command reload, panel cache invalidation)
 
   loaders/
     commandLoader.ts            Recursively discovers command modules and registers them on the client
@@ -28,46 +37,73 @@ src/
   events/
     memberEvents.ts              guildMemberAdd/Update/Remove — cache maintenance + leave notifications
     birthdayWatcher.ts            messageCreate/Update on the birthday channel — triggers a re-scan
+    reactionRoleEvents.ts         messageReactionAdd/Remove — delegates to services/reactionRoles.ts
 
   commands/
     birthday/                    checkbirthday, clearbirthdaychannel, refreshbirthdays,
                                    setbirthdaymessage, testbirthdaymessage
     general/                     cleardm, finduser
+    roles/                       reactionroles (list/sync — full editing is on the dashboard)
+
+  web/                        Dashboard backend (Fastify) — see DASHBOARD.md
+    server.ts                   Bootstraps Fastify, static file serving + SPA fallback
+    auth.ts                     Discord OAuth2 login/callback/logout, GET /api/me
+    session.ts                   Cookie helpers, the requireAdmin preHandler
+    routes/                      One file per API resource; all delegate to db/services, no logic of
+                                   their own
 
   utils/
     logger.ts                   winston logger + errorMessage() helper
     embedUtils.ts                 createEmbed/createErrorEmbed/createSuccessEmbed/createNoAdminEmbed
     utils.ts                     isOwner / isAdmin / isConfigGuild
 
-  config_structure.json        Generated config.json template (see CONFIGURATION.md)
-
 scripts/
-  generateConfigTemplate.ts    Regenerates src/config_structure.json from config/schema.ts
+  generateEnvExample.ts        Regenerates .env.example from config/schema.ts
+
+.env.example                  Generated .env template (see CONFIGURATION.md)
+
+web/                          Dashboard frontend — separate package.json, Vite + React + TypeScript.
+                                Built output (web/dist) is served as static files by src/web/server.ts.
+                                See DEVELOPMENT.md#dashboard-frontend.
 ```
 
 ## Startup sequence
 
 All of this happens in `src/index.ts`:
 
-1. `loadConfig()` reads and validates `config.json`. Any failure here logs a readable error and the process never gets further (see [CONFIGURATION.md](CONFIGURATION.md)).
-2. A `discord.js` `Client` is constructed with the `Guilds`, `GuildMembers`, `GuildMessages`, and `MessageContent` intents.
-3. The nightly cron job and the `interactionCreate` handler are registered (they're inert until the client logs in).
+1. `loadConfig()` loads `.env` (via `dotenv`) and validates the resulting environment. Any failure here logs a readable error and the process never gets further (see [CONFIGURATION.md](CONFIGURATION.md)).
+2. A `discord.js` `Client` is constructed with the `Guilds`, `GuildMembers`, `GuildMessages`, `MessageContent`, and `GuildMessageReactions` intents, plus `Message`/`Channel`/`Reaction`/`User` partials (needed so reactions on messages older than the bot's cache still fire events — see [REACTION_ROLES.md](REACTION_ROLES.md#requirements)).
+3. The nightly cron job (rescheduled live from the DB-backed `birthdayCron` setting — see [Live reconfiguration](#live-reconfiguration) below) and the `interactionCreate` handler are registered (they're inert until the client logs in).
 4. Inside an async IIFE, wrapped in try/catch so any startup failure logs cleanly and exits (`process.exit(1)`) instead of crashing with a raw stack trace:
-   - `loadCommands()` recursively imports every file under `src/commands/` (or `dist/commands/` when compiled) and registers enabled ones on `client.commands`.
+   - `loadCommands()` recursively imports every file under `src/commands/` (or `dist/commands/` when compiled) and registers enabled ones (per `command_settings` in the DB) on `client.commands`.
    - Slash commands are registered globally with Discord via the REST API (`PUT /applications/{clientId}/commands`).
-   - Event modules (`registerMemberEvents`, `registerBirthdayWatcher`) attach their listeners.
-   - A one-time `clientReady` handler populates the member cache for `guildId` and does an initial birthday-list re-scan.
+   - Event modules (`registerMemberEvents`, `registerBirthdayWatcher`, `registerReactionRoleEvents`) attach their listeners.
+   - A one-time `clientReady` handler populates the member cache for `guildId`, does an initial birthday-list re-scan, re-syncs every reaction-role panel (`syncAllPanels()`), and — once the guild is cached — starts the dashboard (`startWebServer()`, a no-op if `config.web` isn't set).
    - `client.login()` connects to the Discord gateway.
+
+## Live reconfiguration
+
+Everything an admin might want to change while the bot is running (birthday channel/template/cron, per-command overrides, reaction-role panels) lives in SQLite, not env vars, and takes effect immediately, from either a slash command or the [dashboard](DASHBOARD.md) — no restart, no redeploy. This works through one small `EventEmitter`, `settingsBus` (`src/services/settingsBus.ts`), which repository write functions emit on after persisting:
+
+| Event | Emitted by | Consumed by |
+| --- | --- | --- |
+| `SettingsEvent.Settings` | `settingsRepository.updateSettings()` | `src/index.ts` — re-`cron.schedule()`s the daily birthday job if `birthdayCron` changed |
+| `SettingsEvent.Commands` | `settingsRepository.setCommandOverride()` | Nothing subscribes directly — the dashboard's Commands page instead calls `reloadCommands()` (re-walks `src/commands/`, re-`PUT`s Discord) right after writing, since a command toggle needs an explicit re-registration anyway |
+| `SettingsEvent.ReactionRoles` | Every write in `reactionRolesRepository.ts` | `services/reactionRoles.ts` — invalidates its in-memory panel cache so the next reaction lookup re-reads from the DB |
+
+This keeps the DB layer (`src/db/*Repository.ts`) free of imports from `src/index.ts` or `src/web/` — it only ever emits an event, never calls back into a specific consumer.
 
 ## Command loading
 
 `src/loaders/commandLoader.ts` walks `src/commands/` (or `dist/commands/`) recursively, dynamically `import()`-ing every file. It detects at runtime whether it's itself running as `.ts` (via `tsx`, in dev) or `.js` (compiled, in prod) and only picks up files with the matching extension — so command discovery works identically in both modes without extra config.
 
-For each module, it reads `data` (a `SlashCommandBuilder`), `execute`, and `permission`, cross-references `config.commands[name]` for `enabled`/`guildOnly` overrides, and — if enabled — registers a `Command` object on `client.commands`. A command with no `execute` export, or explicitly disabled in config, is skipped with a warning log.
+For each module, it reads `data` (a `SlashCommandBuilder`), `execute`, and `permission`, cross-references `getCommandOverride(name)` (`command_settings` table, defaulting to `{enabled: true, guildOnly: true}` for a command that's never been overridden) for `enabled`/`guildOnly`, and — if enabled — registers a `Command` object on `client.commands`. A command with no `execute` export, or disabled via the DB, is skipped with a warning log.
+
+`loadCommands()` is also called by `reloadCommands()`, which additionally re-`PUT`s the command list with Discord — this is what makes toggling a command from the dashboard's Commands page take effect without a restart. A separate `listCommandDefinitions()` walks the same files but returns every command's metadata regardless of enabled state, so the dashboard can show (and re-enable) commands that are currently disabled.
 
 ## Permission model
 
-Every command module exports a `permission: CommandPermission` constant (see [COMMANDS.md](COMMANDS.md#permission-levels)) alongside its `data`/`execute`. This is **not** configurable via `config.json` — it's a code-level decision, deliberately separate from the `enabled`/`guildOnly` config overrides.
+Every command module exports a `permission: CommandPermission` constant (see [COMMANDS.md](COMMANDS.md#permission-levels)) alongside its `data`/`execute`. This is **not** configurable at runtime — it's a code-level decision, deliberately separate from the `enabled`/`guildOnly` overrides set from the dashboard.
 
 Enforcement happens once, centrally, in `index.ts`'s `interactionCreate` handler, in this order:
 
@@ -86,6 +122,19 @@ This means individual command files never re-implement permission checks — the
 4. The result replaces the entire `birthdays` table in one transaction (`replaceAllBirthdays()` — see [DATABASE.md](DATABASE.md)).
 5. This re-scan is triggered by: the `/refreshbirthdays` command, the bot's own `clientReady` handler on startup, and automatically whenever a message is created/edited in the birthday channel (`events/birthdayWatcher.ts`).
 6. A cron job (`DAILY_MIDNIGHT_CRON`, `0 0 * * *`) runs daily: it first deletes the previous day's announcement messages (`deleteBirthdayMessages()`, walking back to the first message the bot posted), then looks up today's birthdays and posts fresh announcements built from the configured template (`buildBirthdayMessage()`).
+
+## Data flow: reaction roles
+
+See [REACTION_ROLES.md](REACTION_ROLES.md) for the feature-level explanation (modes, `removeReaction` semantics, requirements). Architecturally:
+
+1. A panel and its mappings are created/edited via the dashboard's API (`src/web/routes/reactionRolePanels.ts`) or, read-only, via `/reactionroles list`.
+2. Every panel write calls `syncPanelMessage()` (`services/reactionRoles.ts`), which posts/edits the panel's embed and reconciles its seed reactions to match the current mappings.
+3. `events/reactionRoleEvents.ts` wires `messageReactionAdd`/`Remove` to `handleReactionAdd`/`handleReactionRemove` in the same service. Both resolve any partial reaction/message/user first, look the message up in an in-memory panel cache (invalidated via `settingsBus`, see above), and apply the mode-specific grant/revoke logic described in REACTION_ROLES.md.
+4. A short-lived self-echo suppression map and a per-user promise-chain (also in `services/reactionRoles.ts`) keep bot-initiated reaction removals and rapid repeated clicks from double-processing.
+
+## Dashboard
+
+See [DASHBOARD.md](DASHBOARD.md) for setup and usage. In short: `src/web/server.ts` runs a Fastify server (started from `clientReady`, once the guild is cached) that serves the `web/` React app's static build and a `/api/*` surface gated by Discord OAuth2 (`src/web/auth.ts`, `src/web/session.ts`). The API routes (`src/web/routes/*.ts`) are intentionally thin — they validate input with `zod` and call the exact same repository/service functions the slash commands and cron job use, so there's a single source of truth for business logic regardless of which surface triggered it.
 
 ## Member cache
 
@@ -106,5 +155,5 @@ Log file location defaults to `<cwd>/../logs` (deliberately one level above the 
 ## Type-safety notes
 
 - `BotClient` (`types.ts`) is `discord.js`'s `Client` intersected with `{ commands: Collection<string, Command> }` — the app always works with this type, not the bare `Client`.
-- `Config` and `CommandConfig` are inferred from the zod schema (`z.infer<typeof ConfigSchema>`) rather than hand-written interfaces, so the runtime validator and the compile-time type can never drift apart.
+- `EnvSchema` (`src/config/schema.ts`) is the zod-validated raw `process.env` shape — every field flat and optional, matching what environment variables actually look like. `Config`, the type the rest of the app imports and uses, is a hand-written, fully-typed interface that `loadConfig()` builds *from* the validated `Env`, applying the cross-field logic described in [Startup sequence](#startup-sequence) (e.g. "the dashboard's `web` object only exists if all three of its required vars are present"). Keep that split — don't let `Config` drift back into being a 1:1 mirror of `Env`, or callers lose the guarantee that `config.web` (when present) is fully usable.
 - `BirthdayEntry`/`BirthdaysByDate` intentionally do **not** carry a `discordMember` field — earlier revisions persisted a snapshot of the resolved `GuildMember`, but nothing ever read it back, and it doesn't survive a SQLite round-trip meaningfully anyway. Only `mention`/`userId`/`name` are stored.

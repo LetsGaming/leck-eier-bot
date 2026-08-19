@@ -4,6 +4,7 @@ import {
   removeCacheMember,
   getCachedMembers, // Added to retrieve the member before deletion
 } from "../services/memberCache.js";
+import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
 import { AUDIT_LOG_RECENT_WINDOW_MS, AUDIT_LOG_SYNC_DELAY_MS } from "../constants.js";
@@ -61,6 +62,10 @@ export default function registerMemberEvents(client: BotClient): void {
       const wasBanned = isRecentActionAgainst(banLogs.entries.first(), user.id, now);
 
       if (wasKicked || wasBanned) {
+        return;
+      }
+
+      if (!getSettings().leaveNotificationsEnabled) {
         return;
       }
 

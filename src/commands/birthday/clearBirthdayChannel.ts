@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
-import { deleteBirthdayMessages } from "../../services/birthdays.js";
-import { loadConfig } from "../../config/index.js";
-import { createSuccessEmbed } from "../../utils/embedUtils.js";
+import { deleteBirthdayMessages, getBirthdayListLocation } from "../../services/birthdays.js";
+import { createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { CommandName, CommandPermission } from "../../constants.js";
 
 export const permission = CommandPermission.Admin;
@@ -14,12 +13,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // Acknowledge immediately
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const config = loadConfig();
+  const location = getBirthdayListLocation();
+  if (!location) {
+    return interaction.editReply({
+      embeds: [createErrorEmbed("Birthday list channel/message not configured yet. Set it via the dashboard.")],
+    });
+  }
 
   const count = await deleteBirthdayMessages(
     interaction.client,
-    config.birthdayListChannelId,
-    config.birthdayListMessageId,
+    location.channelId,
+    location.messageId,
   );
 
   const successEmbed = createSuccessEmbed(
