@@ -73,10 +73,15 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
     const current = getSettings();
     const nextSelfRegistrationEnabled = selfRegistrationEnabled ?? current.birthdaySelfRegistrationEnabled;
     const nextBotManagesAnchor = botManagesAnchor ?? current.birthdayBotManagesAnchor;
-    if (nextBotManagesAnchor && !nextSelfRegistrationEnabled) {
-      return reply
-        .code(400)
-        .send({ error: "The bot can only manage the anchor message while self-registration is enabled." });
+    // The two are required to move together: self-registered entries only
+    // ever show up anywhere visible via the bot-rendered anchor message, so
+    // self-registration active while the bot *isn't* managing that message
+    // is a dead-end state (silently-collected registrations nobody sees) —
+    // not something to allow and reject the other way around.
+    if (nextSelfRegistrationEnabled !== nextBotManagesAnchor) {
+      return reply.code(400).send({
+        error: "Self-registration and the bot-managed anchor message can only be turned on and off together.",
+      });
     }
 
     // updateSettings emits SettingsEvent.Settings, which src/index.ts listens

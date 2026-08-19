@@ -4,6 +4,12 @@ import {
   removeCacheMember,
   getCachedMembers, // Added to retrieve the member before deletion
 } from "../services/memberCache.js";
+import {
+  recordMemberJoin,
+  recordMemberLeave,
+  recordMemberProfileUpdate,
+  recordRulesAcceptedIfJustVerified,
+} from "../services/memberRecords.js";
 import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -29,11 +35,18 @@ export default function registerMemberEvents(client: BotClient): void {
   client.on("guildMemberAdd", (member) => {
     logger.info(`New member joined: ${member.user.tag} (${member.id})`);
     updateCacheMember(member);
+    recordMemberJoin(member);
   });
 
   // Update member in cache on nickname/role change
-  client.on("guildMemberUpdate", (_oldMember, newMember) => {
+  client.on("guildMemberUpdate", (oldMember, newMember) => {
     updateCacheMember(newMember);
+    recordMemberProfileUpdate(newMember);
+    // A partial oldMember (missing most fields, `pending` included) means
+    // Discord didn't send enough to diff against — nothing to compare.
+    if (!oldMember.partial) {
+      recordRulesAcceptedIfJustVerified(oldMember, newMember);
+    }
   });
 
   // Handle member leaving
@@ -47,6 +60,7 @@ export default function registerMemberEvents(client: BotClient): void {
 
     // 2. Now remove from local cache
     removeCacheMember(member.id);
+    recordMemberLeave(user.id, user.username, knownAs, cachedMember?.user.avatar ?? user.avatar ?? null);
 
     try {
       // 3. Wait for Audit Logs to sync

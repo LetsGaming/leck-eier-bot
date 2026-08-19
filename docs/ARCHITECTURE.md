@@ -27,6 +27,7 @@ src/
     birthdays.ts                Business logic: parsing the announcement message, resolving Discord
                                   members, building/sending birthday messages, cleanup
     memberCache.ts               In-memory Collection<id, GuildMember> cache for /finduser
+    memberRecords.ts             Records join/rules-acceptance/leave events to member_records (dashboard's Member Audit page)
     reactionRoles.ts             Reaction-role event handling, panel cache, posting/syncing panels
     settingsBus.ts               EventEmitter that decouples DB writes from their live-reconfiguration
                                    effects (cron rescheduling, command reload, panel cache invalidation)
@@ -35,7 +36,7 @@ src/
     commandLoader.ts            Recursively discovers command modules and registers them on the client
 
   events/
-    memberEvents.ts              guildMemberAdd/Update/Remove — cache maintenance + leave notifications
+    memberEvents.ts              guildMemberAdd/Update/Remove — cache maintenance + leave notifications + member_records tracking
     birthdayWatcher.ts            messageCreate/Update on the birthday channel — triggers a re-scan
     reactionRoleEvents.ts         messageReactionAdd/Remove — delegates to services/reactionRoles.ts
 
@@ -138,7 +139,9 @@ See [DASHBOARD.md](DASHBOARD.md) for setup and usage. In short: `src/web/server.
 
 ## Member cache
 
-`services/memberCache.ts` holds a single in-memory `discord.js` `Collection<userId, GuildMember>`, populated once on `clientReady` via `guild.members.fetch()` and kept up to date by `events/memberEvents.ts` on join/update/leave. It exists purely so `/finduser` can search names without hitting the Discord API per search — it is not persisted and is rebuilt from scratch on every restart.
+`services/memberCache.ts` holds a single in-memory `discord.js` `Collection<userId, GuildMember>`, populated once on `clientReady` via `guild.members.fetch()` and kept up to date by `events/memberEvents.ts` on join/update/leave. It exists purely so `/finduser` (and the dashboard's Member Audit page, for current members) can search names without hitting the Discord API per search — it is not persisted and is rebuilt from scratch on every restart.
+
+`services/memberRecords.ts` is the persisted counterpart, one row per user ever seen (`member_records` — see [DATABASE.md](DATABASE.md#member_records)) rather than just currently-cached ones. The same `events/memberEvents.ts` handlers that maintain the in-memory cache also call into it, recording each join/rules-acceptance/leave the moment it happens — that's the only way to know it at all, since Discord doesn't retain a former member's history or a rules-acceptance timestamp for the bot to read back later.
 
 ## Logging
 

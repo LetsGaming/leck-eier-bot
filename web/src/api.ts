@@ -9,7 +9,7 @@ import type {
   Mapping,
   MappingInput,
   Me,
-  MemberSearchResult,
+  MemberAuditResponse,
   UpcomingBirthday,
   Panel,
   PanelInput,
@@ -60,7 +60,7 @@ export const api = {
   roles: () => request<RoleOption[]>("/discord/roles"),
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
-  searchMembers: (query: string) => request<MemberSearchResult[]>(`/members/search?q=${encodeURIComponent(query)}`),
+  memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),

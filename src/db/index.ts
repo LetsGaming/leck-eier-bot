@@ -202,9 +202,13 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // ('bot-owner' | 'guild-owner' | 'admin', see WebRole in types.ts)
   // instead of just an `is_owner` flag, resolved at login time in
   // web/auth.ts. `is_owner` is left in place unused rather than dropped
-  // (SQLite migrations here are additive-only — see the note
-  // above); sessions are short-lived (7-day TTL) so old rows age out on
-  // their own instead of needing a backfill.
+  // (SQLite migrations here are additive-only — see the note above).
+  // NOTE: this defaults every pre-existing session row's role to 'admin'
+  // regardless of `is_owner` — including a bot owner's — since a session
+  // predating this migration has no better answer available here. v11
+  // backfills that mistake; don't reason about "short-lived enough not to
+  // matter" the way an earlier version of this comment did — 7 days is
+  // plenty of time for it to matter.
   (d) => {
     d.exec(`ALTER TABLE web_sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';`);
   },
@@ -240,6 +244,64 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE settings ADD COLUMN birthday_anchor_use_font INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE settings ADD COLUMN birthday_announcement_use_font INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE reaction_role_panels ADD COLUMN use_font INTEGER NOT NULL DEFAULT 0;
+    `);
+  },
+  // v11: fixes a v8 data bug — that migration defaulted every *existing*
+  // session row's new `role` column to 'admin', even ones with
+  // `is_owner = 1`, instead of backfilling from it (the reasoning at the
+  // time — "sessions are short-lived, so old rows age out on their own" —
+  // was wrong: a session created just before v8 ran keeps the wrong role
+  // for up to its full 7-day TTL, not until the next login). A fresh login
+  // was never affected — resolveDashboardRole() in web/auth.ts always
+  // computed the role correctly — only a session that already existed at
+  // the moment v8 ran.
+  (d) => {
+    d.exec(`UPDATE web_sessions SET role = 'bot-owner' WHERE is_owner = 1 AND role != 'bot-owner';`);
+  },
+  // v12: birthday self-registration and the bot-managed anchor message are
+  // now required to move together (enforced in web/routes/birthdaySettings.ts)
+  // — self-registration active while the bot *isn't* rendering the anchor
+  // message is a dead end, since a self-registered entry never shows up
+  // anywhere visible otherwise. v9 defaulted self-registration to 1 and
+  // bot-managed-anchor to 0, so every install (fresh or upgraded) is
+  // currently in that now-invalid combination; this turns self-registration
+  // back off wherever the bot isn't managing the anchor, rather than the
+  // more invasive alternative of turning bot-management on for everyone.
+  // Deliberately not a `birthday_self_registration_enabled` column-default
+  // change (SQLite can't ALTER a column default without a table rebuild) —
+  // this UPDATE runs unconditionally after v9's INSERT on every install,
+  // fresh or upgraded, so it doubles as that new effective default.
+  (d) => {
+    d.exec(`
+      UPDATE settings SET birthday_self_registration_enabled = 0
+      WHERE birthday_self_registration_enabled = 1 AND birthday_bot_manages_anchor = 0;
+    `);
+  },
+  // v13: the dashboard's Member Audit page — one row per user ever seen,
+  // current members and former ones alike (`in_guild` tells them apart).
+  // `joined_at`/`rules_accepted_at`/`left_at` are all recorded by the bot
+  // itself as each event happens (services/memberRecords.ts), not read back
+  // from Discord after the fact — Discord doesn't expose a member's rules-
+  // acceptance timestamp or a former member's join/leave history at all, so
+  // this table *is* the only record of them. `joined_at` is backfilled once
+  // at every startup from the live member cache for anyone already in the
+  // guild (Discord does still expose current members' join dates), but
+  // `rules_accepted_at` has no equivalent backfill — it's only ever known
+  // from having observed the pending->false transition live, so it reads as
+  // "not tracked" (null) for anyone who verified before this shipped.
+  (d) => {
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS member_records (
+        user_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        avatar TEXT,
+        joined_at TEXT,
+        rules_accepted_at TEXT,
+        left_at TEXT,
+        in_guild INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE INDEX IF NOT EXISTS idx_member_records_in_guild ON member_records(in_guild);
     `);
   },
 ];

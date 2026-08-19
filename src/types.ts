@@ -122,6 +122,30 @@ export interface EmojiKey {
 }
 
 /**
+ * One row per Discord user ever seen in the configured guild, current or
+ * former (`inGuild` tells them apart) — backs the dashboard's Member Audit
+ * page. Every date here is recorded live by the bot itself (see
+ * services/memberRecords.ts) rather than read back from Discord after the
+ * fact, since Discord doesn't expose a former member's history or a rules-
+ * acceptance timestamp at all; `null` means "not tracked" (e.g. verified
+ * before this feature shipped), not "never happened".
+ */
+export interface MemberRecord {
+  userId: string;
+  username: string;
+  displayName: string;
+  /** Global user avatar hash — `null` for the default avatar. Only meaningful for a former member; a current one's avatar is read live from the cache instead. */
+  avatar: string | null;
+  /** ISO UTC. Backfilled once at every startup for anyone already in the guild — Discord does expose a current member's join date. */
+  joinedAt: string | null;
+  /** ISO UTC. Only ever known from observing the pending->false (membership screening / "rules") transition live — see `recordRulesAcceptedIfJustVerified()`. */
+  rulesAcceptedAt: string | null;
+  /** ISO UTC. `null` while still in the guild. */
+  leftAt: string | null;
+  inGuild: boolean;
+}
+
+/**
  * Dashboard RBAC role, resolved at login (`resolveDashboardRole()` in
  * web/auth.ts) and carried on the session for its lifetime — a Discord-side
  * ownership/role change takes effect on the next login, not live. Strict

@@ -20,7 +20,8 @@ import { loadCommands } from "./loaders/commandLoader.js";
 import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
-import { initMemberCache } from "./services/memberCache.js";
+import { getCachedMembers, initMemberCache } from "./services/memberCache.js";
+import { seedMemberRecordsFromCache } from "./services/memberRecords.js";
 import {
   deleteBirthdayMessages,
   getBirthdayListLocation,
@@ -176,7 +177,10 @@ client.on("interactionCreate", async (interaction) => {
       logger.info(`Bot logged in as ${client.user?.tag}`);
 
       const guild = client.guilds.cache.get(config.guildId);
-      if (guild) await initMemberCache(guild);
+      if (guild) {
+        await initMemberCache(guild);
+        seedMemberRecordsFromCache(getCachedMembers());
+      }
 
       if (getSettings().birthdayBotManagesAnchor) {
         // Owns the message end to end — creates it on first run, otherwise

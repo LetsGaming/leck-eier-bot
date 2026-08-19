@@ -1,6 +1,6 @@
 # Dashboard
 
-An optional web UI for configuring the bot without SSH access: reaction-role panels, the birthday template/channel/schedule, per-command enable/guildOnly toggles, the leave-notification setting, and searching cached guild members. Everything it edits takes effect live — no restart.
+An optional web UI for configuring the bot without SSH access: reaction-role panels, the birthday template/channel/schedule, per-command enable/guildOnly toggles, the leave-notification setting, and a member audit log (current and former members, join/rules-acceptance/leave dates). Everything it edits takes effect live — no restart.
 
 It's a React SPA (`web/`) served as static files by the bot's own HTTP server (Fastify, `src/web/`), gated behind Discord OAuth2. There's no separate deployment: setting the right env vars is the whole setup.
 
@@ -85,17 +85,21 @@ Sessions are server-side rows in the `web_sessions` table (see [DATABASE.md](DAT
 | `/reaction-roles` | Create/edit/delete reaction-role panels (reactions, buttons, or a dropdown) and their role mappings as a draft, then send them; manual re-sync afterward. A role already used by another option on the same panel is filtered out of the picker, a "Use font" toggle styles the title/text/labels with the [global font](#the-global-font) if one's set, and a live preview shows roughly how the message will render on Discord before you send it. See [REACTION_ROLES.md](REACTION_ROLES.md#dashboard-workflow). |
 | `/birthdays` | Edit the message template (with live preview) and its own "Use font" toggle, the announcement channel/anchor message, and the cron schedule; toggle self-registration and its notifications channel; optionally let the bot post/maintain the anchor message itself, with an editable month-heading template and its own "Use font" toggle — see [below](#self-registration--the-bot-managed-anchor-message); a "next up" tile for the soonest birthday(ies) and a chronologically-sorted table of every registered birthday with days-until and its source (list vs. self-registered). |
 | `/commands` | Table of every command on disk (including currently-disabled ones) with `enabled`/`guildOnly` switches. |
-| `/find-user` | Lists every cached guild member by default; search narrows it by username, global name, nickname, or display name — same matching (including stylized/lookalike Unicode names) as [`/finduser`](COMMANDS.md#finduser). |
+| `/members` | Member Audit — every member ever seen, current and former, in separate tables. Lists everyone by default; search narrows both tables by username, global name, nickname, or display name — same matching (including stylized/lookalike Unicode names) as [`/finduser`](COMMANDS.md#finduser). Each row shows joined date, rules-acceptance date (Discord's membership screening), and — for a former member — leave date, each as both an absolute timestamp in your own local timezone and a relative "xM, yD and zHr ago" breakdown. See [below](#member-audit). |
 | `/settings` | The leave-notification toggle, the [global font](#the-global-font), and current session info (including your dashboard role). |
 
 ## Self-registration & the bot-managed anchor message
 
 By default, the birthday list is maintained by hand: an admin posts an "anchor" message in a channel (optionally followed by their own continuation messages), each formatted as `ღ: DD.MM: @mention, @mention`, and the bot re-scans that author's message chain into the database on every edit/new message in that channel (or via `/refreshbirthdays`).
 
-Two independent settings on `/birthdays` change that:
+A single toggle on `/birthdays` ("Enable self-registration") turns both on together — they're required to move as one (enforced in `web/routes/birthdaySettings.ts`, checked as `birthdaySelfRegistrationEnabled !== birthdayBotManagesAnchor` → rejected), since a self-registered entry only ever becomes visible to anyone via the bot-rendered anchor message; self-registration active while the bot isn't managing that message would silently collect registrations nobody sees. Off by default (see [DATABASE.md](DATABASE.md#settings)'s v12 migration note — the two used to be independent, and enabling self-registration alone used to be the default).
 
-- **Self-registration** (on by default) lets members add themselves without an admin editing anything: `/setmybirthday` any time, or posting a bare date (e.g. `15.03`) directly in the configured birthday channel — the bot parses it, saves it under that member (`source: 'self'` — see [DATABASE.md](DATABASE.md#birthdays)), deletes their message, and optionally posts a heads-up to a notifications channel. Turning this off makes both paths reply/behave as if the feature doesn't exist — back to the anchor author needing to edit their message by hand.
-- **Bot-managed message** (off by default, and only choosable while self-registration is on) goes a step further: the bot owns the anchor message entirely, posting it the first time and re-rendering it from the full current birthday list after every registration, on every dashboard save that touches it, and once at startup. There's nothing left to hand-edit — a human edit to that message in the channel is simply ignored rather than scanned, since the bot will overwrite it on the next change anyway. The dashboard's "Anchor message ID" field becomes read-only, "Refresh from message" is replaced by "Regenerate message now", and a **month heading template** becomes editable — `{month}` and `{entries}` placeholders, defaulting to `**{month}**\n{entries}` (`DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE` in `constants.ts`). `{entries}` is always the plain `ღ: DD.MM: mentions` lines (never font-styled, so mentions/dates always render correctly on Discord); `{month}` is the month name, styled with the [global font](#the-global-font) if this panel's own "Use font" toggle is on.
+Turning it on:
+
+- **Self-registration** lets members add themselves without an admin editing anything: `/setmybirthday` any time, or posting a bare date (e.g. `15.03`) directly in the configured birthday channel — the bot parses it, saves it under that member (`source: 'self'` — see [DATABASE.md](DATABASE.md#birthdays)), deletes their message, and optionally posts a heads-up to a notifications channel.
+- **The bot-managed anchor message**: the bot owns the anchor message entirely, posting it the first time and re-rendering it from the full current birthday list after every registration, on every dashboard save that touches it, and once at startup. There's nothing left to hand-edit — a human edit to that message in the channel is simply ignored rather than scanned, since the bot will overwrite it on the next change anyway. The dashboard's "Anchor message ID" field is hidden (there's nothing for an admin to fill in), "Refresh from message" is replaced by "Regenerate message now", and a **month heading template** becomes editable — `{month}` and `{entries}` placeholders, defaulting to `**{month}**\n{entries}` (`DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE` in `constants.ts`). `{entries}` is always the plain `ღ: DD.MM: mentions` lines (never font-styled, so mentions/dates always render correctly on Discord); `{month}` is the month name, styled with the [global font](#the-global-font) if this panel's own "Use font" toggle is on. The template/font/regenerate controls stay mounted (disabled, not removed) while the feature is off, so toggling it doesn't change the card's height.
+
+Turning it off makes self-registration reply/behave as if the feature doesn't exist, and hands the anchor message back to a human — its author has to edit it by hand again, same as before either feature existed.
 
 ## The global font
 
@@ -106,10 +110,22 @@ Setting it doesn't style anything by itself — each feature that can render thr
 | Feature | Toggle | What gets styled |
 | --- | --- | --- |
 | Birthday announcement message | `/birthdays` → Message template card | The entire rendered message (mentions/`@everyone` are untouched — `applyFont()` only ever substitutes plain Latin letters, so it's always safe to apply to a fully-composed message). |
-| Bot-managed anchor message | `/birthdays` → Bot-managed message card | Just the `{month}` heading — `{entries}` (dates/mentions) always renders plain. |
+| Bot-managed anchor message | `/birthdays` → Self-registration card | Just the `{month}` heading — `{entries}` (dates/mentions) always renders plain. |
 | A reaction-role panel | `/reaction-roles` → panel editor | The title, message text, and every button/dropdown option's label. |
 
 `applyFont()` renders through the map position-for-position (`src/utils/font.ts`); characters outside the reference alphabet (digits, punctuation, emoji, `<@id>` mentions) pass through unchanged.
+
+## Member Audit
+
+`/members` replaces the old Find User page — same search, plus a persistent per-member record instead of just a live cache lookup: `member_records` (see [DATABASE.md](DATABASE.md#member_records)), one row per Discord user ever seen in the configured guild, current or former.
+
+- **Current members** come from the live member cache (same one `/finduser` searches), joined with that row for its dates.
+- **Former members** exist *only* as that row — once someone leaves, Discord stops telling the bot anything about them, so this table is the sole record. They're listed in their own table, most-recently-left first, capped at `MEMBER_AUDIT_LEFT_LIMIT` (`constants.ts`).
+- Three dates per member, each recorded live by the bot the moment it happens (`src/services/memberRecords.ts`) — **not** backfilled from Discord history, because Discord doesn't expose most of this after the fact:
+  - **Joined** — backfilled once at every startup for anyone already in the guild (Discord does still report a current member's join date), then kept current via `guildMemberAdd`.
+  - **Rules accepted** — the moment membership screening completes, detected as the member's `pending` flag flipping from `true` to `false` on a `guildMemberUpdate`. Discord has no historical record of this at all, so it reads as "not tracked" (shown as `—`) for anyone who verified before this feature shipped or before the bot was running.
+  - **Left** — recorded on `guildMemberRemove`. `null` while still in the guild.
+- Every date is stored as an ISO UTC string and rendered in the viewer's own local timezone in the browser (`formatAbsolute()`/`formatRelative()` in `web/src/dateFormat.ts` — plain `Date`/`toLocaleString()`, no timezone library needed); the relative form is a calendar-aware "xM, yD and zHr ago" breakdown rather than one giant unit.
 
 ## How it's wired up (for developers)
 
@@ -119,4 +135,4 @@ Setting it doesn't style anything by itself — each feature that can render thr
 - `src/web/routes/*.ts` — one file per resource, all thin: validate the body with `zod`, delegate to the same repository/service functions the slash commands and cron job use (`src/db/*Repository.ts`, `src/services/*.ts`). The dashboard never has its own copy of business logic.
 - `web/` — a separate `package.json`/Vite project (see [DEVELOPMENT.md](DEVELOPMENT.md#dashboard-frontend)), deliberately dependency-light: plain CSS custom properties for theming, no component library, no state-management library.
 
-Writes from the dashboard use the same `settingsBus` event emitter as slash-command writes (`src/services/settingsBus.ts`), so e.g. saving a new birthday cron expression from `/birthdays` reschedules the live cron job in `src/index.ts` exactly the same way `/setbirthdaymessage` would. Reads work the same way: `/find-user`'s `GET /api/members/search` and the `/finduser` slash command both call `searchCachedMembers()` (`src/services/memberSearch.ts`) — the matching/normalization logic exists in exactly one place.
+Writes from the dashboard use the same `settingsBus` event emitter as slash-command writes (`src/services/settingsBus.ts`), so e.g. saving a new birthday cron expression from `/birthdays` reschedules the live cron job in `src/index.ts` exactly the same way `/setbirthdaymessage` would. Reads work the same way: `/members`'s `GET /api/members/audit` and the `/finduser` slash command both filter through `matchesSearch()` (`src/services/memberSearch.ts`) — the matching/normalization logic exists in exactly one place.

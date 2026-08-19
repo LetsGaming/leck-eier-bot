@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAdmin } from "../session.js";
 import { registerStatusRoutes } from "./status.js";
 import { registerDiscordDataRoutes } from "./discordData.js";
-import { registerMemberRoutes } from "./members.js";
+import { registerMemberAuditRoutes } from "./memberAudit.js";
 import { registerReactionRolePanelRoutes } from "./reactionRolePanels.js";
 import { registerBirthdaySettingsRoutes } from "./birthdaySettings.js";
 import { registerBirthdaysReadonlyRoutes } from "./birthdaysReadonly.js";
@@ -21,7 +21,7 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       api.addHook("preHandler", requireAdmin);
       registerStatusRoutes(api, client, config);
       registerDiscordDataRoutes(api, client, config);
-      registerMemberRoutes(api);
+      registerMemberAuditRoutes(api);
       registerReactionRolePanelRoutes(api, client);
       registerBirthdaySettingsRoutes(api, client);
       registerBirthdaysReadonlyRoutes(api);

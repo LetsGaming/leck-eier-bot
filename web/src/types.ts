@@ -153,11 +153,27 @@ export interface GeneralSettings {
   fontMap: string | null;
 }
 
-export interface MemberSearchResult {
-  id: string;
+/**
+ * One user's row on the dashboard's Member Audit page — current or former
+ * (`inGuild` tells them apart). Every date is an ISO UTC string or `null`
+ * ("not tracked", not "never happened" — see `MemberRecord` on the backend);
+ * render them with `formatAbsolute()`/`formatRelative()` (`../dateFormat`),
+ * which convert to the viewer's local timezone.
+ */
+export interface MemberAuditEntry {
+  userId: string;
   username: string;
   tag: string;
   displayName: string;
   nickname: string | null;
   avatarUrl: string;
+  inGuild: boolean;
+  joinedAt: string | null;
+  rulesAcceptedAt: string | null;
+  leftAt: string | null;
+}
+
+export interface MemberAuditResponse {
+  inGuild: MemberAuditEntry[];
+  left: MemberAuditEntry[];
 }

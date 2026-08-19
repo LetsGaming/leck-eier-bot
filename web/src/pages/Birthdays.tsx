@@ -178,13 +178,10 @@ export default function Birthdays() {
               <input
                 id="messageId"
                 type="text"
-                value={messageId}
+                value={botManagesAnchor ? "Managed automatically by the bot" : messageId}
                 onChange={(e) => setMessageId(e.target.value)}
                 disabled={botManagesAnchor}
               />
-              {botManagesAnchor && (
-                <div className="hint">Managed automatically by the bot — see "Bot-managed message" below.</div>
-              )}
             </div>
           </div>
           <div className="field">
@@ -209,8 +206,10 @@ export default function Birthdays() {
           <p className="muted small">
             Members can register their own birthday with <code>/setmybirthday</code>, or by just posting a date
             (e.g. <code>15.03</code>) in the birthday channel above — the bot parses it, saves it, and deletes the
-            message. Self-registered birthdays are kept separately from the announcement list, so a "Refresh from
-            message" above never overwrites them.
+            message. Turning this on also has the bot take over the announcement message above: posting it,
+            keeping it updated after every registration, and hiding its "Anchor message ID" field — the two can
+            only be on or off together, since a self-registered birthday only ever becomes visible to anyone
+            through that bot-managed message.
           </p>
           <label className="switch">
             <input
@@ -219,81 +218,55 @@ export default function Birthdays() {
               onChange={(e) => {
                 const enabled = e.target.checked;
                 setSelfRegistrationEnabled(enabled);
-                if (!enabled) setBotManagesAnchor(false);
+                setBotManagesAnchor(enabled);
               }}
             />
             Enable self-registration
           </label>
-          {!selfRegistrationEnabled && (
-            <p className="hint">
-              Off: <code>/setmybirthday</code> and channel messages are ignored — whoever posted the anchor message
-              has to edit it themselves, like before this feature existed.
-            </p>
-          )}
-          <div className="field">
+
+          {/* These stay mounted (just disabled) rather than being added/removed with the toggle above, so this card's height doesn't jump when it's flipped. */}
+          <div className="field" style={{ marginTop: 12 }}>
             <label htmlFor="modChannel">Registration notifications channel</label>
             <SearchableSelect
               id="modChannel"
               value={modChannelId}
               onChange={setModChannelId}
+              disabled={!selfRegistrationEnabled}
               placeholder="Search channels…"
               emptyLabel="— none —"
               options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
             />
+            <div className="hint">Where the bot posts a heads-up whenever someone registers. Optional.</div>
+          </div>
+          <div className="field">
+            <label htmlFor="anchorTemplate">Month heading template</label>
+            <textarea
+              id="anchorTemplate"
+              value={anchorTemplate}
+              onChange={(e) => setAnchorTemplate(e.target.value)}
+              disabled={!selfRegistrationEnabled}
+            />
             <div className="hint">
-              Where the bot posts a heads-up whenever someone registers. Optional — saved with the button above.
+              Placeholders: <code>{"{month}"}</code> (styled with the font below, if set), <code>{"{entries}"}</code>{" "}
+              (the dates/mentions for that month — always plain, so they render correctly on Discord).
             </div>
           </div>
-        </div>
-
-        <div className="card">
-          <h2>Bot-managed message</h2>
-          <p className="muted small">
-            Instead of an admin hand-maintaining the announcement message, the bot can post and keep it updated
-            itself — re-rendering it from the current birthday list after every registration.
-          </p>
           <label className="switch">
             <input
               type="checkbox"
-              checked={botManagesAnchor}
+              checked={anchorUseFont}
               disabled={!selfRegistrationEnabled}
-              onChange={(e) => setBotManagesAnchor(e.target.checked)}
+              onChange={(e) => setAnchorUseFont(e.target.checked)}
             />
-            Let the bot manage the announcement message
+            Use font for month headings
           </label>
-          {!selfRegistrationEnabled && <p className="hint">Requires self-registration to be enabled above.</p>}
-
-          {botManagesAnchor && (
-            <>
-              <div className="field" style={{ marginTop: 12 }}>
-                <label htmlFor="anchorTemplate">Month heading template</label>
-                <textarea
-                  id="anchorTemplate"
-                  value={anchorTemplate}
-                  onChange={(e) => setAnchorTemplate(e.target.value)}
-                />
-                <div className="hint">
-                  Placeholders: <code>{"{month}"}</code> (styled with the font below, if set), <code>{"{entries}"}</code>{" "}
-                  (the dates/mentions for that month — always plain, so they render correctly on Discord).
-                </div>
-              </div>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={anchorUseFont}
-                  onChange={(e) => setAnchorUseFont(e.target.checked)}
-                />
-                Use font for month headings
-              </label>
-              <div className="hint">
-                Styles <code>{"{month}"}</code> with the font set on the <a href="/settings">Settings page</a>, if
-                one's configured. Everything else (dates, mentions) always renders plain.
-              </div>
-              <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId}>
-                {syncingAnchor ? "Regenerating…" : "Regenerate message now"}
-              </button>
-            </>
-          )}
+          <div className="hint">
+            Styles <code>{"{month}"}</code> with the font set on the <a href="/settings">Settings page</a>, if
+            one's configured. Everything else (dates, mentions) always renders plain.
+          </div>
+          <button onClick={handleSyncAnchor} disabled={syncingAnchor || !selfRegistrationEnabled || !channelId} style={{ marginTop: 8 }}>
+            {syncingAnchor ? "Regenerating…" : "Regenerate message now"}
+          </button>
         </div>
       </div>
 

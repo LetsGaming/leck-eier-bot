@@ -36,29 +36,28 @@ function normalizeForSearch(str: string | null | undefined): string {
 }
 
 /**
- * Searches the in-memory member cache by username/global name/nickname/
- * display name, normalizing fancy Unicode lookalike characters and
- * transliterating first so stylized names still match. Shared by both
- * `/finduser` and the dashboard's Find User page — see docs/ARCHITECTURE.md
- * for why logic like this lives here rather than in either caller.
+ * Whether any of `names` matches `query`, normalizing fancy Unicode
+ * lookalike characters and transliterating both sides first so stylized
+ * names still match. An empty query always matches (a "list everyone, no
+ * filter yet" state) — shared by `/finduser`, `searchCachedMembers()` below,
+ * and the dashboard's Member Audit page (`web/routes/memberAudit.ts`), which
+ * also needs to filter former members it has no live GuildMember for.
  */
-export function searchCachedMembers(query: string, limit: number = FIND_USER_RESULT_LIMIT): GuildMember[] {
+export function matchesSearch(query: string, names: Array<string | null | undefined>): boolean {
   const normalizedSearch = normalizeForSearch(query);
-  const members = getCachedMembers();
-
-  const matched = members.filter((member) => {
-    const names = [member.user.username, member.user.globalName, member.nickname, member.displayName].filter(
-      Boolean,
-    );
-    return names.some((n) => normalizeForSearch(n).includes(normalizedSearch));
-  });
-
-  return [...matched.values()].slice(0, limit);
+  if (!normalizedSearch) return true;
+  return names.some((n) => normalizeForSearch(n).includes(normalizedSearch));
 }
 
-/** Every cached member, alphabetical by display name — powers the dashboard's Find User page before anyone's typed a query. */
-export function listCachedMembers(limit: number): GuildMember[] {
-  return [...getCachedMembers().values()]
-    .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .slice(0, limit);
+/**
+ * Searches the in-memory member cache by username/global name/nickname/
+ * display name — see `matchesSearch()`. Used by `/finduser`; the dashboard's
+ * Member Audit page calls `matchesSearch()` directly instead, since it needs
+ * to filter former members alongside cached ones.
+ */
+export function searchCachedMembers(query: string, limit: number = FIND_USER_RESULT_LIMIT): GuildMember[] {
+  const matched = getCachedMembers().filter((member) =>
+    matchesSearch(query, [member.user.username, member.user.globalName, member.nickname, member.displayName]),
+  );
+  return [...matched.values()].slice(0, limit);
 }

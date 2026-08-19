@@ -4,7 +4,7 @@ import { api } from "../api";
 import {
   IconBirthdays,
   IconCommands,
-  IconFindUser,
+  IconMembers,
   IconOverview,
   IconReactionRoles,
   IconSettings,
@@ -13,10 +13,10 @@ import type { Me } from "../types";
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; end?: boolean }> = [
   { to: "/", label: "Overview", icon: IconOverview, end: true },
+  { to: "/members", label: "Member Audit", icon: IconMembers },
   { to: "/reaction-roles", label: "Reaction Roles", icon: IconReactionRoles },
   { to: "/birthdays", label: "Birthdays", icon: IconBirthdays },
   { to: "/commands", label: "Commands", icon: IconCommands },
-  { to: "/find-user", label: "Find User", icon: IconFindUser },
   { to: "/settings", label: "Settings", icon: IconSettings },
 ];
 

@@ -8,6 +8,7 @@ import type {
   Channel,
   CreatePanelInput,
   EmojiOption,
+  Mapping,
   Panel,
   PanelMessageType,
   RoleOption,
@@ -109,6 +110,8 @@ export default function ReactionRoles() {
   const [attachMode, setAttachMode] = useState<"new" | "existing">("new");
   const [messageLink, setMessageLink] = useState("");
   const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
+  const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<MappingDraft>(emptyMappingDraft());
   const [allowedRoleSearch, setAllowedRoleSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const { showError, showSuccess } = useToast();
@@ -159,6 +162,7 @@ export default function ReactionRoles() {
       setForm(panelToForm(selected));
     }
     setMappingDraft(emptyMappingDraft());
+    setEditingMappingId(null);
   }, [selectedId, selected]);
 
   function selectPanel(id: number | "new") {
@@ -327,6 +331,47 @@ export default function ReactionRoles() {
     try {
       const saved = await api.deleteMapping(selectedId, mappingId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleStartEditMapping(m: Mapping) {
+    setEditingMappingId(m.id);
+    setEditDraft({ emojiName: m.emojiName ?? "", emojiId: m.emojiId, roleId: m.roleId, label: m.label ?? "" });
+  }
+
+  function handleCancelEditMapping() {
+    setEditingMappingId(null);
+    setEditDraft(emptyMappingDraft());
+  }
+
+  async function handleSaveEditMapping() {
+    if (typeof selectedId !== "number" || editingMappingId === null) return;
+    if (!editDraft.roleId) {
+      showError("Pick a role.");
+      return;
+    }
+    if (effectiveSelectionType === "reactions" && !editDraft.emojiName) {
+      showError("Pick an emoji.");
+      return;
+    }
+    if (effectiveSelectionType !== "reactions" && !editDraft.label.trim()) {
+      showError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const saved = await api.updateMapping(selectedId, editingMappingId, {
+        emojiName: editDraft.emojiName || null,
+        emojiId: editDraft.emojiId,
+        roleId: editDraft.roleId,
+        label: editDraft.label.trim() ? editDraft.label : null,
+      });
+      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      handleCancelEditMapping();
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -585,32 +630,80 @@ export default function ReactionRoles() {
                   {selected.mappings.length === 0 && <p className="muted">No roles configured yet.</p>}
                   {[...selected.mappings]
                     .sort((a, b) => a.position - b.position)
-                    .map((m, i, arr) => (
-                      <div className="mapping-row" key={m.id}>
-                        {effectiveSelectionType === "reactions" && <span>{emojiDisplay(m)}</span>}
-                        <span className="grow">
-                          {roleName(m.roleId)}
-                          {!roleIsManageable(m.roleId) && (
-                            <span className="badge warn" style={{ marginLeft: 8 }}>
-                              bot can't assign this role
-                            </span>
-                          )}
-                          {m.label && <span className="muted"> — {m.label}</span>}
-                          {effectiveSelectionType !== "reactions" && (m.emojiId || m.emojiName) && (
-                            <span className="muted"> {emojiDisplay(m)}</span>
-                          )}
-                        </span>
-                        <button disabled={busy || i === 0} onClick={() => handleMove(m.id, -1)}>
-                          ↑
-                        </button>
-                        <button disabled={busy || i === arr.length - 1} onClick={() => handleMove(m.id, 1)}>
-                          ↓
-                        </button>
-                        <button className="danger" disabled={busy} onClick={() => handleRemoveMapping(m.id)}>
-                          Remove
-                        </button>
-                      </div>
-                    ))}
+                    .map((m, i, arr) =>
+                      editingMappingId === m.id ? (
+                        <div className="mapping-row" key={m.id}>
+                          <EmojiPicker
+                            value={{ emojiId: editDraft.emojiId, emojiName: editDraft.emojiName || null }}
+                            onChange={(v) =>
+                              setEditDraft((d) => ({ ...d, emojiId: v.emojiId, emojiName: v.emojiName ?? "" }))
+                            }
+                            customEmojis={emojis}
+                            allowEmpty={effectiveSelectionType !== "reactions"}
+                          />
+                          <SearchableSelect
+                            className="grow"
+                            value={editDraft.roleId}
+                            onChange={(v) => setEditDraft((d) => ({ ...d, roleId: v }))}
+                            placeholder="Search roles…"
+                            emptyLabel="— pick a role —"
+                            options={roles
+                              .filter((r) => !usedRoleIds.has(r.id) || r.id === m.roleId)
+                              .map((r) => ({
+                                value: r.id,
+                                label: r.name,
+                                disabled: !r.manageable,
+                                hint: r.manageable ? undefined : "(not assignable)",
+                              }))}
+                          />
+                          <input
+                            type="text"
+                            className="grow"
+                            placeholder={
+                              effectiveSelectionType === "reactions"
+                                ? "Label (optional)"
+                                : `${effectiveSelectionType === "buttons" ? "Button" : "Option"} text (required)`
+                            }
+                            value={editDraft.label}
+                            onChange={(e) => setEditDraft((d) => ({ ...d, label: e.target.value }))}
+                          />
+                          <button className="primary" disabled={busy} onClick={handleSaveEditMapping}>
+                            Save
+                          </button>
+                          <button disabled={busy} onClick={handleCancelEditMapping}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mapping-row" key={m.id}>
+                          {effectiveSelectionType === "reactions" && <span>{emojiDisplay(m)}</span>}
+                          <span className="grow">
+                            {roleName(m.roleId)}
+                            {!roleIsManageable(m.roleId) && (
+                              <span className="badge warn" style={{ marginLeft: 8 }}>
+                                bot can't assign this role
+                              </span>
+                            )}
+                            {m.label && <span className="muted"> — {m.label}</span>}
+                            {effectiveSelectionType !== "reactions" && (m.emojiId || m.emojiName) && (
+                              <span className="muted"> {emojiDisplay(m)}</span>
+                            )}
+                          </span>
+                          <button disabled={busy || editingMappingId !== null} onClick={() => handleStartEditMapping(m)}>
+                            Edit
+                          </button>
+                          <button disabled={busy || i === 0} onClick={() => handleMove(m.id, -1)}>
+                            ↑
+                          </button>
+                          <button disabled={busy || i === arr.length - 1} onClick={() => handleMove(m.id, 1)}>
+                            ↓
+                          </button>
+                          <button className="danger" disabled={busy} onClick={() => handleRemoveMapping(m.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      ),
+                    )}
 
                   <h2 style={{ marginTop: 20 }}>
                     Add {atOptionCap ? `(limit of ${optionCap} reached)` : `a ${optionWord}`}
