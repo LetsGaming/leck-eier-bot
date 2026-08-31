@@ -46,7 +46,9 @@ const MappingBodySchema = z.object({
   // context.
   emojiName: z.string().min(1).nullable(),
   emojiId: z.string().min(1).nullable(),
-  roleId: z.string().min(1),
+  // Length is further restricted to exactly 1 for Buttons/Dropdown by
+  // validateMappingForPanel() below — only a Reactions panel may have more.
+  roleIds: z.array(z.string().min(1)).min(1),
   label: z.string().max(100).nullable(),
 });
 
@@ -73,8 +75,11 @@ function parsePanelId(request: { params: unknown }, reply: FastifyReply): number
  */
 function validateMappingForPanel(
   selectionType: SelectionType,
-  data: { emojiName: string | null; label: string | null },
+  data: { emojiName: string | null; label: string | null; roleIds: string[] },
 ): string | null {
+  if (selectionType !== SelectionType.Reactions && data.roleIds.length > 1) {
+    return "Only a reactions panel can grant more than one role per option.";
+  }
   if (selectionType === SelectionType.Reactions) {
     return data.emojiName ? null : "An emoji is required for a reactions panel.";
   }
@@ -229,8 +234,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
-    if (panel.mappings.some((m) => m.roleId === body.data.roleId)) {
-      return reply.code(400).send({ error: "That role is already used by another option on this panel." });
+    if (panel.mappings.some((m) => m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
+      return reply.code(400).send({ error: "One of those roles is already used by another option on this panel." });
     }
     const cap = mappingCap(panel.selectionType);
     if (cap !== null && panel.mappings.length >= cap) {
@@ -256,8 +261,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
-    if (panel.mappings.some((m) => m.id !== mappingId && m.roleId === body.data.roleId)) {
-      return reply.code(400).send({ error: "That role is already used by another option on this panel." });
+    if (panel.mappings.some((m) => m.id !== mappingId && m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
+      return reply.code(400).send({ error: "One of those roles is already used by another option on this panel." });
     }
 
     upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...body.data });
