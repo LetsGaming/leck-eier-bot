@@ -151,6 +151,10 @@ export interface GeneralSettings {
   leaveNotificationsEnabled: boolean;
   /** Pasted 52-character stylized alphabet (AaBbCc...XxYyZz, one for one), set once and reused by any feature with its own "use font" toggle — see Birthdays and Reaction Roles. Null = no font configured. */
   fontMap: string | null;
+  /** Role that lets a not-yet-registered member see #register. Null = the register-gate role swap is disabled. */
+  registerGateRoleId: string | null;
+  /** The lowest membership tier role, granted once at manual registration. Null = the register-gate role swap is disabled. */
+  registrationTierRoleId: string | null;
 }
 
 /**

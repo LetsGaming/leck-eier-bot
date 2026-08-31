@@ -304,6 +304,42 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX IF NOT EXISTS idx_member_records_in_guild ON member_records(in_guild);
     `);
   },
+  // v14: drops web_sessions.is_owner, which v8's comment already called
+  // dead ("left in place unused rather than dropped") but never actually
+  // removed — it's still `NOT NULL` with no default, and createSession()
+  // (sessionsRepository.ts) hasn't supplied it since v8 switched to `role`.
+  // Every fresh login INSERT has been failing the NOT NULL constraint ever
+  // since; only sessions that predate v8 still work. SQLite can't drop a
+  // NOT NULL column via plain ALTER, hence the rebuild-and-swap.
+  (d) => {
+    d.exec(`
+      CREATE TABLE web_sessions_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        avatar TEXT,
+        role TEXT NOT NULL DEFAULT 'admin',
+        expires_at INTEGER NOT NULL
+      );
+      INSERT INTO web_sessions_new (id, user_id, username, avatar, role, expires_at)
+        SELECT id, user_id, username, avatar, role, expires_at FROM web_sessions;
+      DROP TABLE web_sessions;
+      ALTER TABLE web_sessions_new RENAME TO web_sessions;
+    `);
+  },
+  // v15: the register-channel role swap — a member holds a reaction-granted
+  // "register gate" role only so they can see the #register channel; once
+  // staff manually grant them the lowest membership tier role at
+  // registration, the gate role is stripped (memberEvents.ts) so the
+  // channel disappears for them. registration_tier_role_id is deliberately
+  // the *lowest* tier only, not "any member role" — later tier promotions
+  // swap between higher roles and must never re-trigger this.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN register_gate_role_id TEXT;
+      ALTER TABLE settings ADD COLUMN registration_tier_role_id TEXT;
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

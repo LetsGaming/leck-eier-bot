@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
-import type { GeneralSettings, Me } from "../types";
+import SearchableSelect from "../components/SearchableSelect";
+import type { GeneralSettings, Me, RoleOption } from "../types";
 
 const FONT_REFERENCE = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
 
@@ -18,6 +19,7 @@ export default function Settings({ me }: { me: Me }) {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [fontMap, setFontMap] = useState("");
   const [savingFont, setSavingFont] = useState(false);
+  const [roles, setRoles] = useState<RoleOption[]>([]);
   const { showError, showSuccess } = useToast();
 
   useEffect(() => {
@@ -28,11 +30,12 @@ export default function Settings({ me }: { me: Me }) {
         setFontMap(s.fontMap ?? "");
       })
       .catch((err) => showError(errorMessage(err)));
+    api.roles().then(setRoles).catch((err) => showError(errorMessage(err)));
   }, [showError]);
 
-  async function update(leaveNotificationsEnabled: boolean) {
+  async function update(patch: Partial<GeneralSettings>) {
     try {
-      const updated = await api.updateGeneralSettings({ leaveNotificationsEnabled });
+      const updated = await api.updateGeneralSettings(patch);
       setSettings(updated);
       showSuccess("Saved.");
     } catch (err) {
@@ -67,7 +70,7 @@ export default function Settings({ me }: { me: Me }) {
               <input
                 type="checkbox"
                 checked={settings.leaveNotificationsEnabled}
-                onChange={(e) => update(e.target.checked)}
+                onChange={(e) => update({ leaveNotificationsEnabled: e.target.checked })}
               />
               DM the server owner when a member leaves voluntarily
             </label>
@@ -108,6 +111,48 @@ export default function Settings({ me }: { me: Me }) {
           <button className="primary" onClick={handleSaveFont} disabled={savingFont}>
             {savingFont ? "Saving…" : "Save"}
           </button>
+        </div>
+
+        <div className="card">
+          <h2>Registration</h2>
+          <p className="muted small">
+            When a member is manually given the registration role below, the bot automatically removes the
+            register-gate role from them, so a channel gated on that role (e.g. #register) disappears once
+            they're registered. Leave either field unset to disable this.
+          </p>
+          {!settings ? (
+            <div className="loading">Loading…</div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="register-gate-role">Register-gate role</label>
+                <SearchableSelect
+                  id="register-gate-role"
+                  value={settings.registerGateRoleId ?? ""}
+                  onChange={(v) => update({ registerGateRoleId: v || null })}
+                  placeholder="Search roles…"
+                  emptyLabel="— none —"
+                  options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                />
+                <div className="hint">The role that lets a not-yet-registered member see #register.</div>
+              </div>
+              <div className="field">
+                <label htmlFor="registration-tier-role">Registration role (lowest tier)</label>
+                <SearchableSelect
+                  id="registration-tier-role"
+                  value={settings.registrationTierRoleId ?? ""}
+                  onChange={(v) => update({ registrationTierRoleId: v || null })}
+                  placeholder="Search roles…"
+                  emptyLabel="— none —"
+                  options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                />
+                <div className="hint">
+                  The lowest membership tier role, granted once at manual registration — not a higher tier, since
+                  later promotions must not re-trigger this.
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="card">

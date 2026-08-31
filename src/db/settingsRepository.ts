@@ -16,6 +16,8 @@ interface SettingsRow {
   birthday_anchor_use_font: 0 | 1;
   birthday_announcement_use_font: 0 | 1;
   leave_notifications_enabled: 0 | 1;
+  register_gate_role_id: string | null;
+  registration_tier_role_id: string | null;
 }
 
 function rowToSettings(row: SettingsRow): Settings {
@@ -33,6 +35,8 @@ function rowToSettings(row: SettingsRow): Settings {
     birthdayAnchorUseFont: row.birthday_anchor_use_font === 1,
     birthdayAnnouncementUseFont: row.birthday_announcement_use_font === 1,
     leaveNotificationsEnabled: row.leave_notifications_enabled === 1,
+    registerGateRoleId: row.register_gate_role_id,
+    registrationTierRoleId: row.registration_tier_role_id,
   };
 }
 
@@ -41,7 +45,8 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_list_message_id, birthday_cron, birthday_mod_channel_id,
           birthday_self_registration_enabled, birthday_bot_manages_anchor,
           birthday_anchor_template, font_map, birthday_anchor_use_font,
-          birthday_announcement_use_font, leave_notifications_enabled
+          birthday_announcement_use_font, leave_notifications_enabled,
+          register_gate_role_id, registration_tier_role_id
    FROM settings WHERE id = 1`,
 );
 const updateStmt = db.prepare<{
@@ -58,6 +63,8 @@ const updateStmt = db.prepare<{
   birthdayAnchorUseFont: 0 | 1;
   birthdayAnnouncementUseFont: 0 | 1;
   leaveNotificationsEnabled: 0 | 1;
+  registerGateRoleId: string | null;
+  registrationTierRoleId: string | null;
 }>(
   `UPDATE settings SET
      birthday_template = @birthdayTemplate,
@@ -72,7 +79,9 @@ const updateStmt = db.prepare<{
      font_map = @fontMap,
      birthday_anchor_use_font = @birthdayAnchorUseFont,
      birthday_announcement_use_font = @birthdayAnnouncementUseFont,
-     leave_notifications_enabled = @leaveNotificationsEnabled
+     leave_notifications_enabled = @leaveNotificationsEnabled,
+     register_gate_role_id = @registerGateRoleId,
+     registration_tier_role_id = @registrationTierRoleId
    WHERE id = 1`,
 );
 
@@ -98,6 +107,8 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     birthdayAnchorUseFont: next.birthdayAnchorUseFont ? 1 : 0,
     birthdayAnnouncementUseFont: next.birthdayAnnouncementUseFont ? 1 : 0,
     leaveNotificationsEnabled: next.leaveNotificationsEnabled ? 1 : 0,
+    registerGateRoleId: next.registerGateRoleId,
+    registrationTierRoleId: next.registrationTierRoleId,
   });
   settingsBus.emit(SettingsEvent.Settings);
   return next;

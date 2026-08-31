@@ -59,6 +59,10 @@ export interface Settings {
   /** Whether the daily birthday announcement message is rendered through `fontMap`. */
   birthdayAnnouncementUseFont: boolean;
   leaveNotificationsEnabled: boolean;
+  /** Role granted (typically via a reaction) that lets a not-yet-registered member see the #register channel. Null = the register-gate role swap is disabled. */
+  registerGateRoleId: string | null;
+  /** The lowest membership tier role, granted once at manual registration — not any tier role, since later promotions swap between higher tiers and must never re-trigger the gate-role removal. Null = the register-gate role swap is disabled. */
+  registrationTierRoleId: string | null;
 }
 
 export interface CommandSetting {

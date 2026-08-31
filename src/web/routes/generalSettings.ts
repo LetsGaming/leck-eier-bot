@@ -6,12 +6,16 @@ import { isValidFontMap } from "../../utils/font.js";
 const PatchBodySchema = z.object({
   leaveNotificationsEnabled: z.boolean().optional(),
   fontMap: z.string().nullable().optional(),
+  registerGateRoleId: z.string().nullable().optional(),
+  registrationTierRoleId: z.string().nullable().optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
   return {
     leaveNotificationsEnabled: settings.leaveNotificationsEnabled,
     fontMap: settings.fontMap,
+    registerGateRoleId: settings.registerGateRoleId,
+    registrationTierRoleId: settings.registrationTierRoleId,
   };
 }
 
@@ -22,7 +26,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
-    const { leaveNotificationsEnabled, fontMap } = body.data;
+    const { leaveNotificationsEnabled, fontMap, registerGateRoleId, registrationTierRoleId } = body.data;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)
@@ -32,6 +36,8 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     const settings = updateSettings({
       ...(leaveNotificationsEnabled !== undefined && { leaveNotificationsEnabled }),
       ...(fontMap !== undefined && { fontMap: fontMap || null }),
+      ...(registerGateRoleId !== undefined && { registerGateRoleId: registerGateRoleId || null }),
+      ...(registrationTierRoleId !== undefined && { registrationTierRoleId: registrationTierRoleId || null }),
     });
     return serialize(settings);
   });
