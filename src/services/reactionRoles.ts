@@ -238,19 +238,18 @@ async function applyMappingSelection(
     return { ok: false, message: "Sorry, I can't currently assign that role — an admin needs to check my permissions." };
   }
   const unmanageableSuffix =
-    unmanageable.length > 0 ? ` (couldn't touch ${roleMentions(unmanageable)} — ask an admin)` : "";
-
-  if (unmanageable.length > 0) {
-    logger.warn(
-      `Reaction role: some roles not manageable (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")}.`,
-    );
-  }
+    unmanageable.length > 0 ? ` Couldn't give you: ${roleMentions(unmanageable)} (ask an admin).` : "";
 
   const hasAllRoles = manageable.every((id) => member.roles.cache.has(id));
 
   if (hasAllRoles) {
     if (!opts.flip) return { ok: true, message: `You already have ${roleMentions(manageable)}.${unmanageableSuffix}` };
     if (!panel.removable) return { ok: true, message: `${roleMentions(manageable)} can't be removed.${unmanageableSuffix}` };
+    if (unmanageable.length > 0) {
+      logger.warn(
+        `Reaction role: some roles not manageable (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")}.`,
+      );
+    }
     for (const roleId of manageable) {
       await member.roles.remove(roleId).catch((err) => logger.warn(`Failed to revoke role ${roleId}: ${errorMessage(err)}`));
     }
@@ -272,10 +271,15 @@ async function applyMappingSelection(
   }
 
   const toGrant = manageable.filter((id) => !member.roles.cache.has(id));
+  if (unmanageable.length > 0) {
+    logger.warn(
+      `Reaction role: some roles not manageable (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")}.`,
+    );
+  }
   for (const roleId of toGrant) {
     await member.roles.add(roleId).catch((err) => logger.warn(`Failed to grant role ${roleId}: ${errorMessage(err)}`));
   }
-  return { ok: true, message: `Gave you ${roleMentions(manageable)}.${unmanageableSuffix}` };
+  return { ok: true, message: `Gave you ${roleMentions(toGrant)}.${unmanageableSuffix}` };
 }
 
 /** Un-react equivalent — only meaningful when `removable`; a flip-style interaction (buttons, `removeReaction` panels) never calls this, it's handled inline by `applyMappingSelection`. */
@@ -287,12 +291,12 @@ async function revokeMappingSelection(
 ): Promise<void> {
   if (!panel.removable) return;
   const { manageable, unmanageable } = partitionManageable(guild, mapping.roleIds);
-  if (unmanageable.length > 0) {
+  const toRevoke = manageable.filter((id) => member.roles.cache.has(id));
+  if (toRevoke.length > 0 && unmanageable.length > 0) {
     logger.warn(
       `Reaction role revoke skipped some roles (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")} not manageable.`,
     );
   }
-  const toRevoke = manageable.filter((id) => member.roles.cache.has(id));
   for (const roleId of toRevoke) {
     await member.roles.remove(roleId).catch((err) => logger.warn(`Failed to revoke role ${roleId}: ${errorMessage(err)}`));
   }

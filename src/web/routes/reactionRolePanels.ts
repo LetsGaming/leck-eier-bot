@@ -48,7 +48,12 @@ const MappingBodySchema = z.object({
   emojiId: z.string().min(1).nullable(),
   // Length is further restricted to exactly 1 for Buttons/Dropdown by
   // validateMappingForPanel() below — only a Reactions panel may have more.
-  roleIds: z.array(z.string().min(1)).min(1),
+  roleIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each role can only appear once in a single option.",
+    }),
   label: z.string().max(100).nullable(),
 });
 

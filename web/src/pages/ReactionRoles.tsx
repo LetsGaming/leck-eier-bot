@@ -646,7 +646,7 @@ export default function ReactionRoles() {
                                 .map((r) => ({
                                   value: r.id,
                                   label: r.name,
-                                  disabled: !r.manageable,
+                                  disabled: !r.manageable && !editDraft.roleIds.includes(r.id),
                                   hint: r.manageable ? undefined : "(not assignable)",
                                 }))}
                             />
@@ -739,7 +739,7 @@ export default function ReactionRoles() {
                             .map((r) => ({
                               value: r.id,
                               label: r.name,
-                              disabled: !r.manageable,
+                              disabled: !r.manageable && !mappingDraft.roleIds.includes(r.id),
                               hint: r.manageable ? undefined : "(not assignable)",
                             }))}
                         />
