@@ -4,7 +4,7 @@ Lets members self-assign roles — by reacting to a message, clicking a button, 
 
 ## Concepts
 
-A **panel** is one message (`reaction_role_panels`) in a chosen channel that members interact with to pick roles. Each panel has a required **name** — purely for identifying it in the dashboard's panel list and `/reactionroles list`, never shown on the Discord message itself. Each **mapping** (`reaction_role_mappings`) attaches one option (an emoji, a button, or a dropdown entry) to one role on that panel, in a display order.
+A **panel** is one message (`reaction_role_panels`) in a chosen channel that members interact with to pick roles. Each panel has a required **name** — purely for identifying it in the dashboard's panel list and `/reactionroles list`, never shown on the Discord message itself. Each **mapping** (`reaction_role_mappings`) attaches one option (an emoji, a button, or a dropdown entry) to one or more roles on that panel, in a display order — **more than one role per option is only possible on a Reactions panel** (e.g. one ✅ granting both a permanent "rules accepted" role and a separate "unregistered" gate role some other mechanism removes later); Buttons and Dropdown options stay exactly one role each.
 
 Every panel has, set once at creation and fixed afterward:
 
@@ -22,7 +22,7 @@ Panels also start as **drafts** and don't touch Discord at all until explicitly 
 
 | Type | How it works | Requires |
 | --- | --- | --- |
-| **Reactions** | Members react to the message with a configured emoji. | Nothing extra — works on any message, including [an existing one](#attaching-to-an-existing-message). |
+| **Reactions** | Members react to the message with a configured emoji. Can grant more than one role per emoji — see [Multi-role options](#multi-role-options-reactions-only). | Nothing extra — works on any message, including [an existing one](#attaching-to-an-existing-message). |
 | **Buttons** | Up to 25 buttons (5 per row) under the message, one per role. | A bot-owned message — Discord has no way to attach a component to a message it didn't send. |
 | **Dropdown** | A single select menu with up to 25 options under the message. | Same as buttons. |
 
@@ -33,6 +33,16 @@ Buttons and dropdowns are click/submit-based rather than persistent marks on the
 A reaction has no text of its own — the emoji *is* the option — so it's required, and a mapping's label is just decorative extra text shown next to the role on the panel message. Buttons and dropdown options are the opposite: the label is what the member actually reads (an emoji-only button is easy to misread), so it's **required** for those two, and the emoji becomes a nice-to-have visual instead. Enforced both in the dashboard's mapping form and, authoritatively, by the API (`validateMappingForPanel()` in `src/web/routes/reactionRolePanels.ts`).
 
 For a **dropdown**, "allow multiple" controls how many options the menu lets you pick in one go (`maxValues`) — picking a new set replaces your previous selection from that panel in a single submission, rather than needing a separate un-pick step. Discord's select menus don't support showing a different "currently selected" state per viewer, so the menu always starts blank regardless of what you already hold; submitting it still applies correctly against your real roles.
+
+## Multi-role options (reactions only)
+
+A single reaction can be configured to grant more than one role at once — pick as many roles as you like in the dashboard's role picker for that option (a checkbox list instead of the usual single-role dropdown, shown only for a Reactions panel). All configured roles for that option are granted/revoked together, following the panel's normal `removable`/`allowMultiple` rules — there's no way to make one of a multi-role option's roles behave differently from the others through this feature.
+
+If the bot can manage some but not all of an option's configured roles (e.g. one role sits above the bot's own in the role list), it grants/revokes whichever it can and reports which it couldn't — it never blocks the whole option over a single unmanageable role.
+
+The motivating case is rules-acceptance granting two roles at once: a permanent "rules accepted" role that's never removed through this panel (`removable: off`), alongside a separate "unregistered"/gate role that a *different*, unrelated mechanism removes later (e.g. staff manually registering the member) — see [DATABASE.md](DATABASE.md#settings) for `register_gate_role_id`/`registration_tier_role_id`. That later removal isn't part of this feature; it already works the same way it did before.
+
+Buttons and Dropdown options are still exactly one role each — a dropdown's own multi-*select* (picking several options in one submission, see [Emoji vs. label](#emoji-vs-label)) already covers "give me several outcomes" for that selection type.
 
 ## `removeReaction` (reactions only)
 
@@ -104,7 +114,7 @@ Both require Admin permission, same as the birthday commands.
 - **Storage**: `src/db/reactionRolesRepository.ts`, following the same prepared-statement/row-mapper pattern as `birthdaysRepository.ts`. Every write emits `SettingsEvent.ReactionRoles` on the shared `settingsBus` (`src/services/settingsBus.ts`).
 - **In-memory cache**: `src/services/reactionRoles.ts` keeps a `Map<messageId, panel+mappings>`, rebuilt lazily and invalidated on that same event — so handling an interaction never hits SQLite on the hot path.
 - **Event flow**: `src/events/reactionRoleEvents.ts` wires `messageReactionAdd`/`Remove` and, via a second `interactionCreate` listener alongside the slash-command dispatcher in `index.ts`, button/select-menu interactions (`customId` prefixed `rr:`) to handlers in the service. All resolve partials/fetch what they need first, look up the panel by message id, and no-op immediately for bot reactors, unrelated messages, or a panel that isn't `sent` yet.
-- **Shared role logic**: `applyMappingSelection()` is the single place the allow-multiple/removable rules live, used by reactions (both the flip case, when `removeReaction` is on, and the grant-only case) and by button clicks (always a flip). Dropdown submissions go through the separate `applyDropdownSelection()` instead, since a select menu submits the member's *complete* new choice every time rather than one option at a time — it reconciles that target set against current role membership in one pass, honoring `removable` per-role rather than needing a flip flag at all.
+- **Shared role logic**: `applyMappingSelection()` is the single place the allow-multiple/removable rules live, used by reactions (both the flip case, when `removeReaction` is on, and the grant-only case) and by button clicks (always a flip). It operates over a mapping's full `roleIds` array — partitioning them into currently-manageable vs. not (`partitionManageable()`) and applying the grant/revoke to whichever it can, per option, rather than failing the whole mapping over one unmanageable role. Dropdown submissions go through the separate `applyDropdownSelection()` instead, since a select menu submits the member's *complete* new choice every time rather than one option at a time — it reconciles that target set against current role membership in one pass, honoring `removable` per-role rather than needing a flip flag at all (dropdown mappings are always single-role, so this doesn't need the same partitioning).
 - **Self-echo suppression** (reactions only): a single-role swap or a `removeReaction` panel both make the bot remove a *user's* reaction, which fires a real `messageReactionRemove` for that user. A short-lived `Map` of `messageId:userId:emojiKey` (10s TTL, `REACTION_SELF_ECHO_TTL_MS` in `constants.ts`) marks removals the bot itself initiated so the resulting event is treated as already-handled instead of triggering a second revoke.
 - **Per-user serialization**: a promise-chain keyed by `messageId:userId` (`runSerialized()`) so rapid clicking/reacting can't interleave two concurrent grant/revoke operations for the same person.
 - **Building the message**: `buildPanelContent()` returns plain text or an embed depending on `messageType`, always specifying *both* `content` and `embeds` explicitly (even when one is empty/null) so switching type on an edit fully replaces the old content instead of Discord leaving a stale field in place. `buildComponents()` builds the button rows or the select-menu row for `selectionType: buttons | dropdown`; reactions get no components. `reconcilePanelReactions()` (reactions only) diffs the bot's own reactions against the current mapping list and adds/removes to match, in `position` order.
