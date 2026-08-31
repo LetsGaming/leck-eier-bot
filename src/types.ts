@@ -80,7 +80,8 @@ export interface ReactionRoleMapping {
   emojiName: string | null;
   /** Set only for custom (guild) emoji; null for unicode emoji or no emoji at all. */
   emojiId: string | null;
-  roleId: string;
+  /** One or more roles this option grants. Multiple roles are only ever possible on a Reactions panel — Buttons/Dropdown mappings are restricted to exactly one, enforced in web/routes/reactionRolePanels.ts, not here. Always non-empty. */
+  roleIds: string[];
   label: string | null;
   position: number;
 }

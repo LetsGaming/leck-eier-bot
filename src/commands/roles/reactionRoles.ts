@@ -67,7 +67,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       ? panel.mappings
           .map((m) => {
             const emoji = m.emojiId ? `<:${m.emojiName}:${m.emojiId}>` : (m.emojiName ?? "");
-            return `${emoji ? `${emoji} ` : ""}${m.label ?? ""} → <@&${m.roleId}>`.trim();
+            return `${emoji ? `${emoji} ` : ""}${m.label ?? ""} → ${m.roleIds.map((id) => `<@&${id}>`).join(", ")}`.trim();
           })
           .join("\n")
       : "_No roles configured_";

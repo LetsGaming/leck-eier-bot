@@ -28,7 +28,7 @@ interface MappingRow {
   /** Null for a buttons/dropdown mapping with no emoji — reactions always have one (there's no reacting without an emoji). */
   emoji_name: string | null;
   emoji_id: string | null;
-  role_id: string;
+  role_ids: string;
   label: string | null;
   position: number;
 }
@@ -60,7 +60,7 @@ function rowToMapping(row: MappingRow): ReactionRoleMapping {
     panelId: row.panel_id,
     emojiName: row.emoji_name,
     emojiId: row.emoji_id,
-    roleId: row.role_id,
+    roleIds: JSON.parse(row.role_ids) as string[],
     label: row.label,
     position: row.position,
   };
@@ -68,7 +68,7 @@ function rowToMapping(row: MappingRow): ReactionRoleMapping {
 
 const PANEL_COLUMNS = `id, name, channel_id, message_id, managed, selection_type, message_type, remove_reaction,
   allow_multiple, removable, allowed_role_ids, sent, title, description, use_font, created_at`;
-const MAPPING_COLUMNS = "id, panel_id, emoji_name, emoji_id, role_id, label, position";
+const MAPPING_COLUMNS = "id, panel_id, emoji_name, emoji_id, role_ids, label, position";
 
 const selectAllPanelsStmt = db.prepare<[], PanelRow>(
   `SELECT ${PANEL_COLUMNS} FROM reaction_role_panels ORDER BY id`,
@@ -139,23 +139,23 @@ const insertMappingStmt = db.prepare<{
   panelId: number;
   emojiName: string | null;
   emojiId: string | null;
-  roleId: string;
+  roleIds: string;
   label: string | null;
   position: number;
 }>(
-  `INSERT INTO reaction_role_mappings (panel_id, emoji_name, emoji_id, role_id, label, position)
-   VALUES (@panelId, @emojiName, @emojiId, @roleId, @label, @position)`,
+  `INSERT INTO reaction_role_mappings (panel_id, emoji_name, emoji_id, role_ids, label, position)
+   VALUES (@panelId, @emojiName, @emojiId, @roleIds, @label, @position)`,
 );
 const updateMappingStmt = db.prepare<{
   id: number;
   emojiName: string | null;
   emojiId: string | null;
-  roleId: string;
+  roleIds: string;
   label: string | null;
   position: number;
 }>(
   `UPDATE reaction_role_mappings SET
-     emoji_name = @emojiName, emoji_id = @emojiId, role_id = @roleId, label = @label, position = @position
+     emoji_name = @emojiName, emoji_id = @emojiId, role_ids = @roleIds, label = @label, position = @position
    WHERE id = @id`,
 );
 const deleteMappingStmt = db.prepare<[number]>("DELETE FROM reaction_role_mappings WHERE id = ?");
@@ -290,19 +290,20 @@ export interface UpsertMappingInput {
   panelId: number;
   emojiName: string | null;
   emojiId: string | null;
-  roleId: string;
+  roleIds: string[];
   label: string | null;
   position: number;
 }
 
 export function upsertMapping(input: UpsertMappingInput): ReactionRoleMapping {
+  const roleIds = JSON.stringify(input.roleIds);
   let mapping: ReactionRoleMapping;
   if (input.id !== undefined) {
     updateMappingStmt.run({
       id: input.id,
       emojiName: input.emojiName,
       emojiId: input.emojiId,
-      roleId: input.roleId,
+      roleIds,
       label: input.label,
       position: input.position,
     });
@@ -312,7 +313,7 @@ export function upsertMapping(input: UpsertMappingInput): ReactionRoleMapping {
       panelId: input.panelId,
       emojiName: input.emojiName,
       emojiId: input.emojiId,
-      roleId: input.roleId,
+      roleIds,
       label: input.label,
       position: input.position,
     });
