@@ -408,6 +408,46 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   (d) => {
     d.exec(`ALTER TABLE settings ADD COLUMN rules_accepted_use_discord_screening INTEGER NOT NULL DEFAULT 0;`);
   },
+  // v21: a reaction-role mapping can now grant more than one role at once
+  // (Reactions panels only — enforced in web/routes/reactionRolePanels.ts,
+  // not here) — e.g. one checkmark granting both a permanent "rules
+  // accepted" role and a separate "unregistered" gate role that a different,
+  // unrelated mechanism removes later. `role_id` (one role) becomes
+  // `role_ids` (a JSON array of roles), the same JSON-array-in-a-TEXT-column
+  // convention `allowed_role_ids` already uses on reaction_role_panels.
+  // SQLite has no ALTER COLUMN, so this is the standard rebuild-and-swap
+  // (see v14's web_sessions migration for the same pattern) rather than a
+  // plain ADD COLUMN — every existing row's single role_id is preserved as
+  // a one-element array.
+  (d) => {
+    d.exec(`
+      CREATE TABLE reaction_role_mappings_v21 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        panel_id INTEGER NOT NULL REFERENCES reaction_role_panels(id) ON DELETE CASCADE,
+        emoji_name TEXT,
+        emoji_id TEXT,
+        role_ids TEXT NOT NULL,
+        label TEXT,
+        position INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    const rows = d.prepare("SELECT id, role_id FROM reaction_role_mappings").all() as Array<{
+      id: number;
+      role_id: string;
+    }>;
+    const insertStmt = d.prepare(
+      "INSERT INTO reaction_role_mappings_v21 (id, panel_id, emoji_name, emoji_id, role_ids, label, position) SELECT id, panel_id, emoji_name, emoji_id, ?, label, position FROM reaction_role_mappings WHERE id = ?",
+    );
+    for (const row of rows) {
+      insertStmt.run(JSON.stringify([row.role_id]), row.id);
+    }
+    d.exec(`
+      DROP TABLE reaction_role_mappings;
+      ALTER TABLE reaction_role_mappings_v21 RENAME TO reaction_role_mappings;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rr_map_emoji
+        ON reaction_role_mappings(panel_id, emoji_id, emoji_name);
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;
