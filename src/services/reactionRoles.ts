@@ -311,7 +311,7 @@ async function applyDropdownSelection(
   selectedMappingIds: number[],
 ): Promise<SelectionResult> {
   const targetRoleIds = new Set(
-    panel.mappings.filter((m) => selectedMappingIds.includes(m.id)).map((m) => m.roleId),
+    panel.mappings.filter((m) => selectedMappingIds.includes(m.id)).map((m) => m.roleIds[0]!),
   );
 
   const granted: string[] = [];
@@ -319,31 +319,28 @@ async function applyDropdownSelection(
   const kept: string[] = [];
 
   for (const mapping of panel.mappings) {
-    if (!canManageRole(guild, mapping.roleId).ok) continue;
-    const hasRole = member.roles.cache.has(mapping.roleId);
-    const wantsRole = targetRoleIds.has(mapping.roleId);
+    const roleId = mapping.roleIds[0]!;
+    if (!canManageRole(guild, roleId).ok) continue;
+    const hasRole = member.roles.cache.has(roleId);
+    const wantsRole = targetRoleIds.has(roleId);
 
     if (wantsRole && !hasRole) {
-      await member.roles.add(mapping.roleId).catch((err) =>
-        logger.warn(`Failed to grant role ${mapping.roleId}: ${errorMessage(err)}`),
-      );
-      granted.push(mapping.roleId);
+      await member.roles.add(roleId).catch((err) => logger.warn(`Failed to grant role ${roleId}: ${errorMessage(err)}`));
+      granted.push(roleId);
     } else if (!wantsRole && hasRole) {
       if (panel.removable) {
-        await member.roles.remove(mapping.roleId).catch((err) =>
-          logger.warn(`Failed to revoke role ${mapping.roleId}: ${errorMessage(err)}`),
-        );
-        revoked.push(mapping.roleId);
+        await member.roles.remove(roleId).catch((err) => logger.warn(`Failed to revoke role ${roleId}: ${errorMessage(err)}`));
+        revoked.push(roleId);
       } else {
-        kept.push(mapping.roleId);
+        kept.push(roleId);
       }
     }
   }
 
   const parts: string[] = [];
-  if (granted.length) parts.push(`Gave you: ${granted.map((id) => `<@&${id}>`).join(", ")}`);
-  if (revoked.length) parts.push(`Removed: ${revoked.map((id) => `<@&${id}>`).join(", ")}`);
-  if (kept.length) parts.push(`Kept (not removable): ${kept.map((id) => `<@&${id}>`).join(", ")}`);
+  if (granted.length) parts.push(`Gave you: ${roleMentions(granted)}`);
+  if (revoked.length) parts.push(`Removed: ${roleMentions(revoked)}`);
+  if (kept.length) parts.push(`Kept (not removable): ${roleMentions(kept)}`);
   return { ok: true, message: parts.length ? parts.join("\n") : "No changes." };
 }
 
@@ -527,7 +524,7 @@ function emojiDisplay(mapping: ReactionRoleMapping): string {
 
 function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
   if (mapping.label) return mapping.label;
-  return guild.roles.cache.get(mapping.roleId)?.name ?? "Unknown role";
+  return mapping.roleIds.map((id) => guild.roles.cache.get(id)?.name ?? "Unknown role").join(", ");
 }
 
 /**
@@ -545,7 +542,7 @@ function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
     .sort((a, b) => a.position - b.position)
     .map((m) => {
       const emoji = emojiDisplay(m);
-      return `${emoji ? `${emoji} — ` : ""}<@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`;
+      return `${emoji ? `${emoji} — ` : ""}${roleMentions(m.roleIds)}${m.label ? ` — ${m.label}` : ""}`;
     });
   const description = [panel.description, lines.join("\n")].filter(Boolean).join("\n\n");
   return createEmbed({
@@ -566,7 +563,7 @@ function buildPanelText(panel: ReactionRolePanelWithMappings): string {
           .sort((a, b) => a.position - b.position)
           .map((m) => {
             const emoji = emojiDisplay(m);
-            return `${emoji ? `${emoji} — ` : ""}<@&${m.roleId}>${m.label ? ` — ${m.label}` : ""}`;
+            return `${emoji ? `${emoji} — ` : ""}${roleMentions(m.roleIds)}${m.label ? ` — ${m.label}` : ""}`;
           })
       : [];
   return styled(panel, [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "React to get a role!");
