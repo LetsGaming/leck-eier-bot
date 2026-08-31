@@ -47,7 +47,8 @@ export interface Mapping {
   /** Null for a buttons/dropdown option with no emoji — reactions always have one. */
   emojiName: string | null;
   emojiId: string | null;
-  roleId: string;
+  /** One or more roles this option grants. Multiple only ever possible on a Reactions panel — Buttons/Dropdown are restricted to exactly one. */
+  roleIds: string[];
   label: string | null;
   position: number;
 }
@@ -99,7 +100,7 @@ export interface CreatePanelInput extends PanelInput {
 export interface MappingInput {
   emojiName: string | null;
   emojiId: string | null;
-  roleId: string;
+  roleIds: string[];
   label: string | null;
 }
 
