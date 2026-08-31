@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "../api";
 import EmojiPicker from "../components/EmojiPicker";
+import RoleCheckboxList from "../components/RoleCheckboxList";
 import MessagePreview from "../components/MessagePreview";
 import SearchableSelect from "../components/SearchableSelect";
 import { useToast } from "../components/ToastContext";
@@ -89,12 +90,12 @@ function panelToForm(panel: Panel): PanelFormState {
 interface MappingDraft {
   emojiName: string;
   emojiId: string | null;
-  roleId: string;
+  roleIds: string[];
   label: string;
 }
 
 function emptyMappingDraft(): MappingDraft {
-  return { emojiName: "", emojiId: null, roleId: "", label: "" };
+  return { emojiName: "", emojiId: null, roleIds: [], label: "" };
 }
 
 export default function ReactionRoles() {
@@ -113,7 +114,6 @@ export default function ReactionRoles() {
   const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
   const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<MappingDraft>(emptyMappingDraft());
-  const [allowedRoleSearch, setAllowedRoleSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const { showError, showSuccess } = useToast();
 
@@ -143,16 +143,12 @@ export default function ReactionRoles() {
   const messageSource: MessageSource = attachMode === "existing" ? "existing" : form.messageType === "text" ? "simple" : "embed";
 
   // A role can only grant one outcome per panel — once it's mapped to an
-  // option, picking it again for a second option would just be ambiguous.
-  const usedRoleIds = useMemo(() => new Set(selected?.mappings.map((m) => m.roleId) ?? []), [selected]);
-
-  // Keeps already-checked roles visible even when they don't match the
-  // current search, so typing never hides your existing selection.
-  const filteredAllowedRoles = useMemo(() => {
-    const q = allowedRoleSearch.trim().toLowerCase();
-    if (!q) return roles;
-    return roles.filter((r) => r.name.toLowerCase().includes(q) || form.allowedRoleIds.includes(r.id));
-  }, [roles, allowedRoleSearch, form.allowedRoleIds]);
+  // option, picking it again for a second option (even as part of a
+  // different multi-role Reactions option) would just be ambiguous.
+  const usedRoleIds = useMemo(
+    () => new Set(selected?.mappings.flatMap((m) => m.roleIds) ?? []),
+    [selected],
+  );
 
   useEffect(() => {
     if (selectedId === "new") {
@@ -179,15 +175,6 @@ export default function ReactionRoles() {
       setAttachMode("new");
       setForm((f) => ({ ...f, messageType: source === "simple" ? "text" : "embed" }));
     }
-  }
-
-  function toggleAllowedRole(roleId: string) {
-    setForm((f) => ({
-      ...f,
-      allowedRoleIds: f.allowedRoleIds.includes(roleId)
-        ? f.allowedRoleIds.filter((id) => id !== roleId)
-        : [...f.allowedRoleIds, roleId],
-    }));
   }
 
   async function handleSavePanel() {
@@ -294,8 +281,8 @@ export default function ReactionRoles() {
 
   async function handleAddMapping() {
     if (typeof selectedId !== "number") return;
-    if (!mappingDraft.roleId) {
-      showError("Pick a role.");
+    if (mappingDraft.roleIds.length === 0) {
+      showError("Pick at least one role.");
       return;
     }
     if (effectiveSelectionType === "reactions" && !mappingDraft.emojiName) {
@@ -315,7 +302,7 @@ export default function ReactionRoles() {
       const saved = await api.addMapping(selectedId, {
         emojiName: mappingDraft.emojiName || null,
         emojiId: mappingDraft.emojiId,
-        roleId: mappingDraft.roleId,
+        roleIds: mappingDraft.roleIds,
         label: mappingDraft.label.trim() ? mappingDraft.label : null,
       });
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
@@ -342,7 +329,7 @@ export default function ReactionRoles() {
 
   function handleStartEditMapping(m: Mapping) {
     setEditingMappingId(m.id);
-    setEditDraft({ emojiName: m.emojiName ?? "", emojiId: m.emojiId, roleId: m.roleId, label: m.label ?? "" });
+    setEditDraft({ emojiName: m.emojiName ?? "", emojiId: m.emojiId, roleIds: m.roleIds, label: m.label ?? "" });
   }
 
   function handleCancelEditMapping() {
@@ -352,8 +339,8 @@ export default function ReactionRoles() {
 
   async function handleSaveEditMapping() {
     if (typeof selectedId !== "number" || editingMappingId === null) return;
-    if (!editDraft.roleId) {
-      showError("Pick a role.");
+    if (editDraft.roleIds.length === 0) {
+      showError("Pick at least one role.");
       return;
     }
     if (effectiveSelectionType === "reactions" && !editDraft.emojiName) {
@@ -369,7 +356,7 @@ export default function ReactionRoles() {
       const saved = await api.updateMapping(selectedId, editingMappingId, {
         emojiName: editDraft.emojiName || null,
         emojiId: editDraft.emojiId,
-        roleId: editDraft.roleId,
+        roleIds: editDraft.roleIds,
         label: editDraft.label.trim() ? editDraft.label : null,
       });
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
@@ -401,6 +388,10 @@ export default function ReactionRoles() {
 
   function roleName(roleId: string): string {
     return roles.find((r) => r.id === roleId)?.name ?? roleId;
+  }
+
+  function roleNamesLabel(roleIds: string[]): string {
+    return roleIds.map(roleName).join(", ");
   }
 
   function roleIsManageable(roleId: string): boolean {
@@ -621,7 +612,7 @@ export default function ReactionRoles() {
                     title={form.title || form.name}
                     description={form.description}
                     mappings={selected?.mappings ?? []}
-                    resolveRoleLabel={(m) => m.label ?? roleName(m.roleId)}
+                    resolveRoleLabel={(m) => m.label ?? roleNamesLabel(m.roleIds)}
                     fontMap={fontMap}
                     useFont={form.useFont}
                   />
@@ -645,21 +636,37 @@ export default function ReactionRoles() {
                             customEmojis={emojis}
                             allowEmpty={effectiveSelectionType !== "reactions"}
                           />
-                          <SearchableSelect
-                            className="grow"
-                            value={editDraft.roleId}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, roleId: v }))}
-                            placeholder="Search roles…"
-                            emptyLabel="— pick a role —"
-                            options={roles
-                              .filter((r) => !usedRoleIds.has(r.id) || r.id === m.roleId)
-                              .map((r) => ({
-                                value: r.id,
-                                label: r.name,
-                                disabled: !r.manageable,
-                                hint: r.manageable ? undefined : "(not assignable)",
-                              }))}
-                          />
+                          {effectiveSelectionType === "reactions" ? (
+                            <RoleCheckboxList
+                              placeholder="Search roles…"
+                              value={editDraft.roleIds}
+                              onChange={(ids) => setEditDraft((d) => ({ ...d, roleIds: ids }))}
+                              options={roles
+                                .filter((r) => !usedRoleIds.has(r.id) || m.roleIds.includes(r.id))
+                                .map((r) => ({
+                                  value: r.id,
+                                  label: r.name,
+                                  disabled: !r.manageable,
+                                  hint: r.manageable ? undefined : "(not assignable)",
+                                }))}
+                            />
+                          ) : (
+                            <SearchableSelect
+                              className="grow"
+                              value={editDraft.roleIds[0] ?? ""}
+                              onChange={(v) => setEditDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
+                              placeholder="Search roles…"
+                              emptyLabel="— pick a role —"
+                              options={roles
+                                .filter((r) => !usedRoleIds.has(r.id) || m.roleIds.includes(r.id))
+                                .map((r) => ({
+                                  value: r.id,
+                                  label: r.name,
+                                  disabled: !r.manageable,
+                                  hint: r.manageable ? undefined : "(not assignable)",
+                                }))}
+                            />
+                          )}
                           <input
                             type="text"
                             className="grow"
@@ -682,10 +689,10 @@ export default function ReactionRoles() {
                         <div className="mapping-row" key={m.id}>
                           {effectiveSelectionType === "reactions" && <span>{emojiDisplay(m)}</span>}
                           <span className="grow">
-                            {roleName(m.roleId)}
-                            {!roleIsManageable(m.roleId) && (
+                            {roleNamesLabel(m.roleIds)}
+                            {m.roleIds.some((id) => !roleIsManageable(id)) && (
                               <span className="badge warn" style={{ marginLeft: 8 }}>
-                                bot can't assign this role
+                                bot can't assign: {roleNamesLabel(m.roleIds.filter((id) => !roleIsManageable(id)))}
                               </span>
                             )}
                             {m.label && <span className="muted"> — {m.label}</span>}
@@ -722,21 +729,37 @@ export default function ReactionRoles() {
                         customEmojis={emojis}
                         allowEmpty={effectiveSelectionType !== "reactions"}
                       />
-                      <SearchableSelect
-                        className="grow"
-                        value={mappingDraft.roleId}
-                        onChange={(v) => setMappingDraft((d) => ({ ...d, roleId: v }))}
-                        placeholder="Search roles…"
-                        emptyLabel="— pick a role —"
-                        options={roles
-                          .filter((r) => !usedRoleIds.has(r.id))
-                          .map((r) => ({
-                            value: r.id,
-                            label: r.name,
-                            disabled: !r.manageable,
-                            hint: r.manageable ? undefined : "(not assignable)",
-                          }))}
-                      />
+                      {effectiveSelectionType === "reactions" ? (
+                        <RoleCheckboxList
+                          placeholder="Search roles…"
+                          value={mappingDraft.roleIds}
+                          onChange={(ids) => setMappingDraft((d) => ({ ...d, roleIds: ids }))}
+                          options={roles
+                            .filter((r) => !usedRoleIds.has(r.id))
+                            .map((r) => ({
+                              value: r.id,
+                              label: r.name,
+                              disabled: !r.manageable,
+                              hint: r.manageable ? undefined : "(not assignable)",
+                            }))}
+                        />
+                      ) : (
+                        <SearchableSelect
+                          className="grow"
+                          value={mappingDraft.roleIds[0] ?? ""}
+                          onChange={(v) => setMappingDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
+                          placeholder="Search roles…"
+                          emptyLabel="— pick a role —"
+                          options={roles
+                            .filter((r) => !usedRoleIds.has(r.id))
+                            .map((r) => ({
+                              value: r.id,
+                              label: r.name,
+                              disabled: !r.manageable,
+                              hint: r.manageable ? undefined : "(not assignable)",
+                            }))}
+                        />
+                      )}
                       <input
                         type="text"
                         className="grow"
@@ -803,47 +826,12 @@ export default function ReactionRoles() {
 
                     <div className="field">
                       <label>Allowed roles</label>
-                      {roles.length > 8 && (
-                        <input
-                          type="text"
-                          placeholder="Search roles…"
-                          value={allowedRoleSearch}
-                          onChange={(e) => setAllowedRoleSearch(e.target.value)}
-                          style={{ marginBottom: 6 }}
-                        />
-                      )}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          background: "var(--bg-inset)",
-                          border: "1px solid var(--border)",
-                          borderRadius: "var(--radius)",
-                          padding: 8,
-                          maxHeight: 140,
-                          overflowY: "auto",
-                        }}
-                      >
-                        {roles.length === 0 && <span className="muted">No roles found.</span>}
-                        {roles.length > 0 && filteredAllowedRoles.length === 0 && (
-                          <span className="muted">No matches.</span>
-                        )}
-                        {filteredAllowedRoles.map((r) => (
-                          <label
-                            key={r.id}
-                            className="switch"
-                            style={{ fontSize: 13, background: "var(--bg-elevated)", padding: "2px 8px", borderRadius: 999 }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={form.allowedRoleIds.includes(r.id)}
-                              onChange={() => toggleAllowedRole(r.id)}
-                            />
-                            {r.name}
-                          </label>
-                        ))}
-                      </div>
+                      <RoleCheckboxList
+                        placeholder="Search roles…"
+                        value={form.allowedRoleIds}
+                        onChange={(ids) => setForm((f) => ({ ...f, allowedRoleIds: ids }))}
+                        options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                      />
                       <div className="hint">
                         Only members holding one of these roles may use the panel. None selected = everyone.
                       </div>
