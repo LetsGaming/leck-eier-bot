@@ -240,6 +240,12 @@ async function applyMappingSelection(
   const unmanageableSuffix =
     unmanageable.length > 0 ? ` (couldn't touch ${roleMentions(unmanageable)} — ask an admin)` : "";
 
+  if (unmanageable.length > 0) {
+    logger.warn(
+      `Reaction role: some roles not manageable (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")}.`,
+    );
+  }
+
   const hasAllRoles = manageable.every((id) => member.roles.cache.has(id));
 
   if (hasAllRoles) {
