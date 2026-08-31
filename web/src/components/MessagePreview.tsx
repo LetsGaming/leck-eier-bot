@@ -1,3 +1,4 @@
+import { applyFont } from "../utils/font";
 import type { Mapping, PanelMessageType, SelectionType } from "../types";
 
 interface MessagePreviewProps {
@@ -7,6 +8,9 @@ interface MessagePreviewProps {
   description: string;
   mappings: Mapping[];
   resolveRoleLabel: (mapping: Mapping) => string;
+  /** The globally-configured font (Settings page) — applied only when `useFont` is on. */
+  fontMap: string | null;
+  useFont: boolean;
 }
 
 function emojiNode(mapping: Mapping) {
@@ -42,9 +46,13 @@ export default function MessagePreview({
   description,
   mappings,
   resolveRoleLabel,
+  fontMap,
+  useFont,
 }: MessagePreviewProps) {
   const sorted = [...mappings].sort((a, b) => a.position - b.position);
-  const text = bodyText(description, selectionType, sorted, resolveRoleLabel);
+  const style = (s: string) => (useFont ? applyFont(s, fontMap) : s);
+  const text = style(bodyText(description, selectionType, sorted, resolveRoleLabel));
+  const styledTitle = style(title);
 
   return (
     <div className="message-preview">
@@ -60,7 +68,7 @@ export default function MessagePreview({
 
       {messageType === "embed" ? (
         <div className="message-preview-embed">
-          {title && <div className="message-preview-embed-title">{title}</div>}
+          {styledTitle && <div className="message-preview-embed-title">{styledTitle}</div>}
           <div className="message-preview-embed-desc">{text || <span className="muted">No description set.</span>}</div>
         </div>
       ) : (
@@ -83,7 +91,7 @@ export default function MessagePreview({
           {sorted.length === 0 && <span className="muted">No buttons added yet.</span>}
           {sorted.map((m) => (
             <span className="message-preview-button" key={m.id}>
-              {emojiNode(m)} {resolveRoleLabel(m)}
+              {emojiNode(m)} {style(resolveRoleLabel(m))}
             </span>
           ))}
         </div>
@@ -95,8 +103,8 @@ export default function MessagePreview({
             {sorted.length === 0
               ? "No options added yet"
               : sorted.length === 1
-                ? resolveRoleLabel(sorted[0]!)
-                : `${resolveRoleLabel(sorted[0]!)} +${sorted.length - 1} more`}
+                ? style(resolveRoleLabel(sorted[0]!))
+                : `${style(resolveRoleLabel(sorted[0]!))} +${sorted.length - 1} more`}
           </span>
           <span>▾</span>
         </div>

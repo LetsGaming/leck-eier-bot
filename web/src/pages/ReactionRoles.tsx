@@ -102,6 +102,7 @@ export default function ReactionRoles() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [emojis, setEmojis] = useState<EmojiOption[]>([]);
+  const [fontMap, setFontMap] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const [form, setForm] = useState<PanelFormState>(emptyPanelForm());
   // Only meaningful while creating a new panel — both are fixed for the
@@ -117,12 +118,13 @@ export default function ReactionRoles() {
   const { showError, showSuccess } = useToast();
 
   function loadAll() {
-    Promise.all([api.panels(), api.channels(), api.roles(), api.emojis()])
-      .then(([p, c, r, e]) => {
+    Promise.all([api.panels(), api.channels(), api.roles(), api.emojis(), api.generalSettings()])
+      .then(([p, c, r, e, s]) => {
         setPanels(p);
         setChannels(c);
         setRoles(r);
         setEmojis(e);
+        setFontMap(s.fontMap);
       })
       .catch((err) => showError(errorMessage(err)));
   }
@@ -620,6 +622,8 @@ export default function ReactionRoles() {
                     description={form.description}
                     mappings={selected?.mappings ?? []}
                     resolveRoleLabel={(m) => m.label ?? roleName(m.roleId)}
+                    fontMap={fontMap}
+                    useFont={form.useFont}
                   />
                 </div>
               )}

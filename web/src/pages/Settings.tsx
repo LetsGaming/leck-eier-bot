@@ -2,18 +2,8 @@ import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
+import { applyFont, FONT_REFERENCE } from "../utils/font";
 import type { GeneralSettings, Me, RoleOption } from "../types";
-
-const FONT_REFERENCE = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz";
-
-/** Mirrors applyFont() in src/utils/font.ts, for the live preview below — spreads by code point so a supplementary-plane alphabet (e.g. Mathematical Bold) previews correctly instead of splitting a surrogate pair. */
-function applyFontPreview(text: string, fontMap: string): string {
-  const styled = [...fontMap];
-  if (styled.length !== FONT_REFERENCE.length) return text;
-  const table = new Map<string, string>();
-  [...FONT_REFERENCE].forEach((ch, i) => table.set(ch, styled[i]!));
-  return [...text].map((ch) => table.get(ch) ?? ch).join("");
-}
 
 export default function Settings({ me }: { me: Me }) {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
@@ -100,7 +90,7 @@ export default function Settings({ me }: { me: Me }) {
             {fontMap &&
               ([...fontMap].length === FONT_REFERENCE.length ? (
                 <div className="preview-box" style={{ marginTop: 8 }}>
-                  Preview: {applyFontPreview("The quick brown fox", fontMap)}
+                  Preview: {applyFont("The quick brown fox", fontMap)}
                 </div>
               ) : (
                 <div className="preview-box" style={{ marginTop: 8 }}>
