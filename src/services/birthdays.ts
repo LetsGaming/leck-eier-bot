@@ -6,6 +6,7 @@ import {
   replaceAllBirthdays,
 } from "../db/birthdaysRepository.js";
 import { getSettings, updateSettings } from "../db/settingsRepository.js";
+import { getAnchorMessageIds, setAnchorMessageIds } from "../db/birthdayAnchorMessagesRepository.js";
 import { applyFont } from "../utils/font.js";
 import type { BirthdayEntry, BirthdaysByDate } from "../types.js";
 import {
@@ -13,6 +14,7 @@ import {
   BIRTHDAY_LIST_SCAN_LIMIT,
   DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE,
   DISCORD_FETCH_PAGE_SIZE,
+  DISCORD_MESSAGE_MAX_LENGTH,
   MEMBER_FETCH_DELAY_MS,
   MESSAGE_DELETE_DELAY_MS,
   SELF_BIRTHDAY_DATE_REGEX,
@@ -403,15 +405,24 @@ const MONTH_NAMES = [
 ];
 
 /**
- * Builds the full bot-managed anchor message content from the current
- * birthday list — grouped by calendar month (skipping months with no
- * entries), each rendered through `template`'s `{month}`/`{entries}`
- * placeholders. `{month}` is passed through `applyFont()` first; `{entries}`
- * deliberately never is, so mentions and dates always render literally no
- * matter what font is configured. Pure function of its arguments — never
- * touches Discord itself; see `syncAnchorMessage()` for that part.
+ * Builds the bot-managed anchor message's content as an ordered list of
+ * independent parts — the intro (if any) followed by one block per calendar
+ * month that has entries — instead of one joined string, so
+ * `paginateAnchorParts()` below can pack them across multiple Discord
+ * messages without ever splitting in the middle of a month. Each month is
+ * rendered through `template`'s `{month}`/`{entries}` placeholders;
+ * `{month}` is passed through `applyFont()` first, `{entries}` deliberately
+ * never is, so mentions and dates always render literally no matter what
+ * font is configured. `intro` is also always plain text, never styled.
+ * Pure function of its arguments — never touches Discord itself; see
+ * `syncAnchorMessage()` for that part.
  */
-export function renderAnchorMessage(entries: BirthdaysByDate, template: string, fontMap: string | null): string {
+export function buildAnchorParts(
+  entries: BirthdaysByDate,
+  template: string,
+  fontMap: string | null,
+  intro: string | null,
+): string[] {
   const byMonth = new Map<number, Array<{ dateKey: string; day: number; list: BirthdayEntry[] }>>();
   for (const [dateKey, list] of Object.entries(entries)) {
     const [dd, mm] = dateKey.split(".").map((x) => parseInt(x, 10));
@@ -438,7 +449,56 @@ export function renderAnchorMessage(entries: BirthdaysByDate, template: string, 
     );
   }
 
-  return blocks.length > 0 ? blocks.join("\n\n") : "_No birthdays registered yet._";
+  if (blocks.length === 0) blocks.push("_No birthdays registered yet._");
+  return intro ? [intro, ...blocks] : blocks;
+}
+
+/** Splits `part` into `maxLen`-sized pieces at line boundaries — the fallback for a single part too big to fit in one Discord message on its own. Only reached in extreme cases (e.g. one date shared by an enormous number of members). */
+function splitOversizedPart(part: string, maxLen: number): string[] {
+  const lines = part.split("\n");
+  const pieces: string[] = [];
+  let current = "";
+  for (const line of lines) {
+    // A single line longer than maxLen on its own is a last resort — hard-cut it
+    // rather than let it break pagination entirely.
+    const piece = line.length > maxLen ? line.slice(0, maxLen) : line;
+    const candidate = current ? `${current}\n${piece}` : piece;
+    if (candidate.length > maxLen && current) {
+      pieces.push(current);
+      current = piece;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) pieces.push(current);
+  return pieces;
+}
+
+/**
+ * Greedily packs `parts` (see `buildAnchorParts()`) into as few
+ * `maxLen`-character chunks as possible, joining consecutive parts with a
+ * blank line — so the intro rides along with as many month blocks as fit on
+ * the first message, and a month never gets split across two messages
+ * unless it's too large to fit in one on its own. Pure function; always
+ * returns at least one chunk.
+ */
+export function paginateAnchorParts(parts: string[], maxLen: number): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  for (const rawPart of parts) {
+    const pieces = rawPart.length > maxLen ? splitOversizedPart(rawPart, maxLen) : [rawPart];
+    for (const part of pieces) {
+      const candidate = current ? `${current}\n\n${part}` : part;
+      if (candidate.length > maxLen && current) {
+        chunks.push(current);
+        current = part;
+      } else {
+        current = candidate;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length > 0 ? chunks : [""];
 }
 
 /**
@@ -447,6 +507,12 @@ export function renderAnchorMessage(entries: BirthdaysByDate, template: string, 
  * once at startup, so the message always reflects the current birthday
  * list. A no-op unless `birthdayBotManagesAnchor` is on, so call sites don't
  * need to duplicate that check.
+ *
+ * The list can outgrow a single Discord message (2000-char cap), so it's
+ * paginated across a *chain* of messages tracked in
+ * `birthday_anchor_messages` (see birthdayAnchorMessagesRepository.ts):
+ * each existing message in the chain is edited in place; new messages are
+ * appended if the list grew; trailing messages are deleted if it shrank.
  */
 export async function syncAnchorMessage(client: Client): Promise<void> {
   const settings = getSettings();
@@ -456,11 +522,13 @@ export async function syncAnchorMessage(client: Client): Promise<void> {
     return;
   }
 
-  const content = renderAnchorMessage(
+  const parts = buildAnchorParts(
     getAllBirthdaysByDate(),
     settings.birthdayAnchorTemplate,
     settings.birthdayAnchorUseFont ? settings.fontMap : null,
+    settings.birthdayAnchorIntro,
   );
+  const chunks = paginateAnchorParts(parts, DISCORD_MESSAGE_MAX_LENGTH);
 
   try {
     const channel = await client.channels.fetch(settings.birthdayListChannelId);
@@ -471,20 +539,41 @@ export async function syncAnchorMessage(client: Client): Promise<void> {
       return;
     }
 
-    if (settings.birthdayListMessageId) {
+    const existingIds = getAnchorMessageIds();
+    const finalIds: string[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const existingId = existingIds[i];
+      if (existingId) {
+        try {
+          const message = await channel.messages.fetch(existingId);
+          await message.edit(chunks[i]!);
+          finalIds.push(existingId);
+          continue;
+        } catch (err) {
+          logger.warn(
+            `Bot-managed birthday anchor: couldn't edit chunk ${i} (${errorMessage(err)}) — posting a new one.`,
+          );
+        }
+      }
+      const posted = await channel.send(chunks[i]!);
+      finalIds.push(posted.id);
+    }
+
+    for (let i = chunks.length; i < existingIds.length; i++) {
       try {
-        const message = await channel.messages.fetch(settings.birthdayListMessageId);
-        await message.edit(content);
-        return;
+        const message = await channel.messages.fetch(existingIds[i]!);
+        await message.delete();
       } catch (err) {
-        logger.warn(
-          `Bot-managed birthday anchor: couldn't edit the existing message (${errorMessage(err)}) — posting a new one.`,
-        );
+        logger.warn(`Bot-managed birthday anchor: couldn't delete leftover chunk ${i} (${errorMessage(err)}).`);
       }
     }
 
-    const posted = await channel.send(content);
-    updateSettings({ birthdayListMessageId: posted.id });
+    setAnchorMessageIds(finalIds);
+    // Kept in sync purely for the dashboard's "Regenerate" button gating and
+    // any legacy reader — the chain in birthday_anchor_messages is the real
+    // source of truth for editing/deleting.
+    updateSettings({ birthdayListMessageId: finalIds[0] ?? null });
   } catch (err) {
     logger.error(`Failed to sync the bot-managed birthday anchor message: ${errorMessage(err)}`);
   }

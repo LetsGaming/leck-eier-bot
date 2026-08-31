@@ -340,6 +340,39 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE settings ADD COLUMN registration_tier_role_id TEXT;
     `);
   },
+  // v16: a one-time note shown above all the month blocks in the bot-managed
+  // anchor message (e.g. "use /setmybirthday to register!") — distinct from
+  // birthday_anchor_template, which repeats per month. Always rendered
+  // plain (never through fontMap), and omitted entirely when unset.
+  (d) => {
+    d.exec(`ALTER TABLE settings ADD COLUMN birthday_anchor_intro TEXT;`);
+  },
+  // v17: the bot-managed anchor message can now span multiple Discord
+  // messages (each capped at DISCORD_MESSAGE_MAX_LENGTH) instead of
+  // silently failing to update once the full birthday list outgrows one —
+  // see paginateAnchorParts()/syncAnchorMessage() in services/birthdays.ts.
+  // `position` orders the chain; `birthday_list_message_id` on `settings`
+  // is left untouched (and untouched by this migration) since it's shared
+  // with the *other*, manually-maintained list mode — only seed this new
+  // table from it when bot-managed mode is actually the one that produced
+  // that message id, so an admin's manually-maintained message never gets
+  // mistaken for (and later edited/deleted as) a bot-owned anchor chunk.
+  (d) => {
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS birthday_anchor_messages (
+        position INTEGER PRIMARY KEY,
+        message_id TEXT NOT NULL
+      );
+    `);
+    const row = d
+      .prepare("SELECT birthday_list_message_id, birthday_bot_manages_anchor FROM settings WHERE id = 1")
+      .get() as { birthday_list_message_id: string | null; birthday_bot_manages_anchor: number } | undefined;
+    if (row?.birthday_bot_manages_anchor === 1 && row.birthday_list_message_id) {
+      d.prepare("INSERT INTO birthday_anchor_messages (position, message_id) VALUES (0, ?)").run(
+        row.birthday_list_message_id,
+      );
+    }
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

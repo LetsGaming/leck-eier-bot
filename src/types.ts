@@ -46,6 +46,8 @@ export interface Settings {
   birthdayBotManagesAnchor: boolean;
   /** Per-month heading template for the bot-managed anchor message — `{month}` and `{entries}` placeholders. See DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE. */
   birthdayAnchorTemplate: string;
+  /** Shown once above all the month blocks in the bot-managed anchor message (e.g. how to register a birthday) — unlike birthdayAnchorTemplate, never repeated and never rendered through fontMap. Null = no intro shown. */
+  birthdayAnchorIntro: string | null;
   /**
    * Pasted 52-character stylized alphabet (matching FONT_REFERENCE in
    * utils/font.ts position for position) — set once from the dashboard's

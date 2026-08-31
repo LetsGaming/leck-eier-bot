@@ -12,6 +12,7 @@ interface SettingsRow {
   birthday_self_registration_enabled: 0 | 1;
   birthday_bot_manages_anchor: 0 | 1;
   birthday_anchor_template: string;
+  birthday_anchor_intro: string | null;
   font_map: string | null;
   birthday_anchor_use_font: 0 | 1;
   birthday_announcement_use_font: 0 | 1;
@@ -31,6 +32,7 @@ function rowToSettings(row: SettingsRow): Settings {
     birthdaySelfRegistrationEnabled: row.birthday_self_registration_enabled === 1,
     birthdayBotManagesAnchor: row.birthday_bot_manages_anchor === 1,
     birthdayAnchorTemplate: row.birthday_anchor_template,
+    birthdayAnchorIntro: row.birthday_anchor_intro,
     fontMap: row.font_map,
     birthdayAnchorUseFont: row.birthday_anchor_use_font === 1,
     birthdayAnnouncementUseFont: row.birthday_announcement_use_font === 1,
@@ -44,7 +46,7 @@ const selectStmt = db.prepare<[], SettingsRow>(
   `SELECT birthday_template, first_birthday_message_id, birthday_list_channel_id,
           birthday_list_message_id, birthday_cron, birthday_mod_channel_id,
           birthday_self_registration_enabled, birthday_bot_manages_anchor,
-          birthday_anchor_template, font_map, birthday_anchor_use_font,
+          birthday_anchor_template, birthday_anchor_intro, font_map, birthday_anchor_use_font,
           birthday_announcement_use_font, leave_notifications_enabled,
           register_gate_role_id, registration_tier_role_id
    FROM settings WHERE id = 1`,
@@ -59,6 +61,7 @@ const updateStmt = db.prepare<{
   birthdaySelfRegistrationEnabled: 0 | 1;
   birthdayBotManagesAnchor: 0 | 1;
   birthdayAnchorTemplate: string;
+  birthdayAnchorIntro: string | null;
   fontMap: string | null;
   birthdayAnchorUseFont: 0 | 1;
   birthdayAnnouncementUseFont: 0 | 1;
@@ -76,6 +79,7 @@ const updateStmt = db.prepare<{
      birthday_self_registration_enabled = @birthdaySelfRegistrationEnabled,
      birthday_bot_manages_anchor = @birthdayBotManagesAnchor,
      birthday_anchor_template = @birthdayAnchorTemplate,
+     birthday_anchor_intro = @birthdayAnchorIntro,
      font_map = @fontMap,
      birthday_anchor_use_font = @birthdayAnchorUseFont,
      birthday_announcement_use_font = @birthdayAnnouncementUseFont,
@@ -103,6 +107,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     birthdaySelfRegistrationEnabled: next.birthdaySelfRegistrationEnabled ? 1 : 0,
     birthdayBotManagesAnchor: next.birthdayBotManagesAnchor ? 1 : 0,
     birthdayAnchorTemplate: next.birthdayAnchorTemplate,
+    birthdayAnchorIntro: next.birthdayAnchorIntro,
     fontMap: next.fontMap,
     birthdayAnchorUseFont: next.birthdayAnchorUseFont ? 1 : 0,
     birthdayAnnouncementUseFont: next.birthdayAnnouncementUseFont ? 1 : 0,

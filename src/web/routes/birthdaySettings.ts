@@ -20,6 +20,7 @@ const PatchBodySchema = z.object({
   selfRegistrationEnabled: z.boolean().optional(),
   botManagesAnchor: z.boolean().optional(),
   anchorTemplate: z.string().min(1).max(500).optional(),
+  anchorIntro: z.string().max(500).nullable().optional(),
   anchorUseFont: z.boolean().optional(),
   announcementUseFont: z.boolean().optional(),
 });
@@ -38,6 +39,7 @@ function serializeBirthdaySettings(settings: ReturnType<typeof getSettings>) {
     selfRegistrationEnabled: settings.birthdaySelfRegistrationEnabled,
     botManagesAnchor: settings.birthdayBotManagesAnchor,
     anchorTemplate: settings.birthdayAnchorTemplate,
+    anchorIntro: settings.birthdayAnchorIntro,
     anchorUseFont: settings.birthdayAnchorUseFont,
     announcementUseFont: settings.birthdayAnnouncementUseFont,
   };
@@ -59,6 +61,7 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
       selfRegistrationEnabled,
       botManagesAnchor,
       anchorTemplate,
+      anchorIntro,
       anchorUseFont,
       announcementUseFont,
     } = body.data;
@@ -96,6 +99,7 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
       ...(selfRegistrationEnabled !== undefined && { birthdaySelfRegistrationEnabled: selfRegistrationEnabled }),
       ...(botManagesAnchor !== undefined && { birthdayBotManagesAnchor: botManagesAnchor }),
       ...(anchorTemplate !== undefined && { birthdayAnchorTemplate: anchorTemplate }),
+      ...(anchorIntro !== undefined && { birthdayAnchorIntro: anchorIntro || null }),
       ...(anchorUseFont !== undefined && { birthdayAnchorUseFont: anchorUseFont }),
       ...(announcementUseFont !== undefined && { birthdayAnnouncementUseFont: announcementUseFont }),
     });

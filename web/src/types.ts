@@ -116,6 +116,8 @@ export interface BirthdaySettings {
   botManagesAnchor: boolean;
   /** `{month}`/`{entries}` placeholder template for each month's heading in the bot-managed anchor message. */
   anchorTemplate: string;
+  /** Shown once above all the month blocks (e.g. how to register a birthday) — never repeated, never font-styled. Null = no intro shown. */
+  anchorIntro: string | null;
   /** Whether the anchor message's `{month}` heading renders through the global font set on the Settings page. */
   anchorUseFont: boolean;
   /** Whether the daily birthday announcement message renders through the global font set on the Settings page. */

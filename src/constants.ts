@@ -55,6 +55,8 @@ export const SELF_BIRTHDAY_MESSAGE_MAX_LENGTH = 50;
 // --- Bot-managed birthday anchor message ---
 /** `{month}` is the (optionally font-styled — see utils/font.ts) month name; `{entries}` is the marker-formatted date/mention lines for that month — see `renderAnchorMessage()`. */
 export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
+/** Discord's hard cap on a message's `content` length — the anchor message is paginated across multiple messages once the full list exceeds this. See `paginateAnchorParts()`. */
+export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 
 // --- Reaction roles ---
 /**

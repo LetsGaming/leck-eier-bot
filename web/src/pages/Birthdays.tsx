@@ -26,6 +26,7 @@ export default function Birthdays() {
   const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(true);
   const [botManagesAnchor, setBotManagesAnchor] = useState(false);
   const [anchorTemplate, setAnchorTemplate] = useState("");
+  const [anchorIntro, setAnchorIntro] = useState("");
   const [anchorUseFont, setAnchorUseFont] = useState(false);
   const [announcementUseFont, setAnnouncementUseFont] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export default function Birthdays() {
         setSelfRegistrationEnabled(s.selfRegistrationEnabled);
         setBotManagesAnchor(s.botManagesAnchor);
         setAnchorTemplate(s.anchorTemplate);
+        setAnchorIntro(s.anchorIntro ?? "");
         setAnchorUseFont(s.anchorUseFont);
         setAnnouncementUseFont(s.announcementUseFont);
         setChannels(c);
@@ -76,6 +78,7 @@ export default function Birthdays() {
         selfRegistrationEnabled,
         botManagesAnchor,
         anchorTemplate,
+        anchorIntro: anchorIntro || null,
         anchorUseFont,
         announcementUseFont,
       });
@@ -237,6 +240,20 @@ export default function Birthdays() {
               options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
             />
             <div className="hint">Where the bot posts a heads-up whenever someone registers. Optional.</div>
+          </div>
+          <div className="field">
+            <label htmlFor="anchorIntro">Intro note</label>
+            <textarea
+              id="anchorIntro"
+              value={anchorIntro}
+              onChange={(e) => setAnchorIntro(e.target.value)}
+              disabled={!selfRegistrationEnabled}
+              placeholder="e.g. Use /setmybirthday or post your date here to register!"
+            />
+            <div className="hint">
+              Shown once above all the months — unlike the template below, never repeated and never font-styled.
+              Leave blank to show nothing.
+            </div>
           </div>
           <div className="field">
             <label htmlFor="anchorTemplate">Month heading template</label>
