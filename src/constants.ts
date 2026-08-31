@@ -7,7 +7,6 @@
 // --- Discord API ---
 export const DISCORD_API_VERSION = "10";
 export const DISCORD_FETCH_PAGE_SIZE = 100;
-export const BIRTHDAY_LIST_SCAN_LIMIT = 50;
 export const FIND_USER_RESULT_LIMIT = 15;
 /** Cap on the dashboard's Find User page when listing everyone (no search query yet) — a real search is still capped at FIND_USER_RESULT_LIMIT. */
 export const FIND_USER_LIST_LIMIT = 500;
@@ -53,7 +52,7 @@ export const SELF_BIRTHDAY_DATE_REGEX = /\b(\d{1,2})[.\/-](\d{1,2})\.?(?:[.\/-]\
 export const SELF_BIRTHDAY_MESSAGE_MAX_LENGTH = 50;
 
 // --- Bot-managed birthday anchor message ---
-/** `{month}` is the (optionally font-styled — see utils/font.ts) month name; `{entries}` is the marker-formatted date/mention lines for that month — see `renderAnchorMessage()`. */
+/** `{month}` is the (optionally font-styled — see utils/font.ts) month name; `{entries}` is the marker-formatted date/mention lines for that month — see `buildAnchorParts()`. */
 export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
 /** Discord's hard cap on a message's `content` length — the anchor message is paginated across multiple messages once the full list exceeds this. See `paginateAnchorParts()`. */
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
@@ -99,7 +98,6 @@ export enum CommandPermission {
 export enum CommandName {
   CheckBirthday = "checkbirthday",
   ClearBirthdayChannel = "clearbirthdaychannel",
-  RefreshBirthdays = "refreshbirthdays",
   SetBirthdayMessage = "setbirthdaymessage",
   TestBirthdayMessage = "testbirthdaymessage",
   SetMyBirthday = "setmybirthday",

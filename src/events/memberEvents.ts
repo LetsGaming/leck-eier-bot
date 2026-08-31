@@ -10,6 +10,7 @@ import {
   recordMemberProfileUpdate,
   recordRulesAcceptedIfJustVerified,
 } from "../services/memberRecords.js";
+import { removeBirthdayOnMemberLeave } from "../services/birthdays.js";
 import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -84,6 +85,15 @@ export default function registerMemberEvents(client: BotClient): void {
     // 2. Now remove from local cache
     removeCacheMember(member.id);
     recordMemberLeave(user.id, user.username, knownAs, cachedMember?.user.avatar ?? user.avatar ?? null);
+
+    // A departed member's birthday entry (list or self-registered) has to
+    // go too, from both the DB and the rendered anchor message — same
+    // handling regardless of whether they left voluntarily, were kicked, or
+    // were banned, so this runs unconditionally rather than inside the
+    // audit-log-dependent branch below.
+    removeBirthdayOnMemberLeave(client, user.id).catch((err) =>
+      logger.error(`Failed to remove departed member ${user.id}'s birthday entry: ${errorMessage(err)}`),
+    );
 
     try {
       // 3. Wait for Audit Logs to sync

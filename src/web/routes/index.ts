@@ -5,7 +5,7 @@ import { registerDiscordDataRoutes } from "./discordData.js";
 import { registerMemberAuditRoutes } from "./memberAudit.js";
 import { registerReactionRolePanelRoutes } from "./reactionRolePanels.js";
 import { registerBirthdaySettingsRoutes } from "./birthdaySettings.js";
-import { registerBirthdaysReadonlyRoutes } from "./birthdaysReadonly.js";
+import { registerBirthdaysRoutes } from "./birthdays.js";
 import { registerCommandRoutes } from "./commands.js";
 import { registerGeneralSettingsRoutes } from "./generalSettings.js";
 import type { BotClient, Config } from "../../types.js";
@@ -24,7 +24,7 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       registerMemberAuditRoutes(api);
       registerReactionRolePanelRoutes(api, client);
       registerBirthdaySettingsRoutes(api, client);
-      registerBirthdaysReadonlyRoutes(api);
+      registerBirthdaysRoutes(api, client);
       registerCommandRoutes(api, client, config);
       registerGeneralSettingsRoutes(api);
     },

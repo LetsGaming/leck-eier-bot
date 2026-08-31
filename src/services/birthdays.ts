@@ -1,159 +1,25 @@
-import type { Client, Collection, GuildMember, Message } from "discord.js";
+import type { Client, Collection, Message, TextBasedChannel } from "discord.js";
 import logger, { errorMessage } from "../utils/logger.js";
-import {
-  getAllBirthdaysByDate,
-  getBirthdaysForDate,
-  replaceAllBirthdays,
-} from "../db/birthdaysRepository.js";
+import { deleteBirthdaysForUser, getAllBirthdaysByDate, getBirthdaysForDate } from "../db/birthdaysRepository.js";
 import { getSettings, updateSettings } from "../db/settingsRepository.js";
-import { getAnchorMessageIds, setAnchorMessageIds } from "../db/birthdayAnchorMessagesRepository.js";
+import {
+  getAnchorMessageChunks,
+  setAnchorMessageChunks,
+  type AnchorMessageChunk,
+} from "../db/birthdayAnchorMessagesRepository.js";
 import { applyFont } from "../utils/font.js";
-import type { BirthdayEntry, BirthdaysByDate } from "../types.js";
+import type { BirthdayEntry } from "../types.js";
 import {
   BIRTHDAY_LIST_MARKER,
-  BIRTHDAY_LIST_SCAN_LIMIT,
   DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE,
   DISCORD_FETCH_PAGE_SIZE,
   DISCORD_MESSAGE_MAX_LENGTH,
-  MEMBER_FETCH_DELAY_MS,
   MESSAGE_DELETE_DELAY_MS,
   SELF_BIRTHDAY_DATE_REGEX,
 } from "../constants.js";
 
-const blockRegex = new RegExp(`${BIRTHDAY_LIST_MARKER}\\s*(\\d{2}\\.\\d{2})\\s*:\\s*([^\\n⎯]+)`, "g");
-const personRegex = /^\s*(<@!?\d+>|@[^,—–-]+?)(?:\s*[—–-]\s*(.+?))?\s*$/u;
-
-export function parseBirthdayMessage(text: string): BirthdaysByDate {
-  const result: BirthdaysByDate = {};
-  let m: RegExpExecArray | null;
-  while ((m = blockRegex.exec(text)) !== null) {
-    const date = m[1]!;
-    const rest = m[2]!.trim();
-    const people = rest
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    for (const p of people) {
-      const pm = p.match(personRegex);
-      if (!pm) {
-        const fallback = p.match(/(<@!?\d+>)|(@\S+)/);
-        if (fallback) {
-          const mention = fallback[0];
-          const name =
-            p
-              .replace(mention, "")
-              .replace(/^[^\wÀ-ſ]+/, "")
-              .trim() || null;
-          result[date] = result[date] || [];
-          result[date]!.push({
-            mention,
-            userId: extractIdFromMention(mention),
-            name,
-            source: "list",
-          });
-        }
-        continue;
-      }
-      const mention = pm[1]!.trim();
-      let name: string | null = pm[2] ? pm[2].trim() : null;
-      const userId = extractIdFromMention(mention);
-      if (name === "") name = null;
-      result[date] = result[date] || [];
-      result[date]!.push({ mention, userId, name, source: "list" });
-    }
-  }
-  return result;
-}
-
-function extractIdFromMention(mention: string): string | null {
-  const m = mention.match(/^<@!?(\d+)>$/);
-  return m ? m[1]! : null;
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function resolveParsedBirthdaysWithDiscord(
-  client: Client,
-  parsed: BirthdaysByDate,
-  guildId: string,
-): Promise<BirthdaysByDate> {
-  const out: BirthdaysByDate = {};
-  const allIds = new Set<string>();
-  for (const entries of Object.values(parsed)) {
-    for (const e of entries) {
-      if (e.userId) allIds.add(e.userId);
-    }
-  }
-
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) throw new Error(`Guild ${guildId} not found`);
-  const fetchedMembers = new Map<string, GuildMember | null>();
-
-  for (const id of allIds) {
-    let member: GuildMember | null = null;
-    try {
-      member = await guild.members.fetch(id);
-    } catch {
-      member = null;
-    }
-    fetchedMembers.set(id, member);
-    await sleep(MEMBER_FETCH_DELAY_MS);
-  }
-
-  for (const [date, entries] of Object.entries(parsed)) {
-    out[date] = [];
-    for (const entry of entries) {
-      const member = entry.userId ? fetchedMembers.get(entry.userId) ?? null : null;
-      const name = member
-        ? member.displayName || member.user.globalName || member.user.username
-        : entry.name;
-      out[date]!.push({ ...entry, name });
-    }
-  }
-  return out;
-}
-
-export async function updateBirthdayListFromMessage(
-  client: Client,
-  channelId: string,
-  messageId: string,
-): Promise<BirthdaysByDate | undefined> {
-  const channel = await client.channels.fetch(channelId);
-  if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
-
-  const anchorMessage = await channel.messages.fetch(messageId);
-  const authorId = anchorMessage.author.id;
-  const subsequentMessages = await channel.messages.fetch({
-    after: messageId,
-    limit: BIRTHDAY_LIST_SCAN_LIMIT,
-  });
-
-  let fullContent = anchorMessage.content;
-  const sortedMessages = [...subsequentMessages.values()].sort(
-    (a, b) => a.createdTimestamp - b.createdTimestamp,
-  );
-
-  for (const msg of sortedMessages) {
-    // Only continue the chain if the message contains the list identifier
-    if (msg.author.id === authorId && msg.content.includes(BIRTHDAY_LIST_MARKER)) {
-      fullContent += "\n" + msg.content;
-    } else if (msg.author.id === authorId) {
-      // Stop as soon as the list author sends a message that isn't part of the list
-      break;
-    }
-  }
-
-  const parsed = parseBirthdayMessage(fullContent);
-  const resolved = await resolveParsedBirthdaysWithDiscord(
-    client,
-    parsed,
-    channel.guild.id,
-  );
-  replaceAllBirthdays(resolved);
-  return resolved;
 }
 
 function todayDateKey(): string {
@@ -201,7 +67,7 @@ export function getUpcomingBirthdays(): UpcomingBirthday[] {
  * re-deriving this there: round-tripping a Date through JSON and
  * re-interpreting it in a *different* timezone (the browser's) than the
  * one that computed it (the server's) can land on the wrong calendar day
- * entirely — see the API route in src/web/routes/birthdaysReadonly.ts.
+ * entirely — see the API route in src/web/routes/birthdays.ts.
  */
 export function daysUntil(date: Date): number {
   const now = new Date();
@@ -258,10 +124,20 @@ export async function sendBirthdayMessages(
   }
 }
 
+/**
+ * Sweeps `channelId` back to (and including) `settings.firstBirthdayMessageId`,
+ * deleting everything except messages in `protectedIds` — used by the nightly
+ * cleanup and `/clearbirthdaychannel` before/instead of posting that day's
+ * announcements. `protectedIds` must include every message in the current
+ * bot-managed anchor chain (see `getAnchorProtectedMessageIds()`) — the
+ * announcement channel and the anchor channel are typically the same
+ * channel, so without this every anchor chunk past the first would get
+ * swept up and deleted right along with yesterday's announcements.
+ */
 export async function deleteBirthdayMessages(
   client: Client,
   channelId: string,
-  birthdayListMessageId: string,
+  protectedIds: Set<string>,
 ): Promise<number> {
   const settings = getSettings();
   const firstId = settings.firstBirthdayMessageId;
@@ -287,7 +163,7 @@ export async function deleteBirthdayMessages(
     for (const msg of messages.values()) {
       seen.add(msg.id);
       if (msg.id === firstId) {
-        if (msg.id !== birthdayListMessageId) {
+        if (!protectedIds.has(msg.id)) {
           try {
             await msg.delete();
             deletedCount++;
@@ -298,7 +174,7 @@ export async function deleteBirthdayMessages(
         reachedFirst = true;
         break;
       }
-      if (msg.id === birthdayListMessageId) continue;
+      if (protectedIds.has(msg.id)) continue;
       try {
         await msg.delete();
         deletedCount++;
@@ -317,24 +193,31 @@ export async function deleteBirthdayMessages(
   return deletedCount;
 }
 
+/**
+ * Removes a departed member's birthday entry (whether admin-added or
+ * self-registered — a leave doesn't care which) from the DB and, if
+ * anything was actually removed, re-renders the anchor message so they
+ * disappear from it too. Called from `guildMemberRemove` regardless of
+ * whether the member left voluntarily, was kicked, or was banned.
+ */
+export async function removeBirthdayOnMemberLeave(client: Client, userId: string): Promise<void> {
+  const removed = deleteBirthdaysForUser(userId);
+  if (removed === 0) return;
+  logger.info(`Removed departed member ${userId}'s birthday entry.`);
+  await syncAnchorMessage(client);
+}
+
+/** Every message id currently in the bot-managed anchor chain — pass to `deleteBirthdayMessages()` as `protectedIds` so the daily cleanup never sweeps up an anchor chunk. */
+export function getAnchorProtectedMessageIds(): Set<string> {
+  return new Set(getAnchorMessageChunks().map((c) => c.messageId));
+}
+
 export function getCurrentTemplate(): string {
   return getSettings().birthdayTemplate;
 }
 
 export function setCurrentTemplate(newTemplate: string): void {
   updateSettings({ birthdayTemplate: newTemplate });
-}
-
-/**
- * Channel/message id of the manually-maintained birthday announcement list,
- * configured via the dashboard. Returns null on a fresh install until an
- * admin sets it, so every call site must handle the unconfigured case
- * explicitly rather than assuming it's always present.
- */
-export function getBirthdayListLocation(): { channelId: string; messageId: string } | null {
-  const { birthdayListChannelId, birthdayListMessageId } = getSettings();
-  if (!birthdayListChannelId || !birthdayListMessageId) return null;
-  return { channelId: birthdayListChannelId, messageId: birthdayListMessageId };
 }
 
 /** Also used by `/setmybirthday` to validate its day/month options before storing them. */
@@ -352,8 +235,7 @@ export function toDateKey(day: number, month: number): string {
 /**
  * Pulls a `DD.MM`-shaped date out of free text, for the birthday-channel
  * auto-detector (see `events/birthdayWatcher.ts`) — a real registration is
- * just a member typing their birthday, not the structured
- * `BIRTHDAY_LIST_MARKER` format the admin-maintained list uses.
+ * just a member typing their birthday.
  */
 export function parseSelfRegistrationDate(text: string): string | null {
   const match = text.match(SELF_BIRTHDAY_DATE_REGEX);
@@ -404,12 +286,19 @@ const MONTH_NAMES = [
   "December",
 ];
 
+/** One independent piece of the bot-managed anchor message's content — either the intro, the "nothing registered yet" placeholder, or a single calendar month's block. `key` is stable across syncs (`"intro"`, `"empty"`, or the month number as a string) so `paginateAnchorParts()` can keep it pinned to the same chunk/message from one sync to the next. */
+export interface AnchorPart {
+  key: string;
+  text: string;
+}
+
 /**
  * Builds the bot-managed anchor message's content as an ordered list of
- * independent parts — the intro (if any) followed by one block per calendar
- * month that has entries — instead of one joined string, so
- * `paginateAnchorParts()` below can pack them across multiple Discord
- * messages without ever splitting in the middle of a month. Each month is
+ * independent, individually-keyed parts — the intro (if any) followed by
+ * one block per calendar month that has entries — instead of one joined
+ * string, so `paginateAnchorParts()` below can pack them across multiple
+ * Discord messages without ever splitting in the middle of a month, and can
+ * keep each month pinned to the same message across syncs. Each month is
  * rendered through `template`'s `{month}`/`{entries}` placeholders;
  * `{month}` is passed through `applyFont()` first, `{entries}` deliberately
  * never is, so mentions and dates always render literally no matter what
@@ -418,11 +307,11 @@ const MONTH_NAMES = [
  * `syncAnchorMessage()` for that part.
  */
 export function buildAnchorParts(
-  entries: BirthdaysByDate,
+  entries: ReturnType<typeof getAllBirthdaysByDate>,
   template: string,
   fontMap: string | null,
   intro: string | null,
-): string[] {
+): AnchorPart[] {
   const byMonth = new Map<number, Array<{ dateKey: string; day: number; list: BirthdayEntry[] }>>();
   for (const [dateKey, list] of Object.entries(entries)) {
     const [dd, mm] = dateKey.split(".").map((x) => parseInt(x, 10));
@@ -431,7 +320,7 @@ export function buildAnchorParts(
     byMonth.set(mm!, bucket);
   }
 
-  const blocks: string[] = [];
+  const monthParts: AnchorPart[] = [];
   for (let month = 1; month <= 12; month++) {
     const days = byMonth.get(month);
     if (!days || days.length === 0) continue;
@@ -442,15 +331,18 @@ export function buildAnchorParts(
       .join("\n");
     const monthHeading = applyFont(MONTH_NAMES[month - 1]!, fontMap);
 
-    blocks.push(
-      template.includes("{entries}")
+    monthParts.push({
+      key: String(month),
+      text: template.includes("{entries}")
         ? template.replace(/{month}/g, monthHeading).replace("{entries}", entryLines)
         : `${template.replace(/{month}/g, monthHeading)}\n${entryLines}`,
-    );
+    });
   }
 
-  if (blocks.length === 0) blocks.push("_No birthdays registered yet._");
-  return intro ? [intro, ...blocks] : blocks;
+  const parts: AnchorPart[] = [];
+  if (intro) parts.push({ key: "intro", text: intro });
+  parts.push(...(monthParts.length > 0 ? monthParts : [{ key: "empty", text: "_No birthdays registered yet._" }]));
+  return parts;
 }
 
 /** Splits `part` into `maxLen`-sized pieces at line boundaries — the fallback for a single part too big to fit in one Discord message on its own. Only reached in extreme cases (e.g. one date shared by an enormous number of members). */
@@ -474,53 +366,139 @@ function splitOversizedPart(part: string, maxLen: number): string[] {
   return pieces;
 }
 
+/** One packed Discord-message-worth of anchor content, plus which content keys (see `AnchorPart`) it carries — persisted as `AnchorMessageChunk.months` so the next sync's stability bias can read it back. */
+export interface AnchorChunk {
+  keys: string[];
+  text: string;
+}
+
 /**
  * Greedily packs `parts` (see `buildAnchorParts()`) into as few
  * `maxLen`-character chunks as possible, joining consecutive parts with a
- * blank line — so the intro rides along with as many month blocks as fit on
- * the first message, and a month never gets split across two messages
- * unless it's too large to fit in one on its own. Pure function; always
- * returns at least one chunk.
+ * blank line, so a month never gets split across two messages unless it's
+ * too large to fit in one on its own.
+ *
+ * `previousChunkOf` (key -> chunk index from the *previous* sync, see
+ * `syncAnchorMessage()`) biases the packing toward stability: a part is only
+ * merged into the chunk currently being built if that chunk is still
+ * "unclaimed" (empty, or its first part's previous chunk matches this
+ * part's) — so a month that already fits in its existing message stays
+ * there, and only the months that actually stop fitting spill forward into
+ * later messages. Without this, one added entry in an early month can
+ * reshuffle every later month into a different message on every sync, even
+ * though nothing about those months changed. Pure function; always returns
+ * at least one chunk (possibly empty, on a fresh install with no data).
  */
-export function paginateAnchorParts(parts: string[], maxLen: number): string[] {
-  const chunks: string[] = [];
-  let current = "";
+export function paginateAnchorParts(
+  parts: AnchorPart[],
+  maxLen: number,
+  previousChunkOf: Map<string, number> = new Map(),
+): AnchorChunk[] {
+  const chunks: AnchorChunk[] = [];
+  let currentParts: AnchorPart[] = [];
+  let currentGroup: number | undefined;
+
+  const flush = () => {
+    if (currentParts.length === 0) return;
+    chunks.push({ keys: currentParts.map((p) => p.key), text: currentParts.map((p) => p.text).join("\n\n") });
+    currentParts = [];
+    currentGroup = undefined;
+  };
+
   for (const rawPart of parts) {
-    const pieces = rawPart.length > maxLen ? splitOversizedPart(rawPart, maxLen) : [rawPart];
+    const pieces =
+      rawPart.text.length > maxLen
+        ? splitOversizedPart(rawPart.text, maxLen).map((text) => ({ key: rawPart.key, text }))
+        : [rawPart];
+
     for (const part of pieces) {
-      const candidate = current ? `${current}\n\n${part}` : part;
-      if (candidate.length > maxLen && current) {
-        chunks.push(current);
-        current = part;
+      const group = previousChunkOf.get(part.key);
+      const candidateText = currentParts.length
+        ? `${currentParts.map((p) => p.text).join("\n\n")}\n\n${part.text}`
+        : part.text;
+      const fits = candidateText.length <= maxLen;
+      const sameGroup = currentGroup === undefined || group === undefined || group === currentGroup;
+
+      if (currentParts.length > 0 && fits && sameGroup) {
+        currentParts.push(part);
       } else {
-        current = candidate;
+        flush();
+        currentParts.push(part);
+        currentGroup = group;
       }
     }
   }
-  if (current) chunks.push(current);
-  return chunks.length > 0 ? chunks : [""];
+  flush();
+  return chunks.length > 0 ? chunks : [{ keys: [], text: "" }];
+}
+
+/**
+ * Keeps the anchor chain visually contiguous: deletes anything in `channel`
+ * that landed between the first and last message of the chain and isn't
+ * itself one of `chunkIds` — e.g. a daily announcement that got posted
+ * after the last sync, between two already-existing anchor chunks. Only
+ * called from `syncAnchorMessage()` once the chain has more than one
+ * message. Best-effort — a message it can't delete (e.g. too old) is
+ * logged and skipped rather than aborting the rest.
+ */
+async function closeAnchorChainGaps(channel: TextBasedChannel, chunkIds: string[]): Promise<void> {
+  const chunkIdSet = new Set(chunkIds);
+  const lastId = chunkIds[chunkIds.length - 1]!;
+
+  let afterId = chunkIds[0]!;
+  while (true) {
+    const messages = await channel.messages.fetch({ after: afterId, limit: DISCORD_FETCH_PAGE_SIZE });
+    if (messages.size === 0) break;
+
+    const sorted = [...messages.values()].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+    let reachedLast = false;
+    for (const msg of sorted) {
+      if (msg.id === lastId || BigInt(msg.id) >= BigInt(lastId)) {
+        reachedLast = true;
+        break;
+      }
+      if (!chunkIdSet.has(msg.id)) {
+        try {
+          await msg.delete();
+        } catch (err) {
+          logger.warn(`Bot-managed birthday anchor: couldn't delete a message between chunks (${errorMessage(err)}).`);
+        }
+        await sleep(MESSAGE_DELETE_DELAY_MS);
+      }
+    }
+    afterId = sorted[sorted.length - 1]!.id;
+    if (reachedLast) break;
+  }
 }
 
 /**
  * Posts the bot-managed anchor message for the first time, or edits it in
- * place on every call after — called after every self-registration and
- * once at startup, so the message always reflects the current birthday
- * list. A no-op unless `birthdayBotManagesAnchor` is on, so call sites don't
- * need to duplicate that check.
+ * place on every call after — called after every self-registration/dashboard
+ * edit and once at startup, so the message always reflects the current
+ * birthday list.
  *
  * The list can outgrow a single Discord message (2000-char cap), so it's
  * paginated across a *chain* of messages tracked in
- * `birthday_anchor_messages` (see birthdayAnchorMessagesRepository.ts):
- * each existing message in the chain is edited in place; new messages are
+ * `birthday_anchor_messages` (see birthdayAnchorMessagesRepository.ts): each
+ * existing message in the chain is edited in place; new messages are
  * appended if the list grew; trailing messages are deleted if it shrank.
+ * `paginateAnchorParts()`'s stability bias keeps each month pinned to the
+ * chunk it was already in wherever possible, so an edit elsewhere in the
+ * list doesn't needlessly reshuffle which message shows which month. Once
+ * synced, `closeAnchorChainGaps()` removes anything that landed between
+ * chunks since the last sync, so the chain always reads as one unbroken
+ * block.
  */
 export async function syncAnchorMessage(client: Client): Promise<void> {
   const settings = getSettings();
-  if (!settings.birthdayBotManagesAnchor) return;
   if (!settings.birthdayListChannelId) {
     logger.warn("Bot-managed birthday anchor is enabled but no channel is configured yet — skipping.");
     return;
   }
+
+  const existingChunks = getAnchorMessageChunks();
+  const previousChunkOf = new Map<string, number>();
+  existingChunks.forEach((chunk, idx) => chunk.months.forEach((key) => previousChunkOf.set(key, idx)));
 
   const parts = buildAnchorParts(
     getAllBirthdaysByDate(),
@@ -528,7 +506,7 @@ export async function syncAnchorMessage(client: Client): Promise<void> {
     settings.birthdayAnchorUseFont ? settings.fontMap : null,
     settings.birthdayAnchorIntro,
   );
-  const chunks = paginateAnchorParts(parts, DISCORD_MESSAGE_MAX_LENGTH);
+  const chunks = paginateAnchorParts(parts, DISCORD_MESSAGE_MAX_LENGTH, previousChunkOf);
 
   try {
     const channel = await client.channels.fetch(settings.birthdayListChannelId);
@@ -539,16 +517,15 @@ export async function syncAnchorMessage(client: Client): Promise<void> {
       return;
     }
 
-    const existingIds = getAnchorMessageIds();
-    const finalIds: string[] = [];
+    const finalChunks: AnchorMessageChunk[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      const existingId = existingIds[i];
-      if (existingId) {
+      const existing = existingChunks[i];
+      if (existing) {
         try {
-          const message = await channel.messages.fetch(existingId);
-          await message.edit(chunks[i]!);
-          finalIds.push(existingId);
+          const message = await channel.messages.fetch(existing.messageId);
+          await message.edit(chunks[i]!.text);
+          finalChunks.push({ messageId: existing.messageId, months: chunks[i]!.keys });
           continue;
         } catch (err) {
           logger.warn(
@@ -556,24 +533,24 @@ export async function syncAnchorMessage(client: Client): Promise<void> {
           );
         }
       }
-      const posted = await channel.send(chunks[i]!);
-      finalIds.push(posted.id);
+      const posted = await channel.send(chunks[i]!.text);
+      finalChunks.push({ messageId: posted.id, months: chunks[i]!.keys });
     }
 
-    for (let i = chunks.length; i < existingIds.length; i++) {
+    for (let i = chunks.length; i < existingChunks.length; i++) {
       try {
-        const message = await channel.messages.fetch(existingIds[i]!);
+        const message = await channel.messages.fetch(existingChunks[i]!.messageId);
         await message.delete();
       } catch (err) {
         logger.warn(`Bot-managed birthday anchor: couldn't delete leftover chunk ${i} (${errorMessage(err)}).`);
       }
     }
 
-    setAnchorMessageIds(finalIds);
-    // Kept in sync purely for the dashboard's "Regenerate" button gating and
-    // any legacy reader — the chain in birthday_anchor_messages is the real
-    // source of truth for editing/deleting.
-    updateSettings({ birthdayListMessageId: finalIds[0] ?? null });
+    setAnchorMessageChunks(finalChunks);
+
+    if (finalChunks.length > 1) {
+      await closeAnchorChainGaps(channel, finalChunks.map((c) => c.messageId));
+    }
   } catch (err) {
     logger.error(`Failed to sync the bot-managed birthday anchor message: ${errorMessage(err)}`);
   }

@@ -17,8 +17,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | Command | Permission | Guild-only by default | Summary |
 | --- | --- | --- | --- |
 | [`/checkbirthday`](#checkbirthday) | Admin | yes | Preview today's birthdays; optionally trigger the announcement immediately. |
-| [`/clearbirthdaychannel`](#clearbirthdaychannel) | Admin | yes | Bulk-delete the bot's tracked messages in the birthday channel. |
-| [`/refreshbirthdays`](#refreshbirthdays) | Admin | yes | Re-parse the birthday announcement message(s) into the database. |
+| [`/clearbirthdaychannel`](#clearbirthdaychannel) | Admin | yes | Bulk-delete the bot's tracked messages in the birthday channel (never touches the anchor message chain). |
 | [`/setbirthdaymessage`](#setbirthdaymessage) | Admin | yes | Change the birthday announcement template. |
 | [`/testbirthdaymessage`](#testbirthdaymessage) | Admin | yes | Preview the template rendered for yourself. |
 | [`/setmybirthday`](#setmybirthday) | None | yes | Register your own birthday. |
@@ -43,11 +42,7 @@ With no birthdays today, replies with the date of the next upcoming birthday ins
 
 ### `/clearbirthdaychannel`
 
-Deletes messages in the birthday announcements channel back to (and including) the first birthday message the bot ever posted, using the same walk-back logic as the nightly cleanup cron job. Reports how many messages were deleted.
-
-### `/refreshbirthdays`
-
-Re-scans the birthday announcement message (`birthdayListMessageId` and its same-author follow-ups) and re-resolves every entry against live Discord member data, replacing the stored birthday list entirely. Run this after editing the announcement message.
+Deletes messages in the birthday announcements channel back to (and including) the first birthday message the bot ever posted, using the same walk-back logic as the nightly cleanup cron job — every message currently in the bot-managed anchor chain is skipped regardless of where it falls in that range. Reports how many messages were deleted.
 
 ### `/setbirthdaymessage`
 
@@ -68,9 +63,7 @@ Renders the current template using your own account as the birthday person, so y
 | `day` | integer (1–31) | yes | Day of month. |
 | `month` | integer (1–12) | yes | Month. |
 
-Registers (or updates) your own birthday, stored separately from the manually-maintained announcement list so re-scanning that list never overwrites it — see [DATABASE.md](DATABASE.md#birthdays). Posting a bare date (e.g. `15.03`) directly as a message in the configured birthday channel does the same thing: the bot parses it, saves it, and deletes the message. Either way, if a notifications channel is configured on the dashboard's Birthdays page, the bot posts a heads-up there, and if the bot is set to manage the anchor message itself, that message is re-rendered immediately — see [DASHBOARD.md](DASHBOARD.md#self-registration--the-bot-managed-anchor-message).
-
-Replies with an error if self-registration has been turned off from the dashboard.
+Registers (or updates) your own birthday, stored separately from admin-managed entries (`source: 'self'` vs `'list'` — see [DATABASE.md](DATABASE.md#birthdays)) so editing the list from the dashboard never overwrites it. Posting a bare date (e.g. `15.03`) directly as a message in the configured birthday channel does the same thing: the bot parses it, saves it, and deletes the message. Either way, if a notifications channel is configured on the dashboard's Birthdays page, the bot posts a heads-up there, and the anchor message is re-rendered immediately — see [DASHBOARD.md](DASHBOARD.md#self-registration--the-bot-managed-anchor-message).
 
 ### `/cleardm`
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
 import { useToast } from "../components/ToastContext";
-import type { BirthdaySettings, Channel, UpcomingBirthday } from "../types";
+import type { BirthdayEntry, Channel, UpcomingBirthday } from "../types";
 
 function relativeDay(days: number): string {
   if (days === 0) return "today";
@@ -14,17 +14,23 @@ function entryLabel(entry: { name: string | null; mention: string }): string {
   return entry.name ?? entry.mention;
 }
 
+interface EntryDraft {
+  id: number | null;
+  day: string;
+  month: string;
+  userId: string;
+  name: string;
+}
+
+const EMPTY_DRAFT: EntryDraft = { id: null, day: "", month: "", userId: "", name: "" };
+
 export default function Birthdays() {
-  const [settings, setSettings] = useState<BirthdaySettings | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingBirthday[] | null>(null);
   const [template, setTemplate] = useState("");
   const [channelId, setChannelId] = useState("");
-  const [messageId, setMessageId] = useState("");
   const [cronExpr, setCronExpr] = useState("");
   const [modChannelId, setModChannelId] = useState("");
-  const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(true);
-  const [botManagesAnchor, setBotManagesAnchor] = useState(false);
   const [anchorTemplate, setAnchorTemplate] = useState("");
   const [anchorIntro, setAnchorIntro] = useState("");
   const [anchorUseFont, setAnchorUseFont] = useState(false);
@@ -32,19 +38,17 @@ export default function Birthdays() {
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [syncingAnchor, setSyncingAnchor] = useState(false);
+  const [draft, setDraft] = useState<EntryDraft>(EMPTY_DRAFT);
+  const [savingEntry, setSavingEntry] = useState(false);
   const { showError, showSuccess } = useToast();
 
   function loadAll() {
     Promise.all([api.birthdaySettings(), api.channels(), api.upcomingBirthdays()])
       .then(([s, c, u]) => {
-        setSettings(s);
         setTemplate(s.template);
         setChannelId(s.channelId ?? "");
-        setMessageId(s.messageId ?? "");
         setCronExpr(s.cron);
         setModChannelId(s.modChannelId ?? "");
-        setSelfRegistrationEnabled(s.selfRegistrationEnabled);
-        setBotManagesAnchor(s.botManagesAnchor);
         setAnchorTemplate(s.anchorTemplate);
         setAnchorIntro(s.anchorIntro ?? "");
         setAnchorUseFont(s.anchorUseFont);
@@ -69,30 +73,16 @@ export default function Birthdays() {
   async function handleSave() {
     setSaving(true);
     try {
-      const updated = await api.updateBirthdaySettings({
+      await api.updateBirthdaySettings({
         template,
         channelId: channelId || null,
-        messageId: messageId || null,
         cron: cronExpr,
         modChannelId: modChannelId || null,
-        selfRegistrationEnabled,
-        botManagesAnchor,
         anchorTemplate,
         anchorIntro: anchorIntro || null,
         anchorUseFont,
         announcementUseFont,
       });
-      setSettings(updated);
-      setMessageId(updated.messageId ?? "");
-      if (botManagesAnchor) {
-        // The server already kicked off a sync in the background; wait for
-        // our own explicit call so the message id shown below is current
-        // rather than possibly stale until the next reload.
-        await api.syncBirthdayAnchor().catch(() => undefined);
-        const fresh = await api.birthdaySettings();
-        setSettings(fresh);
-        setMessageId(fresh.messageId ?? "");
-      }
       showSuccess("Saved.");
     } catch (err) {
       showError(errorMessage(err));
@@ -101,27 +91,60 @@ export default function Birthdays() {
     }
   }
 
-  async function handleRefresh() {
-    try {
-      await api.refreshBirthdayList();
-      setUpcoming(await api.upcomingBirthdays());
-      showSuccess("Birthday list re-scanned from the announcement message.");
-    } catch (err) {
-      showError(errorMessage(err));
-    }
-  }
-
   async function handleSyncAnchor() {
     setSyncingAnchor(true);
     try {
       await api.syncBirthdayAnchor();
-      setSettings(await api.birthdaySettings());
       setUpcoming(await api.upcomingBirthdays());
       showSuccess("Anchor message regenerated.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
       setSyncingAnchor(false);
+    }
+  }
+
+  function startEdit(entry: BirthdayEntry, dateKey: string) {
+    const [dd, mm] = dateKey.split(".");
+    setDraft({ id: entry.id, day: dd ?? "", month: mm ?? "", userId: entry.userId ?? "", name: entry.name ?? "" });
+  }
+
+  async function handleSaveEntry() {
+    const day = parseInt(draft.day, 10);
+    const month = parseInt(draft.month, 10);
+    if (!day || !month) {
+      showError("Enter a day and month.");
+      return;
+    }
+    if (!draft.userId.trim() && !draft.name.trim()) {
+      showError("Provide a Discord user ID or a name.");
+      return;
+    }
+    setSavingEntry(true);
+    try {
+      const body = { day, month, userId: draft.userId.trim() || null, name: draft.name.trim() || null };
+      if (draft.id === null) {
+        await api.addBirthday(body);
+      } else {
+        await api.updateBirthday(draft.id, body);
+      }
+      setDraft(EMPTY_DRAFT);
+      setUpcoming(await api.upcomingBirthdays());
+      showSuccess("Saved.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingEntry(false);
+    }
+  }
+
+  async function handleDeleteEntry(id: number) {
+    try {
+      await api.deleteBirthday(id);
+      setUpcoming(await api.upcomingBirthdays());
+      showSuccess("Removed.");
+    } catch (err) {
+      showError(errorMessage(err));
     }
   }
 
@@ -163,29 +186,22 @@ export default function Birthdays() {
         </div>
 
         <div className="card">
-          <h2>Announcement list</h2>
-          <div className="row">
-            <div className="field">
-              <label htmlFor="channel">Channel</label>
-              <SearchableSelect
-                id="channel"
-                value={channelId}
-                onChange={setChannelId}
-                placeholder="Search channels…"
-                emptyLabel="— none —"
-                options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="messageId">Anchor message ID</label>
-              <input
-                id="messageId"
-                type="text"
-                value={botManagesAnchor ? "Managed automatically by the bot" : messageId}
-                onChange={(e) => setMessageId(e.target.value)}
-                disabled={botManagesAnchor}
-              />
-            </div>
+          <h2>Anchor message &amp; daily announcement</h2>
+          <p className="muted small">
+            The bot posts and maintains the birthday list itself in the channel below (splitting it across more than
+            one message if the full list ever outgrows Discord's 2000-character limit), and posts the daily
+            announcement there too.
+          </p>
+          <div className="field">
+            <label htmlFor="channel">Channel</label>
+            <SearchableSelect
+              id="channel"
+              value={channelId}
+              onChange={setChannelId}
+              placeholder="Search channels…"
+              emptyLabel="— none —"
+              options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+            />
           </div>
           <div className="field">
             <label htmlFor="cron">Daily job schedule (cron)</label>
@@ -197,11 +213,6 @@ export default function Birthdays() {
           <button className="primary" onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
-          {!botManagesAnchor && (
-            <button onClick={handleRefresh} disabled={!settings?.channelId || !settings?.messageId}>
-              Refresh from message
-            </button>
-          )}
         </div>
 
         <div className="card">
@@ -209,32 +220,14 @@ export default function Birthdays() {
           <p className="muted small">
             Members can register their own birthday with <code>/setmybirthday</code>, or by just posting a date
             (e.g. <code>15.03</code>) in the birthday channel above — the bot parses it, saves it, and deletes the
-            message. Turning this on also has the bot take over the announcement message above: posting it,
-            keeping it updated after every registration, and hiding its "Anchor message ID" field — the two can
-            only be on or off together, since a self-registered birthday only ever becomes visible to anyone
-            through that bot-managed message.
+            message.
           </p>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={selfRegistrationEnabled}
-              onChange={(e) => {
-                const enabled = e.target.checked;
-                setSelfRegistrationEnabled(enabled);
-                setBotManagesAnchor(enabled);
-              }}
-            />
-            Enable self-registration
-          </label>
-
-          {/* These stay mounted (just disabled) rather than being added/removed with the toggle above, so this card's height doesn't jump when it's flipped. */}
-          <div className="field" style={{ marginTop: 12 }}>
+          <div className="field">
             <label htmlFor="modChannel">Registration notifications channel</label>
             <SearchableSelect
               id="modChannel"
               value={modChannelId}
               onChange={setModChannelId}
-              disabled={!selfRegistrationEnabled}
               placeholder="Search channels…"
               emptyLabel="— none —"
               options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
@@ -247,7 +240,6 @@ export default function Birthdays() {
               id="anchorIntro"
               value={anchorIntro}
               onChange={(e) => setAnchorIntro(e.target.value)}
-              disabled={!selfRegistrationEnabled}
               placeholder="e.g. Use /setmybirthday or post your date here to register!"
             />
             <div className="hint">
@@ -257,31 +249,21 @@ export default function Birthdays() {
           </div>
           <div className="field">
             <label htmlFor="anchorTemplate">Month heading template</label>
-            <textarea
-              id="anchorTemplate"
-              value={anchorTemplate}
-              onChange={(e) => setAnchorTemplate(e.target.value)}
-              disabled={!selfRegistrationEnabled}
-            />
+            <textarea id="anchorTemplate" value={anchorTemplate} onChange={(e) => setAnchorTemplate(e.target.value)} />
             <div className="hint">
               Placeholders: <code>{"{month}"}</code> (styled with the font below, if set), <code>{"{entries}"}</code>{" "}
               (the dates/mentions for that month — always plain, so they render correctly on Discord).
             </div>
           </div>
           <label className="switch">
-            <input
-              type="checkbox"
-              checked={anchorUseFont}
-              disabled={!selfRegistrationEnabled}
-              onChange={(e) => setAnchorUseFont(e.target.checked)}
-            />
+            <input type="checkbox" checked={anchorUseFont} onChange={(e) => setAnchorUseFont(e.target.checked)} />
             Use font for month headings
           </label>
           <div className="hint">
             Styles <code>{"{month}"}</code> with the font set on the <a href="/settings">Settings page</a>, if
             one's configured. Everything else (dates, mentions) always renders plain.
           </div>
-          <button onClick={handleSyncAnchor} disabled={syncingAnchor || !selfRegistrationEnabled || !channelId} style={{ marginTop: 8 }}>
+          <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
             {syncingAnchor ? "Regenerating…" : "Regenerate message now"}
           </button>
         </div>
@@ -307,8 +289,62 @@ export default function Birthdays() {
 
           <div className="card">
             <h2>Registered birthdays</h2>
+            <p className="muted small">
+              Add, edit, or remove an entry here — the anchor message updates automatically. Entries marked
+              "self-registered" were added by the member themselves and can still be corrected here if needed.
+            </p>
+
+            <div className="row" style={{ alignItems: "flex-end", marginBottom: 12 }}>
+              <div className="field" style={{ maxWidth: 90 }}>
+                <label htmlFor="entryDay">Day</label>
+                <input
+                  id="entryDay"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={draft.day}
+                  onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
+                />
+              </div>
+              <div className="field" style={{ maxWidth: 90 }}>
+                <label htmlFor="entryMonth">Month</label>
+                <input
+                  id="entryMonth"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={draft.month}
+                  onChange={(e) => setDraft((d) => ({ ...d, month: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="entryUserId">Discord user ID</label>
+                <input
+                  id="entryUserId"
+                  type="text"
+                  placeholder="optional"
+                  value={draft.userId}
+                  onChange={(e) => setDraft((d) => ({ ...d, userId: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="entryName">Name</label>
+                <input
+                  id="entryName"
+                  type="text"
+                  placeholder="optional if a user ID is set"
+                  value={draft.name}
+                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </div>
+              <button className="primary" onClick={handleSaveEntry} disabled={savingEntry}>
+                {draft.id === null ? "Add" : "Save edit"}
+              </button>
+              {draft.id !== null && <button onClick={() => setDraft(EMPTY_DRAFT)}>Cancel</button>}
+            </div>
+
             {upcoming.length === 0 ? (
-              <p className="muted">No birthdays parsed yet.</p>
+              <p className="muted">No birthdays registered yet.</p>
             ) : (
               <div className="table-scroll">
                 <table className="stack-on-mobile">
@@ -318,12 +354,13 @@ export default function Birthdays() {
                       <th>Person</th>
                       <th>Source</th>
                       <th></th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {upcoming.flatMap((b) =>
-                      b.entries.map((entry, i) => (
-                        <tr key={`${b.dateKey}-${i}`}>
+                      b.entries.map((entry) => (
+                        <tr key={entry.id}>
                           <td data-label="Date">{b.dateKey}</td>
                           <td data-label="Person">{entryLabel(entry)}</td>
                           <td data-label="Source">
@@ -332,6 +369,10 @@ export default function Birthdays() {
                             </span>
                           </td>
                           <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
+                          <td className="stack-plain">
+                            <button onClick={() => startEdit(entry, b.dateKey)}>Edit</button>{" "}
+                            <button onClick={() => handleDeleteEntry(entry.id)}>Delete</button>
+                          </td>
                         </tr>
                       )),
                     )}

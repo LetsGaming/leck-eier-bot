@@ -6,11 +6,8 @@ interface SettingsRow {
   birthday_template: string;
   first_birthday_message_id: string | null;
   birthday_list_channel_id: string | null;
-  birthday_list_message_id: string | null;
   birthday_cron: string;
   birthday_mod_channel_id: string | null;
-  birthday_self_registration_enabled: 0 | 1;
-  birthday_bot_manages_anchor: 0 | 1;
   birthday_anchor_template: string;
   birthday_anchor_intro: string | null;
   font_map: string | null;
@@ -19,6 +16,7 @@ interface SettingsRow {
   leave_notifications_enabled: 0 | 1;
   register_gate_role_id: string | null;
   registration_tier_role_id: string | null;
+  rules_accepted_use_discord_screening: 0 | 1;
 }
 
 function rowToSettings(row: SettingsRow): Settings {
@@ -26,11 +24,8 @@ function rowToSettings(row: SettingsRow): Settings {
     birthdayTemplate: row.birthday_template,
     firstBirthdayMessageId: row.first_birthday_message_id,
     birthdayListChannelId: row.birthday_list_channel_id,
-    birthdayListMessageId: row.birthday_list_message_id,
     birthdayCron: row.birthday_cron,
     birthdayModChannelId: row.birthday_mod_channel_id,
-    birthdaySelfRegistrationEnabled: row.birthday_self_registration_enabled === 1,
-    birthdayBotManagesAnchor: row.birthday_bot_manages_anchor === 1,
     birthdayAnchorTemplate: row.birthday_anchor_template,
     birthdayAnchorIntro: row.birthday_anchor_intro,
     fontMap: row.font_map,
@@ -39,27 +34,24 @@ function rowToSettings(row: SettingsRow): Settings {
     leaveNotificationsEnabled: row.leave_notifications_enabled === 1,
     registerGateRoleId: row.register_gate_role_id,
     registrationTierRoleId: row.registration_tier_role_id,
+    rulesAcceptedUseDiscordScreening: row.rules_accepted_use_discord_screening === 1,
   };
 }
 
 const selectStmt = db.prepare<[], SettingsRow>(
   `SELECT birthday_template, first_birthday_message_id, birthday_list_channel_id,
-          birthday_list_message_id, birthday_cron, birthday_mod_channel_id,
-          birthday_self_registration_enabled, birthday_bot_manages_anchor,
+          birthday_cron, birthday_mod_channel_id,
           birthday_anchor_template, birthday_anchor_intro, font_map, birthday_anchor_use_font,
           birthday_announcement_use_font, leave_notifications_enabled,
-          register_gate_role_id, registration_tier_role_id
+          register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening
    FROM settings WHERE id = 1`,
 );
 const updateStmt = db.prepare<{
   birthdayTemplate: string;
   firstBirthdayMessageId: string | null;
   birthdayListChannelId: string | null;
-  birthdayListMessageId: string | null;
   birthdayCron: string;
   birthdayModChannelId: string | null;
-  birthdaySelfRegistrationEnabled: 0 | 1;
-  birthdayBotManagesAnchor: 0 | 1;
   birthdayAnchorTemplate: string;
   birthdayAnchorIntro: string | null;
   fontMap: string | null;
@@ -68,16 +60,14 @@ const updateStmt = db.prepare<{
   leaveNotificationsEnabled: 0 | 1;
   registerGateRoleId: string | null;
   registrationTierRoleId: string | null;
+  rulesAcceptedUseDiscordScreening: 0 | 1;
 }>(
   `UPDATE settings SET
      birthday_template = @birthdayTemplate,
      first_birthday_message_id = @firstBirthdayMessageId,
      birthday_list_channel_id = @birthdayListChannelId,
-     birthday_list_message_id = @birthdayListMessageId,
      birthday_cron = @birthdayCron,
      birthday_mod_channel_id = @birthdayModChannelId,
-     birthday_self_registration_enabled = @birthdaySelfRegistrationEnabled,
-     birthday_bot_manages_anchor = @birthdayBotManagesAnchor,
      birthday_anchor_template = @birthdayAnchorTemplate,
      birthday_anchor_intro = @birthdayAnchorIntro,
      font_map = @fontMap,
@@ -85,7 +75,8 @@ const updateStmt = db.prepare<{
      birthday_announcement_use_font = @birthdayAnnouncementUseFont,
      leave_notifications_enabled = @leaveNotificationsEnabled,
      register_gate_role_id = @registerGateRoleId,
-     registration_tier_role_id = @registrationTierRoleId
+     registration_tier_role_id = @registrationTierRoleId,
+     rules_accepted_use_discord_screening = @rulesAcceptedUseDiscordScreening
    WHERE id = 1`,
 );
 
@@ -101,11 +92,8 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     birthdayTemplate: next.birthdayTemplate,
     firstBirthdayMessageId: next.firstBirthdayMessageId,
     birthdayListChannelId: next.birthdayListChannelId,
-    birthdayListMessageId: next.birthdayListMessageId,
     birthdayCron: next.birthdayCron,
     birthdayModChannelId: next.birthdayModChannelId,
-    birthdaySelfRegistrationEnabled: next.birthdaySelfRegistrationEnabled ? 1 : 0,
-    birthdayBotManagesAnchor: next.birthdayBotManagesAnchor ? 1 : 0,
     birthdayAnchorTemplate: next.birthdayAnchorTemplate,
     birthdayAnchorIntro: next.birthdayAnchorIntro,
     fontMap: next.fontMap,
@@ -114,6 +102,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     leaveNotificationsEnabled: next.leaveNotificationsEnabled ? 1 : 0,
     registerGateRoleId: next.registerGateRoleId,
     registrationTierRoleId: next.registrationTierRoleId,
+    rulesAcceptedUseDiscordScreening: next.rulesAcceptedUseDiscordScreening ? 1 : 0,
   });
   settingsBus.emit(SettingsEvent.Settings);
   return next;

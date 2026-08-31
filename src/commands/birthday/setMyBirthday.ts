@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
 import { upsertSelfBirthday } from "../../db/birthdaysRepository.js";
-import { getSettings } from "../../db/settingsRepository.js";
 import { isValidCalendarDate, notifyBirthdayRegistration, syncAnchorMessage, toDateKey } from "../../services/birthdays.js";
 import { createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { CommandName, CommandPermission } from "../../constants.js";
@@ -18,15 +17,6 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  if (!getSettings().birthdaySelfRegistrationEnabled) {
-    return interaction.reply({
-      embeds: [
-        createErrorEmbed("Self-registration is currently disabled — ask an admin to add you to the birthday list."),
-      ],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
   const day = interaction.options.getInteger("day", true);
   const month = interaction.options.getInteger("month", true);
 
