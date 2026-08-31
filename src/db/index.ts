@@ -214,7 +214,7 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   },
   // v9: lets the bot own the birthday announcement message end to end
   // instead of an admin hand-maintaining it — see services/birthdays.ts's
-  // renderAnchorMessage()/syncAnchorMessage(). birthday_self_registration_enabled
+  // buildAnchorParts()/syncAnchorMessage(). birthday_self_registration_enabled
   // gates both self-registration paths from v7 (previously always on) and is
   // a prerequisite for birthday_bot_manages_anchor (enforced in
   // web/routes/birthdaySettings.ts, not the DB): with self-registration off,
@@ -287,8 +287,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // at every startup from the live member cache for anyone already in the
   // guild (Discord does still expose current members' join dates), but
   // `rules_accepted_at` has no equivalent backfill — it's only ever known
-  // from having observed the pending->false transition live, so it reads as
-  // "not tracked" (null) for anyone who verified before this shipped.
+  // from having observed registerGateRoleId (the rules-message reaction-
+  // role) being newly granted, live, so it reads as "not tracked" (null)
+  // for anyone who got that role before this shipped.
   (d) => {
     d.exec(`
       CREATE TABLE IF NOT EXISTS member_records (
@@ -339,6 +340,73 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE settings ADD COLUMN register_gate_role_id TEXT;
       ALTER TABLE settings ADD COLUMN registration_tier_role_id TEXT;
     `);
+  },
+  // v16: a one-time note shown above all the month blocks in the bot-managed
+  // anchor message (e.g. "use /setmybirthday to register!") — distinct from
+  // birthday_anchor_template, which repeats per month. Always rendered
+  // plain (never through fontMap), and omitted entirely when unset.
+  (d) => {
+    d.exec(`ALTER TABLE settings ADD COLUMN birthday_anchor_intro TEXT;`);
+  },
+  // v17: the bot-managed anchor message can now span multiple Discord
+  // messages (each capped at DISCORD_MESSAGE_MAX_LENGTH) instead of
+  // silently failing to update once the full birthday list outgrows one —
+  // see paginateAnchorParts()/syncAnchorMessage() in services/birthdays.ts.
+  // `position` orders the chain; `birthday_list_message_id` on `settings`
+  // is left untouched (and untouched by this migration) since it's shared
+  // with the *other*, manually-maintained list mode — only seed this new
+  // table from it when bot-managed mode is actually the one that produced
+  // that message id, so an admin's manually-maintained message never gets
+  // mistaken for (and later edited/deleted as) a bot-owned anchor chunk.
+  (d) => {
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS birthday_anchor_messages (
+        position INTEGER PRIMARY KEY,
+        message_id TEXT NOT NULL
+      );
+    `);
+    const row = d
+      .prepare("SELECT birthday_list_message_id, birthday_bot_manages_anchor FROM settings WHERE id = 1")
+      .get() as { birthday_list_message_id: string | null; birthday_bot_manages_anchor: number } | undefined;
+    if (row?.birthday_bot_manages_anchor === 1 && row.birthday_list_message_id) {
+      d.prepare("INSERT INTO birthday_anchor_messages (position, message_id) VALUES (0, ?)").run(
+        row.birthday_list_message_id,
+      );
+    }
+  },
+  // v18: each chunk in the anchor chain now records which months (and,
+  // whichever chunk carries it, the intro — stored as the literal key
+  // "intro") it renders, comma-separated (e.g. "intro,1,2,3"). This lets
+  // syncAnchorMessage() keep a month pinned to the same message across
+  // syncs instead of re-flowing (and re-editing) every later chunk whenever
+  // an earlier month's entry count changes — see paginateAnchorParts()'s
+  // stability bias in services/birthdays.ts. Empty string (existing rows
+  // from before this migration) means "unknown assignment", which the
+  // packer treats as no stability constraint on the first run after
+  // upgrade.
+  (d) => {
+    d.exec(`ALTER TABLE birthday_anchor_messages ADD COLUMN months TEXT NOT NULL DEFAULT '';`);
+  },
+  // v19: birthday self-registration and the bot-managed anchor message are
+  // no longer optional — the bot now owns the whole feature end to end (no
+  // more hand-maintained announcement-message mode). The columns that used
+  // to gate this (birthday_self_registration_enabled, birthday_bot_manages_anchor)
+  // are left in the schema unread rather than dropped (see the additive-only
+  // note above) but are backfilled to their new always-on effective value so
+  // the data isn't left contradicting what the code now does.
+  (d) => {
+    d.exec(`
+      UPDATE settings SET birthday_self_registration_enabled = 1, birthday_bot_manages_anchor = 1 WHERE id = 1;
+    `);
+  },
+  // v20: which signal counts as "rules accepted" is now a toggle instead of
+  // hardcoded — role-based (registerGateRoleId newly granted) by default,
+  // since that's this bot's own rules-message reaction-role mechanism;
+  // Discord's native membership-screening `pending` flag is opt-in for
+  // guilds that actually use that feature instead. See
+  // recordRulesAcceptedIfJustVerified() in services/memberRecords.ts.
+  (d) => {
+    d.exec(`ALTER TABLE settings ADD COLUMN rules_accepted_use_discord_screening INTEGER NOT NULL DEFAULT 0;`);
   },
 ];
 

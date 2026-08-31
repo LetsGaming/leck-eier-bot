@@ -1,13 +1,7 @@
 import type { Message, PartialMessage } from "discord.js";
 import { upsertSelfBirthday } from "../db/birthdaysRepository.js";
 import { getSettings } from "../db/settingsRepository.js";
-import {
-  getBirthdayListLocation,
-  notifyBirthdayRegistration,
-  parseSelfRegistrationDate,
-  syncAnchorMessage,
-  updateBirthdayListFromMessage,
-} from "../services/birthdays.js";
+import { notifyBirthdayRegistration, parseSelfRegistrationDate, syncAnchorMessage } from "../services/birthdays.js";
 import { BIRTHDAY_LIST_MARKER, SELF_BIRTHDAY_MESSAGE_MAX_LENGTH } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -49,32 +43,16 @@ export default function registerBirthdayWatcher(client: BotClient): void {
 
   const triggerUpdate = async (message: Message | PartialMessage) => {
     const settings = getSettings();
-    // Gated on the channel alone (not the anchor message id) so
-    // self-registration works even before a bot-managed anchor message has
-    // ever been posted — see syncAnchorMessage() in services/birthdays.ts.
+    // Gated on the channel alone (not any particular message id) so
+    // self-registration works even before the anchor message has ever been
+    // posted — see syncAnchorMessage() in services/birthdays.ts.
     if (!settings.birthdayListChannelId || message.channelId !== settings.birthdayListChannelId) return;
-    // Never react to the bot's own messages — relevant once the bot itself
-    // is posting/editing the anchor message (birthdayBotManagesAnchor).
+    // Never react to the bot's own messages — it's the one posting/editing
+    // the anchor message in this same channel.
     if (message.author?.id === client.user?.id) return;
 
-    if (settings.birthdaySelfRegistrationEnabled && (await tryHandleSelfRegistration(message))) {
+    if (await tryHandleSelfRegistration(message)) {
       await syncAnchorMessage(client);
-      return;
-    }
-
-    // Bot-managed mode: the bot owns the message's content entirely, so a
-    // human edit elsewhere in the channel has nothing to be scanned into —
-    // the next registration (or restart) just re-renders over it anyway.
-    if (settings.birthdayBotManagesAnchor) return;
-
-    const location = getBirthdayListLocation();
-    if (!location) return;
-
-    logger.info(`Birthday channel activity (Msg: ${message.id})`);
-    try {
-      await updateBirthdayListFromMessage(client, location.channelId, location.messageId);
-    } catch (err) {
-      logger.error(`Failed to update birthday list from message: ${errorMessage(err)}`);
     }
   };
 

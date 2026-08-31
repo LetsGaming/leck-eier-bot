@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, type ChatInputCommandInteraction } from "discord.js";
-import { deleteBirthdayMessages, getBirthdayListLocation } from "../../services/birthdays.js";
+import { deleteBirthdayMessages, getAnchorProtectedMessageIds } from "../../services/birthdays.js";
+import { getSettings } from "../../db/settingsRepository.js";
 import { createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
 import { CommandName, CommandPermission } from "../../constants.js";
 
@@ -13,17 +14,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   // Acknowledge immediately
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const location = getBirthdayListLocation();
-  if (!location) {
+  const { birthdayListChannelId } = getSettings();
+  if (!birthdayListChannelId) {
     return interaction.editReply({
-      embeds: [createErrorEmbed("Birthday list channel/message not configured yet. Set it via the dashboard.")],
+      embeds: [createErrorEmbed("Birthday announcements channel not configured yet. Set it via the dashboard.")],
     });
   }
 
+  // Never delete an anchor chunk — deleteBirthdayMessages() otherwise has no
+  // way to tell a live anchor message apart from a stale announcement.
   const count = await deleteBirthdayMessages(
     interaction.client,
-    location.channelId,
-    location.messageId,
+    birthdayListChannelId,
+    getAnchorProtectedMessageIds(),
   );
 
   const successEmbed = createSuccessEmbed(

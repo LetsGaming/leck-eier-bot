@@ -1,4 +1,5 @@
 import type {
+  BirthdayEntryInput,
   BirthdaySettings,
   BirthdaysByDate,
   Channel,
@@ -83,10 +84,13 @@ export const api = {
     request<BirthdaySettings>("/settings/birthday", { method: "PATCH", ...json(body) }),
   previewBirthday: (template: string) =>
     request<{ rendered: string }>("/settings/birthday/preview", { method: "POST", ...json({ template }) }),
-  refreshBirthdayList: () => request<{ ok: boolean }>("/settings/birthday/refresh", { method: "POST" }),
   syncBirthdayAnchor: () => request<{ ok: boolean }>("/settings/birthday/sync-anchor", { method: "POST" }),
   birthdays: () => request<BirthdaysByDate>("/birthdays"),
   upcomingBirthdays: () => request<UpcomingBirthday[]>("/birthdays/upcoming"),
+  addBirthday: (body: BirthdayEntryInput) => request<{ id: number }>("/birthdays", { method: "POST", ...json(body) }),
+  updateBirthday: (id: number, body: BirthdayEntryInput) =>
+    request<{ ok: boolean }>(`/birthdays/${id}`, { method: "PATCH", ...json(body) }),
+  deleteBirthday: (id: number) => request<void>(`/birthdays/${id}`, { method: "DELETE" }),
 
   commands: () => request<CommandDef[]>("/commands"),
   updateCommand: (name: string, body: { enabled?: boolean; guildOnly?: boolean }) =>

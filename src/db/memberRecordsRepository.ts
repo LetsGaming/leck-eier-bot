@@ -52,8 +52,11 @@ const updateProfileStmt = db.prepare<ProfileInput>(
   `UPDATE member_records SET username = @username, display_name = @displayName, avatar = @avatar WHERE user_id = @userId`,
 );
 
+// Only sets it the first time — a no-op if this user already has a
+// timestamp, so a later strip-then-regrant of the rules-gate role (e.g.
+// re-registering) doesn't overwrite the original acceptance time.
 const recordRulesAcceptedStmt = db.prepare<{ userId: string; timestamp: string }>(
-  `UPDATE member_records SET rules_accepted_at = @timestamp WHERE user_id = @userId`,
+  `UPDATE member_records SET rules_accepted_at = @timestamp WHERE user_id = @userId AND rules_accepted_at IS NULL`,
 );
 
 // A leave can be the very first record we ever have for this user (bot

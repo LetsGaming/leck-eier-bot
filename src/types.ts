@@ -21,10 +21,12 @@ export type BotClient = Client & {
 };
 
 export interface BirthdayEntry {
+  /** Row id in the `birthdays` table — needed to target a specific entry for the dashboard's edit/delete actions (see web/routes/birthdays.ts). */
+  id: number;
   mention: string;
   userId: string | null;
   name: string | null;
-  /** 'list' = parsed from the manually-maintained announcement message; 'self' = registered via `/setmybirthday` or a message in the birthday channel. */
+  /** 'list' = added/edited by an admin via the dashboard; 'self' = registered via `/setmybirthday` or a message in the birthday channel. */
   source: "list" | "self";
 }
 
@@ -33,19 +35,16 @@ export type BirthdaysByDate = Record<string, BirthdayEntry[]>;
 export interface Settings {
   birthdayTemplate: string;
   firstBirthdayMessageId: string | null;
-  /** Channel/message id of the manually-maintained birthday announcement list. Null until set via command or dashboard. */
+  /** Channel the bot-managed birthday anchor message chain lives in. Null until set via the dashboard. */
   birthdayListChannelId: string | null;
-  birthdayListMessageId: string | null;
   /** node-cron expression for the daily birthday-announcement job. */
   birthdayCron: string;
   /** Channel the bot posts a heads-up to whenever someone self-registers their birthday. Null = no notification posted. */
   birthdayModChannelId: string | null;
-  /** Gates both self-registration paths (`/setmybirthday` and posting a date in the birthday channel). Off = the anchor message's author must edit it themselves, same as before that feature existed. */
-  birthdaySelfRegistrationEnabled: boolean;
-  /** When true, the bot renders and owns the anchor message itself (posting/editing it) instead of an admin hand-maintaining it — only meaningful (and only settable) while birthdaySelfRegistrationEnabled is also true. */
-  birthdayBotManagesAnchor: boolean;
   /** Per-month heading template for the bot-managed anchor message — `{month}` and `{entries}` placeholders. See DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE. */
   birthdayAnchorTemplate: string;
+  /** Shown once above all the month blocks in the bot-managed anchor message (e.g. how to register a birthday) — unlike birthdayAnchorTemplate, never repeated and never rendered through fontMap. Null = no intro shown. */
+  birthdayAnchorIntro: string | null;
   /**
    * Pasted 52-character stylized alphabet (matching FONT_REFERENCE in
    * utils/font.ts position for position) — set once from the dashboard's
@@ -63,6 +62,8 @@ export interface Settings {
   registerGateRoleId: string | null;
   /** The lowest membership tier role, granted once at manual registration — not any tier role, since later promotions swap between higher tiers and must never re-trigger the gate-role removal. Null = the register-gate role swap is disabled. */
   registrationTierRoleId: string | null;
+  /** How "rules accepted" (member_records.rules_accepted_at) is detected. Off (default) = role-based: the member being newly granted `registerGateRoleId` — this bot's own rules-message reaction-role. On = Discord's native membership-screening `pending` flag flipping to false, for guilds that use that feature instead. See `recordRulesAcceptedIfJustVerified()` in services/memberRecords.ts. */
+  rulesAcceptedUseDiscordScreening: boolean;
 }
 
 export interface CommandSetting {
@@ -142,7 +143,7 @@ export interface MemberRecord {
   avatar: string | null;
   /** ISO UTC. Backfilled once at every startup for anyone already in the guild — Discord does expose a current member's join date. */
   joinedAt: string | null;
-  /** ISO UTC. Only ever known from observing the pending->false (membership screening / "rules") transition live — see `recordRulesAcceptedIfJustVerified()`. */
+  /** ISO UTC. Only ever known from observing the configured signal (see `Settings.rulesAcceptedUseDiscordScreening`) live — see `recordRulesAcceptedIfJustVerified()`. */
   rulesAcceptedAt: string | null;
   /** ISO UTC. `null` while still in the guild. */
   leftAt: string | null;

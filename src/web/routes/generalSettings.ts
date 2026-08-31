@@ -8,6 +8,7 @@ const PatchBodySchema = z.object({
   fontMap: z.string().nullable().optional(),
   registerGateRoleId: z.string().nullable().optional(),
   registrationTierRoleId: z.string().nullable().optional(),
+  rulesAcceptedUseDiscordScreening: z.boolean().optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -16,6 +17,7 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     fontMap: settings.fontMap,
     registerGateRoleId: settings.registerGateRoleId,
     registrationTierRoleId: settings.registrationTierRoleId,
+    rulesAcceptedUseDiscordScreening: settings.rulesAcceptedUseDiscordScreening,
   };
 }
 
@@ -26,7 +28,8 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
-    const { leaveNotificationsEnabled, fontMap, registerGateRoleId, registrationTierRoleId } = body.data;
+    const { leaveNotificationsEnabled, fontMap, registerGateRoleId, registrationTierRoleId, rulesAcceptedUseDiscordScreening } =
+      body.data;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)
@@ -38,6 +41,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       ...(fontMap !== undefined && { fontMap: fontMap || null }),
       ...(registerGateRoleId !== undefined && { registerGateRoleId: registerGateRoleId || null }),
       ...(registrationTierRoleId !== undefined && { registrationTierRoleId: registrationTierRoleId || null }),
+      ...(rulesAcceptedUseDiscordScreening !== undefined && { rulesAcceptedUseDiscordScreening }),
     });
     return serialize(settings);
   });

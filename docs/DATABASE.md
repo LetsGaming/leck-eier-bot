@@ -22,22 +22,22 @@ for (let v = current; v < MIGRATIONS.length; v++) {
 }
 ```
 
-Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists; v7 adds `source` to `birthdays` and `birthday_mod_channel_id` to `settings` for self-service birthday registration (see below); v8 adds `role` to `web_sessions` for dashboard RBAC (buggy — see v11); v9 adds the bot-managed-anchor-message columns to `settings` (see below); v10 adds the global `font_map` on `settings` plus each feature's own `*_use_font`/`use_font` opt-in column (see below); v11 backfills `role = 'bot-owner'` for pre-existing sessions with `is_owner = 1` that v8 had incorrectly left at the `role` column's `'admin'` default; v12 turns `birthday_self_registration_enabled` back off wherever `birthday_bot_manages_anchor` is off, now that the two are required to move together; v13 adds `member_records` for the dashboard's Member Audit page (see below).
+Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists; v7 adds `source` to `birthdays` and `birthday_mod_channel_id` to `settings` for self-service birthday registration (see below); v8 adds `role` to `web_sessions` for dashboard RBAC (buggy — see v11); v9 adds the bot-managed-anchor-message columns to `settings` (see below); v10 adds the global `font_map` on `settings` plus each feature's own `*_use_font`/`use_font` opt-in column (see below); v11 backfills `role = 'bot-owner'` for pre-existing sessions with `is_owner = 1` that v8 had incorrectly left at the `role` column's `'admin'` default; v12 turns `birthday_self_registration_enabled` back off wherever `birthday_bot_manages_anchor` is off, now that the two are required to move together; v13 adds `member_records` for the dashboard's Member Audit page (see below); v14 drops the dead `web_sessions.is_owner` `NOT NULL` constraint that had been silently failing every fresh login since v8; v15 adds the register-gate-role columns to `settings`; v16 adds `birthday_anchor_intro`; v17 adds `birthday_anchor_messages` (see below), seeded from `birthday_list_message_id` where bot-managed mode was already active; v18 adds `months` to `birthday_anchor_messages`, letting each chunk stay pinned to the same months across syncs; v19 backfills `birthday_self_registration_enabled`/`birthday_bot_manages_anchor` to `1` now that both are the bot's only mode (the columns themselves are left in the schema, unread — see [Schema § settings](#settings)); v20 adds `rules_accepted_use_discord_screening`, defaulting to role-based detection.
 
 ## Schema
 
 ### `birthdays`
 
-One row per person per date. `source = 'list'` rows are repopulated wholesale on every re-scan of the announcement message (see below); `source = 'self'` rows (registered via `/setmybirthday` or a message in the birthday channel) are individually upserted by `user_id` instead, and survive a list re-scan untouched.
+One row per person per date. `source = 'list'` rows are added/edited/removed one at a time by an admin from the dashboard's Birthdays page (`web/routes/birthdays.ts`); `source = 'self'` rows (registered via `/setmybirthday` or a message in the birthday channel) are individually upserted by `user_id` instead. Either kind is deleted the moment the member leaves the guild for any reason (voluntary leave, kick, or ban) — see `removeBirthdayOnMemberLeave()` in `services/birthdays.ts`, called from `guildMemberRemove`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | |
 | `date` | `TEXT NOT NULL` | `DD.MM` format, e.g. `"25.12"`. Indexed (`idx_birthdays_date`). |
-| `mention` | `TEXT NOT NULL` | The raw `<@id>` mention or `@name` text as parsed from the announcement. |
-| `user_id` | `TEXT` | Discord user ID, if the entry was a real mention (`null` for free-text `@name` entries that didn't resolve to an ID). Uniquely indexed where non-null (`idx_birthdays_user`) so a self-registration can upsert by user. |
-| `name` | `TEXT` | Display name — the live Discord display name if the user was successfully resolved, otherwise whatever name text was parsed from the announcement. |
-| `source` | `TEXT NOT NULL DEFAULT 'list'` | `'list'` (parsed from the announcement message) or `'self'` (registered directly by the member — see [COMMANDS.md](COMMANDS.md#setmybirthday)). |
+| `mention` | `TEXT NOT NULL` | `<@userId>` if the entry has a Discord user id, else `@name`. |
+| `user_id` | `TEXT` | Discord user ID, if one was given (`null` for a name-only entry). Uniquely indexed where non-null (`idx_birthdays_user`) so a self-registration can upsert by user, and so an admin can't add a second entry for the same user. |
+| `name` | `TEXT` | Display name. |
+| `source` | `TEXT NOT NULL DEFAULT 'list'` | `'list'` (admin-managed via the dashboard) or `'self'` (registered directly by the member — see [COMMANDS.md](COMMANDS.md#setmybirthday)). |
 
 ### `settings`
 
@@ -48,19 +48,31 @@ A single-row table (`id` is `CHECK`-constrained to `1`) rather than a generic ke
 | `id` | `INTEGER PRIMARY KEY CHECK (id = 1)` | Always `1`. |
 | `birthday_template` | `TEXT NOT NULL` | The active birthday message template. Seeded with the default from `constants.ts` (`DEFAULT_BIRTHDAY_TEMPLATE`) on first run. |
 | `first_birthday_message_id` | `TEXT` | ID of the first message the bot posted in the current announcement "batch" — the anchor the nightly cleanup walks back to. `null` when there's nothing pending cleanup. |
-| `birthday_list_channel_id` | `TEXT` | Channel containing the birthday announcement list. `null` on a fresh install until set from the [dashboard](DASHBOARD.md). |
-| `birthday_list_message_id` | `TEXT` | Anchor message id within that channel. Same null-until-set/seed behavior as above. |
+| `birthday_list_channel_id` | `TEXT` | Channel the bot-managed anchor message chain (and the daily announcement) lives in. `null` on a fresh install until set from the [dashboard](DASHBOARD.md). |
+| `birthday_list_message_id` | `TEXT` | Unread since the anchor message became a chain (see `birthday_anchor_messages` below) — kept in the schema rather than dropped, per the additive-only migration policy above. |
 | `birthday_cron` | `TEXT NOT NULL` | `node-cron` expression for the daily announcement job. Defaults to `DAILY_MIDNIGHT_CRON` (`0 0 * * *`). Changing it live reschedules the job in `src/index.ts` via `settingsBus`. |
 | `birthday_mod_channel_id` | `TEXT` | Channel the bot posts a heads-up to whenever someone self-registers their birthday (`notifyBirthdayRegistration()`). `null` = no notification posted. |
-| `birthday_self_registration_enabled` | `INTEGER NOT NULL` (0/1) | Gates both self-registration paths (`/setmybirthday`, posting a date in the birthday channel). Effectively defaults to `0` (see v12 above — the column's own `DEFAULT 1` is stale but harmless, since v12 always runs after it). Off = the anchor message's own author has to edit it themselves. |
-| `birthday_bot_manages_anchor` | `INTEGER NOT NULL` (0/1) | When true, the bot posts/edits the anchor message itself (`syncAnchorMessage()`) instead of an admin hand-maintaining it. Defaults to `0`. Required to equal `birthday_self_registration_enabled` — enforced in `web/routes/birthdaySettings.ts`, not here — since a self-registered entry only ever becomes visible via the bot-rendered anchor message. |
+| `birthday_self_registration_enabled` / `birthday_bot_manages_anchor` | `INTEGER NOT NULL` (0/1) | Unread since v19 — self-registration and the bot-managed anchor message are no longer optional, so both columns are just backfilled to `1` and otherwise ignored. Kept rather than dropped, per the additive-only migration policy above. |
 | `birthday_anchor_template` | `TEXT NOT NULL` | `{month}`/`{entries}` placeholder template for each month's heading in the bot-managed anchor message. Defaults to `DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE`. |
+| `birthday_anchor_intro` | `TEXT` | Shown once above all the month blocks (e.g. "use `/setmybirthday` to register!") — unlike `birthday_anchor_template`, never repeated per month and never rendered through `font_map`. `null` = no intro shown. |
 | `font_map` | `TEXT` | A pasted 52-character stylized alphabet (matching `FONT_REFERENCE` in `utils/font.ts` position for position), set once from the dashboard's Settings page and reused by any feature below with its own opt-in flag on — see `applyFont()`. `null` = no font configured. |
 | `birthday_anchor_use_font` | `INTEGER NOT NULL` (0/1) | Whether the bot-managed anchor message's `{month}` heading renders through `font_map`. Defaults to `0`. |
 | `birthday_announcement_use_font` | `INTEGER NOT NULL` (0/1) | Whether the daily birthday announcement message renders through `font_map`. Defaults to `0`. |
 | `leave_notifications_enabled` | `INTEGER NOT NULL` (0/1) | Whether `memberEvents.ts` DMs the guild owner on a voluntary leave. Defaults to `1`. |
+| `register_gate_role_id` / `registration_tier_role_id` | `TEXT` | The register-channel role swap — see `Settings` in `src/types.ts`. Unrelated to birthdays. |
+| `rules_accepted_use_discord_screening` | `INTEGER NOT NULL` (0/1) | Which signal counts as "rules accepted" for `member_records.rules_accepted_at`. Defaults to `0` (role-based: `register_gate_role_id` newly granted). `1` = Discord's own membership-screening `pending` flag instead — see `recordRulesAcceptedIfJustVerified()` in `services/memberRecords.ts`. |
 
-`getBirthdayListLocation()` (`src/services/birthdays.ts`) wraps the two `birthday_list_*` columns and returns `null` if either is unset — every call site (the cron job, `/refreshbirthdays`, `/clearbirthdaychannel`, manual-mode `birthdayWatcher` rescans) handles that case explicitly instead of assuming they're always present. `syncAnchorMessage()` (bot-managed mode) only needs `birthday_list_channel_id` — it creates `birthday_list_message_id` itself on first use.
+`syncAnchorMessage()` (`src/services/birthdays.ts`) only needs `birthday_list_channel_id` — it creates the anchor chain itself on first use (see `birthday_anchor_messages` below), and it's the only ingest path left for admin-entered birthdays besides the dashboard's own add/edit/delete on `birthdays` directly.
+
+### `birthday_anchor_messages`
+
+The bot-managed anchor message can outgrow Discord's 2000-character `content` cap, so it's rendered as an ordered chain of messages instead of one. One row per message currently in that chain.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `position` | `INTEGER PRIMARY KEY` | 0-based order within the chain. The whole table is replaced transactionally on every sync (`setAnchorMessageChunks()`), not diffed row by row. |
+| `message_id` | `TEXT NOT NULL` | The Discord message id at that position. |
+| `months` | `TEXT NOT NULL DEFAULT ''` | Comma-separated content keys this chunk currently renders — `"intro"` and/or month numbers `1`-`12` (added in v18). Read back on the next sync as a stability bias in `paginateAnchorParts()` (`src/services/birthdays.ts`) so a month stays pinned to the message it's already in for as long as it still fits, instead of reflowing into a different message whenever an unrelated month's entry count changes. Empty string (pre-v18 rows) means "unknown", so the first post-upgrade sync has no stability constraint. |
 
 ### `command_settings`
 
@@ -126,7 +138,7 @@ Server-side dashboard login sessions (see [DASHBOARD.md](DASHBOARD.md#who-can-lo
 
 ### `member_records`
 
-One row per Discord user ever seen in the configured guild, current or former (`in_guild` tells them apart) — backs the dashboard's [Member Audit](DASHBOARD.md#member-audit) page. Unlike every other table here, this one *is* the primary record for a former member — Discord tells the bot nothing more about someone once they've left, so there's no "source of truth" to re-derive it from the way `replaceAllBirthdays()` re-derives `birthdays` from a message. Every date is recorded live, the moment the corresponding Discord event fires (`src/services/memberRecords.ts`); none of them are backfilled from history except `joined_at`, which Discord does still expose for a current member.
+One row per Discord user ever seen in the configured guild, current or former (`in_guild` tells them apart) — backs the dashboard's [Member Audit](DASHBOARD.md#member-audit) page. This one *is* the primary record for a former member — Discord tells the bot nothing more about someone once they've left, so there's no live source of truth to re-derive it from. Every date is recorded live, the moment the corresponding Discord event fires (`src/services/memberRecords.ts`); none of them are backfilled from history except `joined_at`, which Discord does still expose for a current member.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -135,7 +147,7 @@ One row per Discord user ever seen in the configured guild, current or former (`
 | `display_name` | `TEXT NOT NULL` | Nickname if set, else global name, else username — same precedence `GuildMember#displayName` uses. |
 | `avatar` | `TEXT` | Global user avatar hash, or `null`. Only read back for a former member; a current one's avatar is fetched live from the cache instead (fresher, and handles a guild-specific avatar). |
 | `joined_at` | `TEXT` | ISO UTC. Backfilled once at every startup (`seedMemberRecordsFromCache()`) for anyone already in the guild, then kept current via `guildMemberAdd`. `null` only if the bot has never observed this user's join at all. |
-| `rules_accepted_at` | `TEXT` | ISO UTC. Set the moment a `guildMemberUpdate` shows the member's `pending` flag (Discord's membership screening / "rules" gate) flipping from `true` to `false`. No historical equivalent exists — `null` means "not tracked" (e.g. verified before this shipped), not "never accepted". |
+| `rules_accepted_at` | `TEXT` | ISO UTC. Set the moment a `guildMemberUpdate` shows the configured "rules accepted" signal firing — see `rules_accepted_use_discord_screening` below. Only ever set once (e.g. a later strip-then-regrant of the gate role doesn't overwrite it). No historical equivalent exists — `null` means "not tracked" (e.g. it fired before this shipped, or the role-based signal isn't configured), not "never accepted". |
 | `left_at` | `TEXT` | ISO UTC. Set on `guildMemberRemove`. `null` while still in the guild. |
 | `in_guild` | `INTEGER NOT NULL DEFAULT 1` (0/1) | `0` once `left_at` is set; flips back to `1` (and `left_at` back to `null`) on a rejoin — `rules_accepted_at` is left alone on a rejoin, since screening isn't redone. |
 
@@ -144,7 +156,8 @@ One row per Discord user ever seen in the configured guild, current or former (`
 Raw SQL lives in `src/db/`:
 
 - `src/db/index.ts` — opens the connection, runs migrations (see above).
-- `src/db/birthdaysRepository.ts` — `getBirthdaysForDate(date)`, `getAllBirthdaysByDate()`, `replaceAllBirthdays(data)` (transactional delete-then-insert of `source = 'list'` rows), `upsertSelfBirthday(entry)` (insert/update a single `source = 'self'` row by `user_id`).
+- `src/db/birthdaysRepository.ts` — `getBirthdaysForDate(date)`, `getAllBirthdaysByDate()`, `insertBirthday(entry)`/`updateBirthdayEntry(id, entry)`/`deleteBirthday(id)` (the dashboard's admin CRUD, all `source = 'list'`), `upsertSelfBirthday(entry)` (insert/update a single `source = 'self'` row by `user_id`).
+- `src/db/birthdayAnchorMessagesRepository.ts` — `getAnchorMessageChunks()`/`setAnchorMessageChunks(chunks)` (transactional full replace of `birthday_anchor_messages`).
 - `src/db/settingsRepository.ts` — `getSettings()`/`updateSettings(patch)`, `getCommandOverride(name)`/`getAllCommandOverrides()`/`setCommandOverride(name, override)`.
 - `src/db/reactionRolesRepository.ts` — panel/mapping CRUD (`listPanels`, `getPanel`, `createPanel`, `updatePanel`, `deletePanel`, `setPanelMessageId`, `upsertMapping`, `deleteMapping`, `reorderMappings`).
 - `src/db/sessionsRepository.ts` — `createSession`, `getSession`, `deleteSession`, `sweepExpiredSessions`.
@@ -166,4 +179,4 @@ To back up, copy `bot.sqlite`, `bot.sqlite-wal`, and `bot.sqlite-shm` together (
 
 ## Why SQLite instead of JSON files
 
-Earlier revisions of this bot stored `birthdays.json`/`settings.json` directly under `data/`. That approach had no atomicity (a crash mid-write could corrupt the file), no indexing, and required loading/reserializing the entire dataset for any single read or write. SQLite with WAL mode gives transactional writes (`replaceAllBirthdays` is one atomic swap) and indexed date lookups, for effectively the same operational footprint (still a single file to back up).
+Earlier revisions of this bot stored `birthdays.json`/`settings.json` directly under `data/`. That approach had no atomicity (a crash mid-write could corrupt the file), no indexing, and required loading/reserializing the entire dataset for any single read or write. SQLite with WAL mode gives transactional writes and indexed date lookups, for effectively the same operational footprint (still a single file to back up).

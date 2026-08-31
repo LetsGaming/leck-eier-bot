@@ -41,8 +41,8 @@ src/
     reactionRoleEvents.ts         messageReactionAdd/Remove — delegates to services/reactionRoles.ts
 
   commands/
-    birthday/                    checkbirthday, clearbirthdaychannel, refreshbirthdays,
-                                   setbirthdaymessage, testbirthdaymessage
+    birthday/                    checkbirthday, clearbirthdaychannel,
+                                   setbirthdaymessage, testbirthdaymessage, setmybirthday
     general/                     cleardm, finduser
     roles/                       reactionroles (list/sync — full editing is on the dashboard)
 
@@ -79,7 +79,7 @@ All of this happens in `src/index.ts`:
    - `loadCommands()` recursively imports every file under `src/commands/` (or `dist/commands/` when compiled) and registers enabled ones (per `command_settings` in the DB) on `client.commands`.
    - Slash commands are registered globally with Discord via the REST API (`PUT /applications/{clientId}/commands`).
    - Event modules (`registerMemberEvents`, `registerBirthdayWatcher`, `registerReactionRoleEvents`) attach their listeners.
-   - A one-time `clientReady` handler populates the member cache for `guildId`, does an initial birthday-list re-scan, re-syncs every reaction-role panel (`syncAllPanels()`), and — once the guild is cached — starts the dashboard (`startWebServer()`, a no-op if `config.web` isn't set).
+   - A one-time `clientReady` handler populates the member cache for `guildId`, does an initial anchor-message sync (`syncAnchorMessage()`), re-syncs every reaction-role panel (`syncAllPanels()`), and — once the guild is cached — starts the dashboard (`startWebServer()`, a no-op if `config.web` isn't set).
    - `client.login()` connects to the Discord gateway.
 
 ## Live reconfiguration
@@ -117,12 +117,19 @@ This means individual command files never re-implement permission checks — the
 
 ## Data flow: birthday tracking
 
-1. An admin posts/maintains a birthday list in `birthdayListChannelId`, starting at `birthdayListMessageId`, formatted with the `ღ:` marker (`BIRTHDAY_LIST_MARKER` in `constants.ts`) followed by a `DD.MM` date and a comma-separated list of `@mentions`.
-2. `updateBirthdayListFromMessage()` (in `services/birthdays.ts`) fetches the anchor message plus up to `BIRTHDAY_LIST_SCAN_LIMIT` (50) follow-up messages from the same author, concatenates the ones containing the marker, and parses them with `parseBirthdayMessage()`.
-3. `resolveParsedBirthdaysWithDiscord()` fetches each mentioned user as a guild member (rate-limited via `MEMBER_FETCH_DELAY_MS`) and fills in their current display name.
-4. The result replaces the entire `birthdays` table in one transaction (`replaceAllBirthdays()` — see [DATABASE.md](DATABASE.md)).
-5. This re-scan is triggered by: the `/refreshbirthdays` command, the bot's own `clientReady` handler on startup, and automatically whenever a message is created/edited in the birthday channel (`events/birthdayWatcher.ts`).
-6. A cron job (`DAILY_MIDNIGHT_CRON`, `0 0 * * *`) runs daily: it first deletes the previous day's announcement messages (`deleteBirthdayMessages()`, walking back to the first message the bot posted), then looks up today's birthdays and posts fresh announcements built from the configured template (`buildBirthdayMessage()`).
+Birthdays get into the `birthdays` table one of two ways — there's no bulk-import/message-parsing path:
+
+1. **Admin-managed** (`source = 'list'`): added, edited, or removed one at a time from the dashboard's Birthdays page (`web/routes/birthdays.ts` → `db/birthdaysRepository.ts`'s `insertBirthday`/`updateBirthdayEntry`/`deleteBirthday`).
+2. **Self-registration** (`source = 'self'`): `/setmybirthday`, or posting a bare `DD.MM`-shaped date in the configured `birthdayListChannelId` (auto-detected and deleted by `events/birthdayWatcher.ts`, parsed by `parseSelfRegistrationDate()`). Upserted by Discord user id (`upsertSelfBirthday()`), so re-registering just updates the existing row.
+
+Either path calls `syncAnchorMessage()` (`services/birthdays.ts`) afterward to keep the bot-managed anchor message current:
+
+3. `buildAnchorParts()` groups the current `birthdays` table by month into independently-keyed parts (plus the configured intro note, if any).
+4. `paginateAnchorParts()` packs those parts into as few ≤2000-character chunks as Discord's `content` cap allows — a month is only ever split across chunks if it alone exceeds the cap — biased by the *previous* sync's month→chunk assignment (persisted per chunk in `birthday_anchor_messages.months`) so a month stays pinned to the same message across syncs instead of reflowing whenever an unrelated month's entry count changes.
+5. Each chunk is edited in place if its message from the last sync still exists, appended as a new message if the chain grew, or (for a chunk beyond the new count) deleted if the chain shrank; `closeAnchorChainGaps()` then removes anything that landed between chunks since the last sync (e.g. a daily announcement), so the chain reads as one contiguous block.
+6. `syncAnchorMessage()` runs once at startup (`clientReady`), after every self-registration, and after any dashboard settings/entry change.
+7. A cron job (`DAILY_MIDNIGHT_CRON`, `0 0 * * *`) runs daily: it first deletes the previous day's announcement messages (`deleteBirthdayMessages()`, walking back to the first message the bot posted, skipping every message currently in the anchor chain), then looks up today's birthdays and posts fresh announcements built from the configured template (`buildBirthdayMessage()`).
+8. `removeBirthdayOnMemberLeave()` runs unconditionally from `guildMemberRemove` (`events/memberEvents.ts`) — voluntary leave, kick, or ban all look the same here — deleting that user's row from `birthdays` (list or self-registered, doesn't matter) and re-syncing the anchor message if anything was actually removed. Otherwise a departed member's entry would linger in both the DB and the rendered message indefinitely.
 
 ## Data flow: reaction roles
 

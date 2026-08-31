@@ -141,6 +141,21 @@ export default function Settings({ me }: { me: Me }) {
                   later promotions must not re-trigger this.
                 </div>
               </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.rulesAcceptedUseDiscordScreening}
+                  onChange={(e) => update({ rulesAcceptedUseDiscordScreening: e.target.checked })}
+                />
+                Detect "rules accepted" via Discord's membership screening instead of the register-gate role
+              </label>
+              <div className="hint">
+                Off (default): a member is considered to have accepted the rules the moment they're granted the
+                register-gate role above (i.e. reacting to the rules message) — role-based. On: use Discord's own
+                membership screening "pending" flag instead, for servers that rely on that built-in feature rather
+                than a reaction role. Only affects the "Rules accepted" column on{" "}
+                <a href="/members">Member Audit</a>.
+              </div>
             </>
           )}
         </div>

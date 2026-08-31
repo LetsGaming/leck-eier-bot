@@ -105,17 +105,15 @@ export interface MappingInput {
 
 export interface BirthdaySettings {
   template: string;
+  /** Channel the bot-managed anchor message chain lives in. */
   channelId: string | null;
-  messageId: string | null;
   cron: string;
   /** Channel the bot posts a heads-up to whenever someone self-registers their birthday. Null = no notification posted. */
   modChannelId: string | null;
-  /** Gates both self-registration paths (`/setmybirthday` and posting a date in the birthday channel). */
-  selfRegistrationEnabled: boolean;
-  /** Only settable while selfRegistrationEnabled is also true. */
-  botManagesAnchor: boolean;
   /** `{month}`/`{entries}` placeholder template for each month's heading in the bot-managed anchor message. */
   anchorTemplate: string;
+  /** Shown once above all the month blocks (e.g. how to register a birthday) — never repeated, never font-styled. Null = no intro shown. */
+  anchorIntro: string | null;
   /** Whether the anchor message's `{month}` heading renders through the global font set on the Settings page. */
   anchorUseFont: boolean;
   /** Whether the daily birthday announcement message renders through the global font set on the Settings page. */
@@ -123,11 +121,21 @@ export interface BirthdaySettings {
 }
 
 export interface BirthdayEntry {
+  /** Row id — needed to edit/delete a specific entry from the dashboard's admin-managed table. */
+  id: number;
   mention: string;
   userId: string | null;
   name: string | null;
-  /** 'list' = parsed from the manually-maintained announcement message; 'self' = registered via `/setmybirthday` or a message in the birthday channel. */
+  /** 'list' = added/edited by an admin via the dashboard; 'self' = registered via `/setmybirthday` or a message in the birthday channel. */
   source: "list" | "self";
+}
+
+/** Body for adding or editing a birthday from the dashboard's admin-managed table (see `api.addBirthday`/`api.updateBirthday`). */
+export interface BirthdayEntryInput {
+  day: number;
+  month: number;
+  userId: string | null;
+  name: string | null;
 }
 
 export type BirthdaysByDate = Record<string, BirthdayEntry[]>;
@@ -155,6 +163,8 @@ export interface GeneralSettings {
   registerGateRoleId: string | null;
   /** The lowest membership tier role, granted once at manual registration. Null = the register-gate role swap is disabled. */
   registrationTierRoleId: string | null;
+  /** How "rules accepted" is detected on the Member Audit page. Off (default) = role-based: newly granted registerGateRoleId. On = Discord's native membership-screening `pending` flag. */
+  rulesAcceptedUseDiscordScreening: boolean;
 }
 
 /**

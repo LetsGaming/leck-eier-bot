@@ -1,5 +1,6 @@
 import type { Collection, GuildMember } from "discord.js";
 import { recordLeave, recordRulesAccepted, updateProfile, upsertJoin } from "../db/memberRecordsRepository.js";
+import { getSettings } from "../db/settingsRepository.js";
 
 function displayNameOf(member: GuildMember): string {
   return member.displayName || member.user.globalName || member.user.username;
@@ -37,11 +38,39 @@ export function recordMemberProfileUpdate(member: GuildMember): void {
   });
 }
 
-/** Membership screening ("rules acceptance") completing is the `pending` flag flipping from true to false — Discord has no other signal for it, and no historical record of *when* it happened for anyone already past it. */
+/**
+ * "Rules accepted" has two possible signals, picked via
+ * `settings.rulesAcceptedUseDiscordScreening`:
+ *
+ * - **Role-based** (default, off): this guild's actual rules gate is a
+ *   reaction-role panel on the rules message that grants
+ *   `registerGateRoleId` (see `stripRegisterGateRoleIfJustRegistered()` in
+ *   `events/memberEvents.ts`, which strips that same role once registration
+ *   completes) — so the signal is that role being newly granted. Works even
+ *   for a guild that never uses Discord's own membership screening.
+ * - **Discord-based** (on): Discord's native membership-screening `pending`
+ *   flag flipping from `true` to `false`, for a guild that uses that
+ *   feature instead of a reaction-role gate.
+ *
+ * Either way, `recordRulesAccepted()` only ever sets the column once (its
+ * `UPDATE` is a no-op if already non-null), so e.g. a later
+ * strip-then-regrant of the gate role (re-registering) doesn't overwrite
+ * the original timestamp. No-ops if the relevant signal isn't
+ * available (role-based with no `registerGateRoleId` configured), and no
+ * historical record exists for anyone who triggered it before this shipped
+ * or before the setting was switched.
+ */
 export function recordRulesAcceptedIfJustVerified(oldMember: GuildMember, newMember: GuildMember): void {
-  if (oldMember.pending && !newMember.pending) {
-    recordRulesAccepted(newMember.id, new Date().toISOString());
-  }
+  const { rulesAcceptedUseDiscordScreening, registerGateRoleId } = getSettings();
+
+  const justAccepted = rulesAcceptedUseDiscordScreening
+    ? oldMember.pending && !newMember.pending
+    : !!registerGateRoleId &&
+      !oldMember.roles.cache.has(registerGateRoleId) &&
+      newMember.roles.cache.has(registerGateRoleId);
+
+  if (!justAccepted) return;
+  recordRulesAccepted(newMember.id, new Date().toISOString());
 }
 
 export function recordMemberLeave(userId: string, username: string, displayName: string, avatar: string | null): void {

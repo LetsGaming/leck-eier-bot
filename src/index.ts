@@ -24,11 +24,10 @@ import { getCachedMembers, initMemberCache } from "./services/memberCache.js";
 import { seedMemberRecordsFromCache } from "./services/memberRecords.js";
 import {
   deleteBirthdayMessages,
-  getBirthdayListLocation,
+  getAnchorProtectedMessageIds,
   getTodaysBirthdays,
   sendBirthdayMessages,
   syncAnchorMessage,
-  updateBirthdayListFromMessage,
 } from "./services/birthdays.js";
 import { syncAllPanels } from "./services/reactionRoles.js";
 import { getSettings } from "./db/settingsRepository.js";
@@ -94,15 +93,16 @@ let birthdayCronTask: ScheduledTask | undefined;
 let lastScheduledCron: string | undefined;
 
 async function runDailyBirthdayJob(): Promise<void> {
-  const location = getBirthdayListLocation();
-  if (!location) {
-    logger.warn("Skipping daily birthday job: birthday list not configured yet.");
+  const { birthdayListChannelId } = getSettings();
+  if (!birthdayListChannelId) {
+    logger.warn("Skipping daily birthday job: birthday channel not configured yet.");
     return;
   }
-  await deleteBirthdayMessages(client, location.channelId, location.messageId);
+  // Never delete an anchor chunk while clearing out yesterday's announcements.
+  await deleteBirthdayMessages(client, birthdayListChannelId, getAnchorProtectedMessageIds());
   const birthdays = getTodaysBirthdays();
   if (birthdays.length) {
-    await sendBirthdayMessages(client, location.channelId, birthdays);
+    await sendBirthdayMessages(client, birthdayListChannelId, birthdays);
   }
 }
 
@@ -182,19 +182,10 @@ client.on("interactionCreate", async (interaction) => {
         seedMemberRecordsFromCache(getCachedMembers());
       }
 
-      if (getSettings().birthdayBotManagesAnchor) {
-        // Owns the message end to end — creates it on first run, otherwise
-        // re-renders it from the current DB state (syncAnchorMessage warns
-        // itself if the channel isn't configured yet).
-        await syncAnchorMessage(client);
-      } else {
-        const location = getBirthdayListLocation();
-        if (location) {
-          await updateBirthdayListFromMessage(client, location.channelId, location.messageId);
-        } else {
-          logger.warn("Birthday list channel/message not configured yet — set it via the dashboard.");
-        }
-      }
+      // Owns the anchor message chain end to end — creates it on first run,
+      // otherwise re-renders it from the current DB state (syncAnchorMessage
+      // warns itself if the channel isn't configured yet).
+      await syncAnchorMessage(client);
 
       // Re-post/edit every reaction-role panel so seed reactions survive a
       // restart even if someone manually removed one while the bot was down.
