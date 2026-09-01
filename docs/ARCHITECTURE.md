@@ -155,8 +155,10 @@ See [DASHBOARD.md](DASHBOARD.md) for setup and usage. In short: `src/web/server.
 `utils/logger.ts` configures a `winston` logger with:
 
 - Daily-rotating file transports for `error` and `combined` logs (14-day retention, 20MB rotation size — see `LOG_RETENTION_DAYS`/`LOG_MAX_FILE_SIZE` in `constants.ts`).
-- Separate `exceptions.log`/`rejections.log` files for anything that would otherwise crash the process silently.
-- A colorized console transport, added only when `NODE_ENV !== "production"`.
+- Separate daily-rotating `exceptions-*.log`/`rejections-*.log` files, same retention/size limits, for anything that would otherwise crash the process silently.
+- A colorized console transport, always on, so `docker compose logs` shows the same output as the log files.
+
+All transports share one human-readable line format (`timestamp | [level]: message`) instead of raw JSON.
 
 Because winston's `errors()` format doesn't reliably preserve a custom message when an `Error` is passed as a *second* argument (`logger.error("context:", err)` — the error's own message silently replaces yours), the codebase consistently uses the `errorMessage(err)` helper exported from `logger.ts` to fold the error into the message string itself: `logger.error(\`context: ${errorMessage(err)}\`)`.
 

@@ -18,7 +18,7 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.Clear)
-  .setDescription("Löscht Nachrichten in diesem Kanal und umgeht dabei Discords Limit von 100 Nachrichten pro Löschanfrage.")
+  .setDescription("Löscht Nachrichten in diesem Kanal und umgeht Discords Limit von 100 Nachrichten pro Anfrage.")
   .addIntegerOption((opt) =>
     opt
       .setName("amount")
