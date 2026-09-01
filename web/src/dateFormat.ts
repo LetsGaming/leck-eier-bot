@@ -33,5 +33,5 @@ export function formatRelative(iso: string | null): string {
   const days = Math.floor(remainingMs / 86_400_000);
   const hours = Math.floor((remainingMs % 86_400_000) / 3_600_000);
 
-  return `${months}M, ${days}D and ${hours}Hr ago`;
+  return `vor ${months}M, ${days}T und ${hours}Std`;
 }

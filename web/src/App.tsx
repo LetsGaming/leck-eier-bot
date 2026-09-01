@@ -22,7 +22,7 @@ export default function App() {
       .catch(() => setMe(null));
   }, []);
 
-  if (me === undefined) return <div className="loading">Loading…</div>;
+  if (me === undefined) return <div className="loading">Wird geladen…</div>;
   if (me === null) return <Login />;
 
   return (

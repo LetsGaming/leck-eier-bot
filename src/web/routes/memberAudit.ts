@@ -37,7 +37,7 @@ export function registerMemberAuditRoutes(app: FastifyInstance): void {
   app.get("/members/audit", async (request, reply) => {
     const query = (request.query as { q?: string }).q?.trim() ?? "";
     if (!isCacheReady()) {
-      return reply.code(503).send({ error: "The member cache is still building — try again shortly." });
+      return reply.code(503).send({ error: "Der Mitglieder-Cache wird noch aufgebaut — versuche es gleich noch einmal." });
     }
 
     const records = new Map<string, MemberRecord>(listAllMemberRecords().map((r) => [r.userId, r]));

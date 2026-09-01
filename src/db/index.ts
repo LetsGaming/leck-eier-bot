@@ -170,7 +170,7 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       UPDATE reaction_role_panels
       SET name = CASE
         WHEN title IS NOT NULL AND title != '' THEN title
-        WHEN managed = 0 THEN 'Existing message'
+        WHEN managed = 0 THEN 'Bestehende Nachricht'
         ELSE 'Panel #' || id
       END
       WHERE name = '';

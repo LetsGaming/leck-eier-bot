@@ -105,7 +105,7 @@ export default function SearchableSelect({
                 {o.hint && <span className="muted"> {o.hint}</span>}
               </button>
             ))}
-            {filtered.length === 0 && <span className="muted searchable-select-empty">No matches.</span>}
+            {filtered.length === 0 && <span className="muted searchable-select-empty">Keine Treffer.</span>}
           </div>
         </div>
       )}

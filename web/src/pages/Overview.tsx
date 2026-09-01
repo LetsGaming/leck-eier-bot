@@ -25,9 +25,9 @@ export default function Overview() {
 
   return (
     <div>
-      <h2>Overview</h2>
+      <h2>Übersicht</h2>
       {!status ? (
-        <div className="loading">Loading…</div>
+        <div className="loading">Wird geladen…</div>
       ) : (
         <div className="stat-grid">
           <div className="stat-tile">
@@ -35,37 +35,37 @@ export default function Overview() {
             <div className="value">{status.botTag ?? "—"}</div>
           </div>
           <div className="stat-tile">
-            <div className="label">Uptime</div>
+            <div className="label">Laufzeit</div>
             <div className="value">{formatUptime(status.uptimeMs)}</div>
           </div>
           <div className="stat-tile">
-            <div className="label">Guild</div>
+            <div className="label">Server</div>
             <div className="value">{status.guildName ?? "—"}</div>
           </div>
           <div className="stat-tile">
-            <div className="label">Members</div>
+            <div className="label">Mitglieder</div>
             <div className="value">{status.guildMemberCount ?? "—"}</div>
           </div>
           <div className="stat-tile">
-            <div className="label">Cached members</div>
+            <div className="label">Zwischengespeicherte Mitglieder</div>
             <div className="value">{status.cachedMemberCount}</div>
           </div>
           <div className="stat-tile">
-            <div className="label">Reaction-role panels</div>
+            <div className="label">Reaktionsrollen-Panels</div>
             <div className="value">{status.reactionRolePanelCount}</div>
           </div>
         </div>
       )}
       <div className="card">
-        <h2>Quick links</h2>
+        <h2>Schnellzugriff</h2>
         <p>
-          <Link to="/reaction-roles">Manage reaction-role panels</Link>
+          <Link to="/reaction-roles">Reaktionsrollen-Panels verwalten</Link>
         </p>
         <p>
-          <Link to="/birthdays">Edit the birthday template &amp; schedule</Link>
+          <Link to="/birthdays">Geburtstagsvorlage &amp; Zeitplan bearbeiten</Link>
         </p>
         <p>
-          <Link to="/commands">Enable or disable commands</Link>
+          <Link to="/commands">Befehle aktivieren oder deaktivieren</Link>
         </p>
       </div>
     </div>

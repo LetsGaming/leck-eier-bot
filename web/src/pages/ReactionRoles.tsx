@@ -23,18 +23,18 @@ type MessageSource = "simple" | "embed" | "existing";
 function selectionHint(selectionType: SelectionType): string {
   switch (selectionType) {
     case "reactions":
-      return "Members react on the message to pick a role.";
+      return "Mitglieder reagieren auf die Nachricht, um eine Rolle zu wählen.";
     case "buttons":
-      return "Members click a button under the message. Up to 25 buttons (5 per row).";
+      return "Mitglieder klicken auf einen Button unter der Nachricht. Bis zu 25 Buttons (5 pro Reihe).";
     case "dropdown":
-      return "Members pick from a dropdown menu under the message. Up to 25 options.";
+      return "Mitglieder wählen aus einem Dropdown-Menü unter der Nachricht. Bis zu 25 Optionen.";
   }
 }
 
 function multiRemovableHint(allowMultiple: boolean, removable: boolean): string {
-  const multi = allowMultiple ? "hold more than one role from this panel at once" : "hold only one role from this panel at a time";
-  const remove = removable ? "can give a role up again later" : "can never give a role back up once they have it (rules-acceptance style)";
-  return `Members ${multi}, and ${remove}.`;
+  const multi = allowMultiple ? "gleichzeitig mehr als eine Rolle aus diesem Panel besitzen" : "gleichzeitig nur eine Rolle aus diesem Panel besitzen";
+  const remove = removable ? "eine Rolle später wieder abgeben können" : "eine Rolle nie wieder abgeben können, sobald sie sie haben (im Stil einer Regelakzeptanz)";
+  return `Mitglieder können ${multi}, und ${remove}.`;
 }
 
 function parseMessageLink(link: string): { channelId: string; messageId: string } | null {
@@ -179,7 +179,7 @@ export default function ReactionRoles() {
 
   async function handleSavePanel() {
     if (!form.name.trim()) {
-      showError("Give the panel a name.");
+      showError("Gib dem Panel einen Namen.");
       return;
     }
     const attachingExisting = selectedId === "new" && attachMode === "existing";
@@ -187,11 +187,11 @@ export default function ReactionRoles() {
     if (attachingExisting) {
       existingLocation = parseMessageLink(messageLink);
       if (!existingLocation) {
-        showError("Paste a valid message link (right-click the message → Copy Message Link).");
+        showError("Füge einen gültigen Nachrichtenlink ein (Rechtsklick auf die Nachricht → Nachrichtenlink kopieren).");
         return;
       }
     } else if (!form.channelId) {
-      showError("Pick a channel first.");
+      showError("Wähle zuerst einen Kanal aus.");
       return;
     }
     setBusy(true);
@@ -208,7 +208,7 @@ export default function ReactionRoles() {
           existingMessageId: attachingExisting ? existingLocation!.messageId : null,
         };
         saved = await api.createPanel(body);
-        showSuccess("Panel created as a draft — add roles below, then click Send when ready.");
+        showSuccess("Panel als Entwurf erstellt — füge unten Rollen hinzu und klicke dann auf Senden, wenn du bereit bist.");
       } else if (typeof selectedId === "number") {
         saved = await api.updatePanel(selectedId, {
           ...form,
@@ -216,7 +216,7 @@ export default function ReactionRoles() {
           description: form.description.trim() ? form.description : null,
           allowedRoleIds: form.allowedRoleIds.length ? form.allowedRoleIds : null,
         });
-        showSuccess(saved.sent ? "Panel saved and re-synced with Discord." : "Draft saved.");
+        showSuccess(saved.sent ? "Panel gespeichert und mit Discord synchronisiert." : "Entwurf gespeichert.");
       } else {
         return;
       }
@@ -236,8 +236,8 @@ export default function ReactionRoles() {
     if (typeof selectedId !== "number") return;
     const confirmMsg =
       selected && !selected.managed
-        ? "Delete this panel? The attached Discord message is left alone — only the reaction-role config is removed."
-        : "Delete this panel and its Discord message?";
+        ? "Dieses Panel löschen? Die angehängte Discord-Nachricht bleibt unangetastet — nur die Reaktionsrollen-Konfiguration wird entfernt."
+        : "Dieses Panel und die zugehörige Discord-Nachricht löschen?";
     if (!confirm(confirmMsg)) return;
     setBusy(true);
     try {
@@ -257,7 +257,7 @@ export default function ReactionRoles() {
     try {
       const saved = await api.sendPanel(selectedId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
-      showSuccess("Panel sent — it's live on Discord now.");
+      showSuccess("Panel gesendet — es ist jetzt live auf Discord.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -271,7 +271,7 @@ export default function ReactionRoles() {
     try {
       const saved = await api.syncPanel(selectedId);
       setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
-      showSuccess("Panel re-synced with Discord.");
+      showSuccess("Panel mit Discord synchronisiert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -282,19 +282,19 @@ export default function ReactionRoles() {
   async function handleAddMapping() {
     if (typeof selectedId !== "number") return;
     if (mappingDraft.roleIds.length === 0) {
-      showError("Pick at least one role.");
+      showError("Wähle mindestens eine Rolle aus.");
       return;
     }
     if (effectiveSelectionType === "reactions" && !mappingDraft.emojiName) {
-      showError("Pick an emoji.");
+      showError("Wähle ein Emoji aus.");
       return;
     }
     if (effectiveSelectionType !== "reactions" && !mappingDraft.label.trim()) {
-      showError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
+      showError(`Für ${effectiveSelectionType === "buttons" ? "Buttons" : "Dropdown-Optionen"} ist eine Beschriftung erforderlich.`);
       return;
     }
     if (atOptionCap) {
-      showError(`Discord allows at most ${optionCap} options for this selection type.`);
+      showError(`Discord erlaubt maximal ${optionCap} Optionen für diesen Auswahltyp.`);
       return;
     }
     setBusy(true);
@@ -340,15 +340,15 @@ export default function ReactionRoles() {
   async function handleSaveEditMapping() {
     if (typeof selectedId !== "number" || editingMappingId === null) return;
     if (editDraft.roleIds.length === 0) {
-      showError("Pick at least one role.");
+      showError("Wähle mindestens eine Rolle aus.");
       return;
     }
     if (effectiveSelectionType === "reactions" && !editDraft.emojiName) {
-      showError("Pick an emoji.");
+      showError("Wähle ein Emoji aus.");
       return;
     }
     if (effectiveSelectionType !== "reactions" && !editDraft.label.trim()) {
-      showError(`A label is required for ${effectiveSelectionType === "buttons" ? "buttons" : "dropdown options"}.`);
+      showError(`Für ${effectiveSelectionType === "buttons" ? "Buttons" : "Dropdown-Optionen"} ist eine Beschriftung erforderlich.`);
       return;
     }
     setBusy(true);
@@ -403,39 +403,39 @@ export default function ReactionRoles() {
     return m.emojiName ?? "—";
   }
 
-  const optionWord = effectiveSelectionType === "reactions" ? "reaction" : effectiveSelectionType === "buttons" ? "button" : "option";
+  const optionWord = effectiveSelectionType === "reactions" ? "Reaktion" : effectiveSelectionType === "buttons" ? "Button" : "Option";
 
   return (
     <div>
-      <h2>Reaction Roles</h2>
+      <h2>Reaktionsrollen</h2>
 
       <div className="rr-layout">
         <div className="rr-list">
           <button className={selectedId === "new" ? "active" : ""} onClick={() => selectPanel("new")}>
-            + New panel
+            + Neues Panel
           </button>
           {panels.map((p) => (
             <button key={p.id} className={selectedId === p.id ? "active" : ""} onClick={() => selectPanel(p.id)}>
               #{p.id} — {p.name}
-              {!p.sent && " (draft)"}
+              {!p.sent && " (Entwurf)"}
             </button>
           ))}
         </div>
 
         <div className="rr-editor">
           {selectedId === null ? (
-            <p className="muted">Select a panel on the left, or create a new one.</p>
+            <p className="muted">Wähle links ein Panel aus oder erstelle ein neues.</p>
           ) : (
             <>
               {typeof selectedId === "number" && selected && !selected.sent && (
                 <div className="alert" style={{ background: "var(--bg-inset)", border: "1px solid var(--border)" }}>
-                  <strong>Draft</strong> — nothing has been posted to Discord yet. Configure everything below, then
-                  click <strong>Send</strong> when you're ready.
+                  <strong>Entwurf</strong> — es wurde noch nichts auf Discord gepostet. Konfiguriere alles unten und
+                  klicke dann auf <strong>Senden</strong>, wenn du bereit bist.
                 </div>
               )}
 
               <div className="card">
-                <h2>Message</h2>
+                <h2>Nachricht</h2>
 
                 <div className="field">
                   <label htmlFor="rr-name">Name</label>
@@ -444,75 +444,75 @@ export default function ReactionRoles() {
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Enter a unique name"
+                    placeholder="Gib einen eindeutigen Namen ein"
                   />
-                  <div className="hint">For your own reference in this list — not shown on the message itself.</div>
+                  <div className="hint">Nur zu deiner eigenen Orientierung in dieser Liste — wird nicht in der Nachricht selbst angezeigt.</div>
                 </div>
 
                 {selectedId === "new" ? (
                   <div className="field">
-                    <label htmlFor="rr-message-source">Message type</label>
+                    <label htmlFor="rr-message-source">Nachrichtentyp</label>
                     <select
                       id="rr-message-source"
                       value={messageSource}
                       onChange={(e) => handleMessageSourceChange(e.target.value as MessageSource)}
                     >
-                      <option value="simple">Simple message</option>
-                      <option value="embed">Embedded message</option>
-                      <option value="existing">Existing message</option>
+                      <option value="simple">Einfache Nachricht</option>
+                      <option value="embed">Eingebettete Nachricht</option>
+                      <option value="existing">Bestehende Nachricht</option>
                     </select>
                     <div className="hint">
                       {messageSource === "existing"
-                        ? "Attach to a message an admin already wrote (e.g. server rules) — its content is never touched, only its reactions. Reactions only."
-                        : "The bot posts a message listing the roles below and keeps it updated."}
+                        ? "An eine Nachricht anhängen, die ein Admin bereits geschrieben hat (z. B. Serverregeln) — ihr Inhalt wird nie verändert, nur ihre Reaktionen. Nur Reaktionen."
+                        : "Der Bot postet eine Nachricht mit den unten aufgeführten Rollen und hält sie aktuell."}
                     </div>
                   </div>
                 ) : (
                   selected?.managed && (
                     <div className="field">
-                      <label htmlFor="rr-message-type">Message type</label>
+                      <label htmlFor="rr-message-type">Nachrichtentyp</label>
                       <select
                         id="rr-message-type"
                         value={form.messageType}
                         onChange={(e) => setForm((f) => ({ ...f, messageType: e.target.value as PanelMessageType }))}
                       >
-                        <option value="text">Simple message</option>
-                        <option value="embed">Embedded message</option>
+                        <option value="text">Einfache Nachricht</option>
+                        <option value="embed">Eingebettete Nachricht</option>
                       </select>
                     </div>
                   )
                 )}
                 {typeof selectedId === "number" && selected && !selected.managed && (
                   <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
-                    Attached to an existing message — its content is never edited.
+                    An eine bestehende Nachricht angehängt — ihr Inhalt wird nie bearbeitet.
                   </p>
                 )}
 
                 <div className="field">
-                  <label htmlFor="rr-selection-type">Selection type</label>
+                  <label htmlFor="rr-selection-type">Auswahltyp</label>
                   <select
                     id="rr-selection-type"
                     value={effectiveSelectionType}
                     disabled={selectedId !== "new" || attachMode === "existing"}
                     onChange={(e) => setSelectionType(e.target.value as SelectionType)}
                   >
-                    <option value="reactions">Reactions</option>
+                    <option value="reactions">Reaktionen</option>
                     <option value="buttons" disabled={selectedId === "new" && attachMode === "existing"}>
                       Buttons
                     </option>
                     <option value="dropdown" disabled={selectedId === "new" && attachMode === "existing"}>
-                      Dropdown menu
+                      Dropdown-Menü
                     </option>
                   </select>
                   <div className="hint">
-                    {selectedId === "new" ? selectionHint(selectionType) : "Fixed for this panel."}
+                    {selectedId === "new" ? selectionHint(selectionType) : "Für dieses Panel festgelegt."}
                   </div>
                 </div>
 
                 {isExistingMessageMode ? (
                   selectedId === "new" && (
                     <div className="field">
-                      <label htmlFor="rr-message-link">Message link</label>
+                      <label htmlFor="rr-message-link">Nachrichtenlink</label>
                       <input
                         id="rr-message-link"
                         type="text"
@@ -520,44 +520,44 @@ export default function ReactionRoles() {
                         onChange={(e) => setMessageLink(e.target.value)}
                         placeholder="https://discord.com/channels/…/…/…"
                       />
-                      <div className="hint">Right-click the message → Copy Message Link. No need to pick a channel separately.</div>
+                      <div className="hint">Rechtsklick auf die Nachricht → Nachrichtenlink kopieren. Ein Kanal muss nicht separat gewählt werden.</div>
                     </div>
                   )
                 ) : (
                   <>
                     <div className="field">
-                      <label htmlFor="rr-channel">Channel</label>
+                      <label htmlFor="rr-channel">Kanal</label>
                       <SearchableSelect
                         id="rr-channel"
                         value={form.channelId}
                         onChange={(v) => setForm((f) => ({ ...f, channelId: v }))}
-                        placeholder="Search channels…"
-                        emptyLabel="— pick a channel —"
+                        placeholder="Kanäle durchsuchen…"
+                        emptyLabel="— Kanal wählen —"
                         options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
                       />
                     </div>
                     {form.messageType === "embed" && (
                       <div className="field">
-                        <label htmlFor="rr-title">Embed title</label>
+                        <label htmlFor="rr-title">Embed-Titel</label>
                         <input
                           id="rr-title"
                           type="text"
                           value={form.title}
                           onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                          placeholder={form.name || "Reaction Roles"}
+                          placeholder={form.name || "Reaktionsrollen"}
                         />
                       </div>
                     )}
                     <div className="field">
-                      <label htmlFor="rr-description">Message text</label>
+                      <label htmlFor="rr-description">Nachrichtentext</label>
                       <textarea
                         id="rr-description"
                         value={form.description}
                         onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                         placeholder={
                           effectiveSelectionType === "reactions"
-                            ? "React to get a role!"
-                            : "Optional text shown above the buttons/menu"
+                            ? "Reagiere, um eine Rolle zu erhalten!"
+                            : "Optionaler Text, der über den Buttons/dem Menü angezeigt wird"
                         }
                       />
                     </div>
@@ -567,37 +567,37 @@ export default function ReactionRoles() {
                         checked={form.useFont}
                         onChange={(e) => setForm((f) => ({ ...f, useFont: e.target.checked }))}
                       />
-                      Use font
+                      Schrift verwenden
                     </label>
                     <div className="hint">
-                      Styles the title/text/labels above with the font set on the{" "}
-                      <a href="/settings">Settings page</a>, if one's configured.
+                      Formatiert Titel/Text/Beschriftungen oben mit der auf der{" "}
+                      <a href="/settings">Einstellungsseite</a> festgelegten Schrift, sofern konfiguriert.
                     </div>
                   </>
                 )}
 
                 <button className="primary" onClick={handleSavePanel} disabled={busy}>
-                  {selectedId === "new" ? "Create draft panel" : "Save changes"}
+                  {selectedId === "new" ? "Entwurfspanel erstellen" : "Änderungen speichern"}
                 </button>
                 {typeof selectedId === "number" && selected && (
                   <>
                     {selected.sent ? (
                       <button onClick={handleSync} disabled={busy}>
-                        Re-sync with Discord
+                        Mit Discord synchronisieren
                       </button>
                     ) : (
                       <button className="primary" onClick={handleSend} disabled={busy || selected.mappings.length === 0}>
-                        Send message
+                        Nachricht senden
                       </button>
                     )}
                     <button className="danger" onClick={handleDeletePanel} disabled={busy}>
-                      Delete panel
+                      Panel löschen
                     </button>
                   </>
                 )}
                 {selected?.messageId && (
                   <p className="hint" style={{ marginTop: 12 }}>
-                    {selected.managed ? "Posted as" : "Attached to"} message <code>{selected.messageId}</code> in #
+                    {selected.managed ? "Gepostet als" : "Angehängt an"} Nachricht <code>{selected.messageId}</code> in #
                     {channels.find((c) => c.id === selected.channelId)?.name ?? selected.channelId}
                   </p>
                 )}
@@ -605,7 +605,7 @@ export default function ReactionRoles() {
 
               {!isExistingMessageMode && (
                 <div className="card">
-                  <h2>Preview</h2>
+                  <h2>Vorschau</h2>
                   <MessagePreview
                     messageType={form.messageType}
                     selectionType={effectiveSelectionType}
@@ -621,8 +621,8 @@ export default function ReactionRoles() {
 
               {typeof selectedId === "number" && selected && (
                 <div className="card">
-                  <h2>Roles</h2>
-                  {selected.mappings.length === 0 && <p className="muted">No roles configured yet.</p>}
+                  <h2>Rollen</h2>
+                  {selected.mappings.length === 0 && <p className="muted">Noch keine Rollen konfiguriert.</p>}
                   {[...selected.mappings]
                     .sort((a, b) => a.position - b.position)
                     .map((m, i, arr) =>
@@ -638,7 +638,7 @@ export default function ReactionRoles() {
                           />
                           {effectiveSelectionType === "reactions" ? (
                             <RoleCheckboxList
-                              placeholder="Search roles…"
+                              placeholder="Rollen durchsuchen…"
                               value={editDraft.roleIds}
                               onChange={(ids) => setEditDraft((d) => ({ ...d, roleIds: ids }))}
                               options={roles
@@ -647,7 +647,7 @@ export default function ReactionRoles() {
                                   value: r.id,
                                   label: r.name,
                                   disabled: !r.manageable && !editDraft.roleIds.includes(r.id),
-                                  hint: r.manageable ? undefined : "(not assignable)",
+                                  hint: r.manageable ? undefined : "(nicht zuweisbar)",
                                 }))}
                             />
                           ) : (
@@ -655,15 +655,15 @@ export default function ReactionRoles() {
                               className="grow"
                               value={editDraft.roleIds[0] ?? ""}
                               onChange={(v) => setEditDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
-                              placeholder="Search roles…"
-                              emptyLabel="— pick a role —"
+                              placeholder="Rollen durchsuchen…"
+                              emptyLabel="— Rolle wählen —"
                               options={roles
                                 .filter((r) => !usedRoleIds.has(r.id) || m.roleIds.includes(r.id))
                                 .map((r) => ({
                                   value: r.id,
                                   label: r.name,
                                   disabled: !r.manageable,
-                                  hint: r.manageable ? undefined : "(not assignable)",
+                                  hint: r.manageable ? undefined : "(nicht zuweisbar)",
                                 }))}
                             />
                           )}
@@ -672,17 +672,17 @@ export default function ReactionRoles() {
                             className="grow"
                             placeholder={
                               effectiveSelectionType === "reactions"
-                                ? "Label (optional)"
-                                : `${effectiveSelectionType === "buttons" ? "Button" : "Option"} text (required)`
+                                ? "Beschriftung (optional)"
+                                : `${effectiveSelectionType === "buttons" ? "Button" : "Options"}text (erforderlich)`
                             }
                             value={editDraft.label}
                             onChange={(e) => setEditDraft((d) => ({ ...d, label: e.target.value }))}
                           />
                           <button className="primary" disabled={busy} onClick={handleSaveEditMapping}>
-                            Save
+                            Speichern
                           </button>
                           <button disabled={busy} onClick={handleCancelEditMapping}>
-                            Cancel
+                            Abbrechen
                           </button>
                         </div>
                       ) : (
@@ -692,7 +692,7 @@ export default function ReactionRoles() {
                             {roleNamesLabel(m.roleIds)}
                             {m.roleIds.some((id) => !roleIsManageable(id)) && (
                               <span className="badge warn" style={{ marginLeft: 8 }}>
-                                bot can't assign: {roleNamesLabel(m.roleIds.filter((id) => !roleIsManageable(id)))}
+                                Bot kann nicht zuweisen: {roleNamesLabel(m.roleIds.filter((id) => !roleIsManageable(id)))}
                               </span>
                             )}
                             {m.label && <span className="muted"> — {m.label}</span>}
@@ -701,7 +701,7 @@ export default function ReactionRoles() {
                             )}
                           </span>
                           <button disabled={busy || editingMappingId !== null} onClick={() => handleStartEditMapping(m)}>
-                            Edit
+                            Bearbeiten
                           </button>
                           <button disabled={busy || i === 0} onClick={() => handleMove(m.id, -1)}>
                             ↑
@@ -710,14 +710,14 @@ export default function ReactionRoles() {
                             ↓
                           </button>
                           <button className="danger" disabled={busy} onClick={() => handleRemoveMapping(m.id)}>
-                            Remove
+                            Entfernen
                           </button>
                         </div>
                       ),
                     )}
 
                   <h2 style={{ marginTop: 20 }}>
-                    Add {atOptionCap ? `(limit of ${optionCap} reached)` : `a ${optionWord}`}
+                    {atOptionCap ? `Hinzufügen (Limit von ${optionCap} erreicht)` : `${optionWord} hinzufügen`}
                   </h2>
                   {!atOptionCap && (
                     <div className="mapping-row">
@@ -731,7 +731,7 @@ export default function ReactionRoles() {
                       />
                       {effectiveSelectionType === "reactions" ? (
                         <RoleCheckboxList
-                          placeholder="Search roles…"
+                          placeholder="Rollen durchsuchen…"
                           value={mappingDraft.roleIds}
                           onChange={(ids) => setMappingDraft((d) => ({ ...d, roleIds: ids }))}
                           options={roles
@@ -740,7 +740,7 @@ export default function ReactionRoles() {
                               value: r.id,
                               label: r.name,
                               disabled: !r.manageable && !mappingDraft.roleIds.includes(r.id),
-                              hint: r.manageable ? undefined : "(not assignable)",
+                              hint: r.manageable ? undefined : "(nicht zuweisbar)",
                             }))}
                         />
                       ) : (
@@ -748,15 +748,15 @@ export default function ReactionRoles() {
                           className="grow"
                           value={mappingDraft.roleIds[0] ?? ""}
                           onChange={(v) => setMappingDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
-                          placeholder="Search roles…"
-                          emptyLabel="— pick a role —"
+                          placeholder="Rollen durchsuchen…"
+                          emptyLabel="— Rolle wählen —"
                           options={roles
                             .filter((r) => !usedRoleIds.has(r.id))
                             .map((r) => ({
                               value: r.id,
                               label: r.name,
                               disabled: !r.manageable,
-                              hint: r.manageable ? undefined : "(not assignable)",
+                              hint: r.manageable ? undefined : "(nicht zuweisbar)",
                             }))}
                         />
                       )}
@@ -765,25 +765,25 @@ export default function ReactionRoles() {
                         className="grow"
                         placeholder={
                           effectiveSelectionType === "reactions"
-                            ? "Label (optional)"
-                            : `${effectiveSelectionType === "buttons" ? "Button" : "Option"} text (required)`
+                            ? "Beschriftung (optional)"
+                            : `${effectiveSelectionType === "buttons" ? "Button" : "Options"}text (erforderlich)`
                         }
                         value={mappingDraft.label}
                         onChange={(e) => setMappingDraft((d) => ({ ...d, label: e.target.value }))}
                       />
                       <button className="primary" disabled={busy} onClick={handleAddMapping}>
-                        Add
+                        Hinzufügen
                       </button>
                     </div>
                   )}
                 </div>
               )}
 
-              {selectedId === "new" && <p className="muted">Save the panel first, then add roles to it.</p>}
+              {selectedId === "new" && <p className="muted">Speichere das Panel zuerst, bevor du Rollen hinzufügst.</p>}
 
               {selectedId !== null && (
                 <details className="card">
-                  <summary>Advanced options</summary>
+                  <summary>Erweiterte Optionen</summary>
                   <div style={{ marginTop: 16 }}>
                     <div className="field">
                       <label className="switch">
@@ -792,7 +792,7 @@ export default function ReactionRoles() {
                           checked={form.allowMultiple}
                           onChange={(e) => setForm((f) => ({ ...f, allowMultiple: e.target.checked }))}
                         />
-                        Allow members to get more than one role from this panel
+                        Mitgliedern erlauben, mehr als eine Rolle aus diesem Panel zu erhalten
                       </label>
                     </div>
                     <div className="field">
@@ -802,7 +802,7 @@ export default function ReactionRoles() {
                           checked={form.removable}
                           onChange={(e) => setForm((f) => ({ ...f, removable: e.target.checked }))}
                         />
-                        Members can give a role back up once they have it
+                        Mitglieder können eine Rolle wieder abgeben, sobald sie sie haben
                       </label>
                       <div className="hint">{multiRemovableHint(form.allowMultiple, form.removable)}</div>
                     </div>
@@ -815,31 +815,31 @@ export default function ReactionRoles() {
                             checked={form.removeReaction}
                             onChange={(e) => setForm((f) => ({ ...f, removeReaction: e.target.checked }))}
                           />
-                          Remove the user's reaction immediately after acting
+                          Die Reaktion des Nutzers sofort nach der Aktion entfernen
                         </label>
                         <div className="hint">
-                          Keeps the reaction count at 1. With this on, re-reacting the same option flips the role
-                          on/off instead of un-reacting revoking it.
+                          Hält die Reaktionsanzahl bei 1. Wenn aktiviert, schaltet erneutes Reagieren auf dieselbe
+                          Option die Rolle an/aus, statt dass das Entfernen der Reaktion sie entzieht.
                         </div>
                       </div>
                     )}
 
                     <div className="field">
-                      <label>Allowed roles</label>
+                      <label>Erlaubte Rollen</label>
                       <RoleCheckboxList
-                        placeholder="Search roles…"
+                        placeholder="Rollen durchsuchen…"
                         value={form.allowedRoleIds}
                         onChange={(ids) => setForm((f) => ({ ...f, allowedRoleIds: ids }))}
                         options={roles.map((r) => ({ value: r.id, label: r.name }))}
                       />
                       <div className="hint">
-                        Only members holding one of these roles may use the panel. None selected = everyone.
+                        Nur Mitglieder mit einer dieser Rollen dürfen das Panel benutzen. Keine ausgewählt = alle.
                       </div>
                     </div>
 
                     <p className="hint">
-                      These are part of the same panel settings above —{" "}
-                      {selectedId === "new" ? "Create draft panel" : "Save changes"} saves them too.
+                      Diese gehören zu denselben Panel-Einstellungen oben —{" "}
+                      {selectedId === "new" ? "Entwurfspanel erstellen" : "Änderungen speichern"} speichert auch sie.
                     </p>
                   </div>
                 </details>

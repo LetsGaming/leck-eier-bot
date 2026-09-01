@@ -59,18 +59,18 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
         type="button"
         className="emoji-picker-trigger"
         onClick={() => setOpen((o) => !o)}
-        title="Pick an emoji"
+        title="Emoji auswählen"
       >
         {value.emojiId ? (
           <img
             src={customEmojiUrl(value.emojiId, selectedCustom?.animated ?? false)}
-            alt={value.emojiName ?? "emoji"}
+            alt={value.emojiName ?? "Emoji"}
             className="emoji-picker-thumb"
           />
         ) : value.emojiName ? (
           <span>{value.emojiName}</span>
         ) : (
-          <span className="muted">{allowEmpty ? "No emoji" : "Pick emoji"}</span>
+          <span className="muted">{allowEmpty ? "Kein Emoji" : "Emoji auswählen"}</span>
         )}
       </button>
 
@@ -79,19 +79,19 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
           <input
             type="text"
             autoFocus
-            placeholder="Search emoji…"
+            placeholder="Emoji suchen…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="emoji-picker-scroll">
             {allowEmpty && (
               <button type="button" className="emoji-picker-clear" onClick={() => pick({ emojiId: null, emojiName: null })}>
-                No emoji
+                Kein Emoji
               </button>
             )}
             {filteredCustom.length > 0 && (
               <>
-                <div className="emoji-picker-section">This server</div>
+                <div className="emoji-picker-section">Dieser Server</div>
                 <div className="emoji-grid">
                   {filteredCustom.map((e) => (
                     <button
@@ -100,7 +100,7 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
                       title={e.name ?? undefined}
                       onClick={() => pick({ emojiId: e.id, emojiName: e.name ?? e.id })}
                     >
-                      <img src={customEmojiUrl(e.id, e.animated)} alt={e.name ?? "emoji"} />
+                      <img src={customEmojiUrl(e.id, e.animated)} alt={e.name ?? "Emoji"} />
                     </button>
                   ))}
                 </div>
@@ -115,7 +115,7 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
               ))}
               {filteredStandard.length === 0 && filteredCustom.length === 0 && (
                 <span className="muted" style={{ padding: 8 }}>
-                  No matches.
+                  Keine Treffer.
                 </span>
               )}
             </div>

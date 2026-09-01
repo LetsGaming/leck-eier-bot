@@ -44,11 +44,11 @@ export function requireRole(...allowed: WebRole[]) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const session = getSessionFromRequest(request);
     if (!session) {
-      reply.code(401).send({ error: "Not authenticated" });
+      reply.code(401).send({ error: "Nicht authentifiziert" });
       return;
     }
     if (!allowed.includes(session.role)) {
-      reply.code(403).send({ error: "You don't have permission to do that." });
+      reply.code(403).send({ error: "Du hast keine Berechtigung, dies zu tun." });
       return;
     }
     request.session = session;

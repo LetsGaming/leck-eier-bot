@@ -3,9 +3,9 @@ export default function Login() {
     <div className="login-shell">
       <div className="login-card">
         <h1>leck-eier-bot Dashboard</h1>
-        <p>Sign in with Discord to manage reaction roles, birthdays, and commands.</p>
+        <p>Melde dich mit Discord an, um Reaktionsrollen, Geburtstage und Befehle zu verwalten.</p>
         <button className="primary" onClick={() => (window.location.href = "/auth/login")}>
-          Log in with Discord
+          Mit Discord anmelden
         </button>
       </div>
     </div>

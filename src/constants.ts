@@ -36,7 +36,7 @@ export const PAGINATION_TIMEOUT_MS = 60_000;
 /** Marks a line in the birthday announcement message as a birthday entry. */
 export const BIRTHDAY_LIST_MARKER = "ღ:";
 export const DEFAULT_BIRTHDAY_TEMPLATE =
-  "Today we celebrate {userMention}! {everyoneMention} say gratulate {userNick}";
+  "Heute feiern wir {userMention}! {everyoneMention} gratuliert {userNick}";
 /** Runs every day at midnight server time. Also the default for the DB-stored `birthdayCron` setting. */
 export const DAILY_MIDNIGHT_CRON = "0 0 * * *";
 

@@ -33,7 +33,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)
-        .send({ error: "Font must be exactly 52 characters, matching AaBbCc...XxYyZz one for one." });
+        .send({ error: "Die Schrift muss genau 52 Zeichen lang sein und AaBbCc...XxYyZz eins zu eins entsprechen." });
     }
 
     const settings = updateSettings({

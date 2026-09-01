@@ -59,8 +59,8 @@ export default function RoleCheckboxList({ options, value, onChange, placeholder
           overflowY: "auto",
         }}
       >
-        {options.length === 0 && <span className="muted">No roles found.</span>}
-        {options.length > 0 && filtered.length === 0 && <span className="muted">No matches.</span>}
+        {options.length === 0 && <span className="muted">Keine Rollen gefunden.</span>}
+        {options.length > 0 && filtered.length === 0 && <span className="muted">Keine Treffer.</span>}
         {filtered.map((o) => (
           <label
             key={o.value}

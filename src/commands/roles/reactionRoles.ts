@@ -9,18 +9,18 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.ReactionRoles)
-  .setDescription("Manage reaction-role panels. Full editing lives on the dashboard.")
+  .setDescription("Verwaltet Reaktionsrollen-Panels. Vollständige Bearbeitung erfolgt über das Dashboard.")
   .addSubcommand((sub) =>
-    sub.setName("list").setDescription("List all reaction-role panels and their mappings"),
+    sub.setName("list").setDescription("Listet alle Reaktionsrollen-Panels und ihre Zuordnungen auf"),
   )
   .addSubcommand((sub) =>
-    sub.setName("sync").setDescription("Re-post/edit every sent panel message and reconcile its reactions"),
+    sub.setName("sync").setDescription("Postet/bearbeitet jede gesendete Panel-Nachricht neu und gleicht die Reaktionen ab"),
   );
 
 function selectionTypeLabel(type: SelectionType): string {
   switch (type) {
     case SelectionType.Reactions:
-      return "Reactions";
+      return "Reaktionen";
     case SelectionType.Buttons:
       return "Buttons";
     case SelectionType.Dropdown:
@@ -30,10 +30,10 @@ function selectionTypeLabel(type: SelectionType): string {
 
 function panelBadges(panel: ReactionRolePanelWithMappings): string {
   const badges = [selectionTypeLabel(panel.selectionType)];
-  if (panel.allowMultiple) badges.push("multiple roles");
-  if (!panel.removable) badges.push("not removable");
-  if (panel.selectionType === SelectionType.Reactions && panel.removeReaction) badges.push("clears reactions");
-  if (!panel.sent) badges.push("DRAFT — not sent");
+  if (panel.allowMultiple) badges.push("mehrere Rollen");
+  if (!panel.removable) badges.push("nicht entfernbar");
+  if (panel.selectionType === SelectionType.Reactions && panel.removeReaction) badges.push("entfernt Reaktionen");
+  if (!panel.sent) badges.push("ENTWURF — nicht gesendet");
   return badges.join(", ");
 }
 
@@ -44,7 +44,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await syncAllPanels(interaction.client);
     return interaction.editReply({
-      embeds: [createSuccessEmbed("All sent reaction-role panels have been synced. Drafts are untouched — send them from the dashboard first.")],
+      embeds: [createSuccessEmbed("Alle gesendeten Reaktionsrollen-Panels wurden synchronisiert. Entwürfe bleiben unverändert — sende sie zuerst über das Dashboard.")],
     });
   }
 
@@ -52,7 +52,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const panels = listPanels();
   if (panels.length === 0) {
     return interaction.reply({
-      embeds: [createErrorEmbed("No reaction-role panels configured yet. Create one on the dashboard.")],
+      embeds: [createErrorEmbed("Es sind noch keine Reaktionsrollen-Panels konfiguriert. Erstelle eines über das Dashboard.")],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -61,8 +61,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const fields = panels.map((panel) => {
     const jump =
       guildId && panel.messageId
-        ? `[Jump to message](https://discord.com/channels/${guildId}/${panel.channelId}/${panel.messageId})`
-        : "_Not sent yet — finish it on the dashboard._";
+        ? `[Zur Nachricht springen](https://discord.com/channels/${guildId}/${panel.channelId}/${panel.messageId})`
+        : "_Noch nicht gesendet — über das Dashboard fertigstellen._";
     const mappingLines = panel.mappings.length
       ? panel.mappings
           .map((m) => {
@@ -70,7 +70,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             return `${emoji ? `${emoji} ` : ""}${m.label ?? ""} → ${m.roleIds.map((id) => `<@&${id}>`).join(", ")}`.trim();
           })
           .join("\n")
-      : "_No roles configured_";
+      : "_Keine Rollen konfiguriert_";
     return {
       name: `#${panel.id} — ${panel.name} (${panelBadges(panel)})`,
       value: `<#${panel.channelId}> — ${jump}\n${mappingLines}`,
@@ -80,7 +80,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   return interaction.reply({
     embeds: [
       createEmbed({
-        title: "Reaction Role Panels",
+        title: "Reaktionsrollen-Panels",
         color: EmbedColor.Info,
         fields,
       }),

@@ -48,7 +48,7 @@ async function stripRegisterGateRoleIfJustRegistered(oldMember: GuildMember, new
   if (!justGotRegistrationTier) return;
   if (!newMember.roles.cache.has(registerGateRoleId)) return;
 
-  await newMember.roles.remove(registerGateRoleId, "Registered — no longer needs #register visibility");
+  await newMember.roles.remove(registerGateRoleId, "Registriert — benötigt #register-Sichtbarkeit nicht mehr");
 }
 
 export default function registerMemberEvents(client: BotClient): void {
@@ -121,7 +121,7 @@ export default function registerMemberEvents(client: BotClient): void {
       if (owner) {
         await owner
           .send(
-            `👋 User **${knownAs}** (${user.displayName}) has **left** the server`,
+            `👋 Benutzer **${knownAs}** (${user.displayName}) hat den Server **verlassen**`,
           )
           .catch((err) => logger.error(`Failed to DM owner: ${err.message}`));
       }

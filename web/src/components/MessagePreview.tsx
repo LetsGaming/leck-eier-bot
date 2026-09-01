@@ -62,22 +62,22 @@ export default function MessagePreview({
           <span className="message-preview-author">
             leck-eier-bot <span className="message-preview-bot-tag">BOT</span>
           </span>
-          <span className="muted message-preview-timestamp">Today at 12:00</span>
+          <span className="muted message-preview-timestamp">Heute um 12:00</span>
         </div>
       </div>
 
       {messageType === "embed" ? (
         <div className="message-preview-embed">
           {styledTitle && <div className="message-preview-embed-title">{styledTitle}</div>}
-          <div className="message-preview-embed-desc">{text || <span className="muted">No description set.</span>}</div>
+          <div className="message-preview-embed-desc">{text || <span className="muted">Keine Beschreibung festgelegt.</span>}</div>
         </div>
       ) : (
-        <div className="message-preview-text">{text || <span className="muted">No message text set.</span>}</div>
+        <div className="message-preview-text">{text || <span className="muted">Kein Nachrichtentext festgelegt.</span>}</div>
       )}
 
       {selectionType === "reactions" && (
         <div className="message-preview-reactions">
-          {sorted.length === 0 && <span className="muted">No roles added yet.</span>}
+          {sorted.length === 0 && <span className="muted">Noch keine Rollen hinzugefügt.</span>}
           {sorted.map((m) => (
             <span className="message-preview-reaction" key={m.id}>
               {emojiNode(m)} <span className="muted">1</span>
@@ -88,7 +88,7 @@ export default function MessagePreview({
 
       {selectionType === "buttons" && (
         <div className="message-preview-buttons">
-          {sorted.length === 0 && <span className="muted">No buttons added yet.</span>}
+          {sorted.length === 0 && <span className="muted">Noch keine Buttons hinzugefügt.</span>}
           {sorted.map((m) => (
             <span className="message-preview-button" key={m.id}>
               {emojiNode(m)} {style(resolveRoleLabel(m))}
@@ -101,10 +101,10 @@ export default function MessagePreview({
         <div className="message-preview-dropdown">
           <span className="muted">
             {sorted.length === 0
-              ? "No options added yet"
+              ? "Noch keine Optionen hinzugefügt"
               : sorted.length === 1
                 ? style(resolveRoleLabel(sorted[0]!))
-                : `${style(resolveRoleLabel(sorted[0]!))} +${sorted.length - 1} more`}
+                : `${style(resolveRoleLabel(sorted[0]!))} +${sorted.length - 1} weitere`}
           </span>
           <span>▾</span>
         </div>

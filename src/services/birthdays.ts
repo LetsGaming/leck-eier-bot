@@ -262,9 +262,9 @@ export async function notifyBirthdayRegistration(
   try {
     const channel = await client.channels.fetch(birthdayModChannelId);
     if (!channel || !channel.isTextBased() || !("send" in channel)) return;
-    const viaText = via === "command" ? "via `/setmybirthday`" : "by posting in the birthday channel";
+    const viaText = via === "command" ? "über `/setmybirthday`" : "durch eine Nachricht im Geburtstagskanal";
     await channel.send(
-      `🎂 ${entry.mention} (${entry.name ?? "unknown"}) registered their birthday for **${entry.dateKey}** ${viaText}.`,
+      `🎂 ${entry.mention} (${entry.name ?? "unbekannt"}) hat seinen Geburtstag für den **${entry.dateKey}** ${viaText} eingetragen.`,
     );
   } catch (err) {
     logger.warn(`Failed to post birthday registration notice: ${errorMessage(err)}`);
@@ -272,18 +272,18 @@ export async function notifyBirthdayRegistration(
 }
 
 const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
+  "Januar",
+  "Februar",
+  "März",
   "April",
-  "May",
-  "June",
-  "July",
+  "Mai",
+  "Juni",
+  "Juli",
   "August",
   "September",
-  "October",
+  "Oktober",
   "November",
-  "December",
+  "Dezember",
 ];
 
 /** One independent piece of the bot-managed anchor message's content — either the intro, the "nothing registered yet" placeholder, or a single calendar month's block. `key` is stable across syncs (`"intro"`, `"empty"`, or the month number as a string) so `paginateAnchorParts()` can keep it pinned to the same chunk/message from one sync to the next. */
@@ -341,7 +341,7 @@ export function buildAnchorParts(
 
   const parts: AnchorPart[] = [];
   if (intro) parts.push({ key: "intro", text: intro });
-  parts.push(...(monthParts.length > 0 ? monthParts : [{ key: "empty", text: "_No birthdays registered yet._" }]));
+  parts.push(...(monthParts.length > 0 ? monthParts : [{ key: "empty", text: "_Noch keine Geburtstage eingetragen._" }]));
   return parts;
 }
 

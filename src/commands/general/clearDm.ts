@@ -12,19 +12,19 @@ export const permission = CommandPermission.Owner;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.ClearDm)
-  .setDescription("Deletes bot messages in your DMs.")
+  .setDescription("Löscht Bot-Nachrichten in deinen DMs.")
   .addBooleanOption((opt) =>
     opt
       .setName("save_history")
       .setDescription(
-        "If true, sends a .txt file of messages before deleting them.",
+        "Wenn aktiviert, wird vor dem Löschen eine .txt-Datei mit den Nachrichten gesendet.",
       )
       .setRequired(false),
   )
   .addIntegerOption((opt) =>
     opt
       .setName("amount")
-      .setDescription("The number of messages to delete (leave empty for all).")
+      .setDescription("Die Anzahl der zu löschenden Nachrichten (leer lassen für alle).")
       .setRequired(false)
       .setMinValue(1),
   );
@@ -73,7 +73,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (allBotMessages.length === 0) {
       return interaction.editReply({
-        content: "ℹ️ No bot messages found to delete.",
+        content: "ℹ️ Keine Bot-Nachrichten zum Löschen gefunden.",
       });
     }
 
@@ -85,7 +85,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     if (shouldSave) {
       [...allBotMessages].reverse().forEach((msg) => {
-        logContent += `[${msg.createdAt.toLocaleString("de-DE")}] BOT:\n${msg.cleanContent || "[Media/Embed]"}\n`;
+        logContent += `[${msg.createdAt.toLocaleString("de-DE")}] BOT:\n${msg.cleanContent || "[Medien/Embed]"}\n`;
         msg.attachments.forEach(
           (att) => (logContent += ` > Link: ${att.url}\n`),
         );
@@ -107,7 +107,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     // 5. Response
-    const finalMsg = `✅ Successfully wiped **${deletedCount}** bot messages.`;
+    const finalMsg = `✅ **${deletedCount}** Bot-Nachrichten erfolgreich gelöscht.`;
 
     if (shouldSave) {
       const buffer = Buffer.from(logContent, "utf-8");
@@ -126,7 +126,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   } catch (error) {
     logger.error(`Error in cleardm: ${errorMessage(error)}`);
     await interaction.editReply({
-      content: "⚠️ An error occurred during the clearing process.",
+      content: "⚠️ Beim Löschvorgang ist ein Fehler aufgetreten.",
     });
   }
 }

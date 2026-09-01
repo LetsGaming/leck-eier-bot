@@ -18,11 +18,11 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.Clear)
-  .setDescription("Deletes messages in this channel, batching past Discord's 100-per-request bulk-delete limit.")
+  .setDescription("Löscht Nachrichten in diesem Kanal und umgeht dabei Discords Limit von 100 Nachrichten pro Löschanfrage.")
   .addIntegerOption((opt) =>
     opt
       .setName("amount")
-      .setDescription("How many messages to delete.")
+      .setDescription("Wie viele Nachrichten gelöscht werden sollen.")
       .setRequired(true)
       .setMinValue(1)
       .setMaxValue(MAX_CLEAR_AMOUNT),
@@ -38,7 +38,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!channel || !channel.isTextBased() || channel.isDMBased() || !("bulkDelete" in channel)) {
     return interaction.reply({
-      embeds: [createErrorEmbed("This command can only be used in a server text channel.")],
+      embeds: [createErrorEmbed("Dieser Befehl kann nur in einem Text-Kanal eines Servers verwendet werden.")],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -46,7 +46,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const me = interaction.guild?.members.me;
   if (!me?.permissionsIn(channel.id).has(PermissionsBitField.Flags.ManageMessages)) {
     return interaction.reply({
-      embeds: [createErrorEmbed("I need the Manage Messages permission in this channel to do that.")],
+      embeds: [createErrorEmbed("Ich benötige die Berechtigung \"Nachrichten verwalten\" in diesem Kanal, um das zu tun.")],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -89,12 +89,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     return interaction.editReply({
-      embeds: [createSuccessEmbed(`Deleted **${deleted}** message${deleted === 1 ? "" : "s"}.`)],
+      embeds: [createSuccessEmbed(`**${deleted}** Nachricht${deleted === 1 ? "" : "en"} gelöscht.`)],
     });
   } catch (err) {
     logger.error(`/clear failed: ${errorMessage(err)}`);
     return interaction.editReply({
-      embeds: [createErrorEmbed(`Deleted ${deleted} message(s) before an error occurred.`)],
+      embeds: [createErrorEmbed(`${deleted} Nachricht(en) gelöscht, bevor ein Fehler auftrat.`)],
     });
   }
 }

@@ -3,6 +3,12 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import type { CommandDef } from "../types";
 
+const PERMISSION_LABELS: Record<string, string> = {
+  none: "keine",
+  admin: "admin",
+  owner: "besitzer",
+};
+
 export default function Commands() {
   const [commands, setCommands] = useState<CommandDef[] | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -29,34 +35,34 @@ export default function Commands() {
 
   return (
     <div>
-      <h2>Commands</h2>
+      <h2>Befehle</h2>
       <p className="muted">
-        Disabling a command removes it from Discord's slash-command list within a minute — no restart needed.
+        Das Deaktivieren eines Befehls entfernt ihn innerhalb einer Minute aus Discords Slash-Befehlsliste — kein Neustart nötig.
       </p>
       <div className="card">
         {!commands ? (
-          <div className="loading">Loading…</div>
+          <div className="loading">Wird geladen…</div>
         ) : (
           <div className="table-scroll">
             <table className="stack-on-mobile">
               <thead>
                 <tr>
-                  <th>Command</th>
-                  <th>Description</th>
-                  <th>Permission</th>
-                  <th>Enabled</th>
-                  <th>Guild only</th>
+                  <th>Befehl</th>
+                  <th>Beschreibung</th>
+                  <th>Berechtigung</th>
+                  <th>Aktiviert</th>
+                  <th>Nur auf Server</th>
                 </tr>
               </thead>
               <tbody>
                 {commands.map((c) => (
                   <tr key={c.name}>
-                    <td data-label="Command">/{c.name}</td>
-                    <td className="muted" data-label="Description">
+                    <td data-label="Befehl">/{c.name}</td>
+                    <td className="muted" data-label="Beschreibung">
                       {c.description}
                     </td>
-                    <td data-label="Permission">{c.permission ?? "none"}</td>
-                    <td data-label="Enabled">
+                    <td data-label="Berechtigung">{PERMISSION_LABELS[c.permission ?? "none"] ?? c.permission}</td>
+                    <td data-label="Aktiviert">
                       <input
                         type="checkbox"
                         checked={c.enabled}
@@ -64,7 +70,7 @@ export default function Commands() {
                         onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
                       />
                     </td>
-                    <td data-label="Guild only">
+                    <td data-label="Nur auf Server">
                       <input
                         type="checkbox"
                         checked={c.guildOnly}

@@ -53,7 +53,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             <span>{t.message}</span>
-            <button className="toast-close" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+            <button className="toast-close" aria-label="Schließen" onClick={() => dismiss(t.id)}>
               ×
             </button>
           </div>

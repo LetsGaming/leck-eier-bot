@@ -5,9 +5,9 @@ import { useToast } from "../components/ToastContext";
 import type { BirthdayEntry, Channel, UpcomingBirthday } from "../types";
 
 function relativeDay(days: number): string {
-  if (days === 0) return "today";
-  if (days === 1) return "tomorrow";
-  return `in ${days} days`;
+  if (days === 0) return "heute";
+  if (days === 1) return "morgen";
+  return `in ${days} Tagen`;
 }
 
 function entryLabel(entry: { name: string | null; mention: string }): string {
@@ -83,7 +83,7 @@ export default function Birthdays() {
         anchorUseFont,
         announcementUseFont,
       });
-      showSuccess("Saved.");
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -96,7 +96,7 @@ export default function Birthdays() {
     try {
       await api.syncBirthdayAnchor();
       setUpcoming(await api.upcomingBirthdays());
-      showSuccess("Anchor message regenerated.");
+      showSuccess("Ankernachricht neu generiert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -113,11 +113,11 @@ export default function Birthdays() {
     const day = parseInt(draft.day, 10);
     const month = parseInt(draft.month, 10);
     if (!day || !month) {
-      showError("Enter a day and month.");
+      showError("Gib einen Tag und einen Monat ein.");
       return;
     }
     if (!draft.userId.trim() && !draft.name.trim()) {
-      showError("Provide a Discord user ID or a name.");
+      showError("Gib eine Discord-Benutzer-ID oder einen Namen an.");
       return;
     }
     setSavingEntry(true);
@@ -130,7 +130,7 @@ export default function Birthdays() {
       }
       setDraft(EMPTY_DRAFT);
       setUpcoming(await api.upcomingBirthdays());
-      showSuccess("Saved.");
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -142,7 +142,7 @@ export default function Birthdays() {
     try {
       await api.deleteBirthday(id);
       setUpcoming(await api.upcomingBirthdays());
-      showSuccess("Removed.");
+      showSuccess("Entfernt.");
     } catch (err) {
       showError(errorMessage(err));
     }
@@ -153,16 +153,16 @@ export default function Birthdays() {
 
   return (
     <div>
-      <h2>Birthdays</h2>
+      <h2>Geburtstage</h2>
 
       <div className="card-grid">
         <div className="card">
-          <h2>Message template</h2>
+          <h2>Nachrichtenvorlage</h2>
           <div className="field">
-            <label htmlFor="template">Template</label>
+            <label htmlFor="template">Vorlage</label>
             <textarea id="template" value={template} onChange={(e) => setTemplate(e.target.value)} />
             <div className="hint">
-              Placeholders: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>, <code>{"{everyoneMention}"}</code>
+              Platzhalter: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>, <code>{"{everyoneMention}"}</code>
             </div>
           </div>
           <label className="switch">
@@ -171,13 +171,13 @@ export default function Birthdays() {
               checked={announcementUseFont}
               onChange={(e) => setAnnouncementUseFont(e.target.checked)}
             />
-            Use font
+            Schrift verwenden
           </label>
           <div className="hint">
-            Styles the announcement with the font set on the <a href="/settings">Settings page</a>, if one's
-            configured.
+            Formatiert die Ankündigung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten Schrift,
+            sofern konfiguriert.
           </div>
-          <button onClick={handlePreview}>Preview</button>
+          <button onClick={handlePreview}>Vorschau</button>
           {preview && (
             <div className="preview-box" style={{ marginTop: 12 }}>
               {preview}
@@ -186,98 +186,98 @@ export default function Birthdays() {
         </div>
 
         <div className="card">
-          <h2>Anchor message &amp; daily announcement</h2>
+          <h2>Ankernachricht &amp; tägliche Ankündigung</h2>
           <p className="muted small">
-            The bot posts and maintains the birthday list itself in the channel below (splitting it across more than
-            one message if the full list ever outgrows Discord's 2000-character limit), and posts the daily
-            announcement there too.
+            Der Bot postet und pflegt die Geburtstagsliste selbst im unten angegebenen Kanal (aufgeteilt auf mehrere
+            Nachrichten, falls die vollständige Liste Discords 2000-Zeichen-Limit überschreitet) und postet dort auch
+            die tägliche Ankündigung.
           </p>
           <div className="field">
-            <label htmlFor="channel">Channel</label>
+            <label htmlFor="channel">Kanal</label>
             <SearchableSelect
               id="channel"
               value={channelId}
               onChange={setChannelId}
-              placeholder="Search channels…"
-              emptyLabel="— none —"
+              placeholder="Kanäle durchsuchen…"
+              emptyLabel="— keiner —"
               options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
             />
           </div>
           <div className="field">
-            <label htmlFor="cron">Daily job schedule (cron)</label>
+            <label htmlFor="cron">Zeitplan der täglichen Aufgabe (Cron)</label>
             <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
             <div className="hint">
-              Default: <code>0 0 * * *</code> (midnight, server time)
+              Standard: <code>0 0 * * *</code> (Mitternacht, Serverzeit)
             </div>
           </div>
           <button className="primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Wird gespeichert…" : "Speichern"}
           </button>
         </div>
 
         <div className="card">
-          <h2>Self-registration</h2>
+          <h2>Selbstregistrierung</h2>
           <p className="muted small">
-            Members can register their own birthday with <code>/setmybirthday</code>, or by just posting a date
-            (e.g. <code>15.03</code>) in the birthday channel above — the bot parses it, saves it, and deletes the
-            message.
+            Mitglieder können ihren eigenen Geburtstag mit <code>/setmybirthday</code> eintragen oder einfach ein
+            Datum (z. B. <code>15.03</code>) im obigen Geburtstagskanal posten — der Bot erkennt es, speichert es und
+            löscht die Nachricht.
           </p>
           <div className="field">
-            <label htmlFor="modChannel">Registration notifications channel</label>
+            <label htmlFor="modChannel">Kanal für Registrierungsbenachrichtigungen</label>
             <SearchableSelect
               id="modChannel"
               value={modChannelId}
               onChange={setModChannelId}
-              placeholder="Search channels…"
-              emptyLabel="— none —"
+              placeholder="Kanäle durchsuchen…"
+              emptyLabel="— keiner —"
               options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
             />
-            <div className="hint">Where the bot posts a heads-up whenever someone registers. Optional.</div>
+            <div className="hint">Wo der Bot einen Hinweis postet, wenn sich jemand registriert. Optional.</div>
           </div>
           <div className="field">
-            <label htmlFor="anchorIntro">Intro note</label>
+            <label htmlFor="anchorIntro">Einleitungstext</label>
             <textarea
               id="anchorIntro"
               value={anchorIntro}
               onChange={(e) => setAnchorIntro(e.target.value)}
-              placeholder="e.g. Use /setmybirthday or post your date here to register!"
+              placeholder="z. B. Nutze /setmybirthday oder poste dein Datum hier, um dich zu registrieren!"
             />
             <div className="hint">
-              Shown once above all the months — unlike the template below, never repeated and never font-styled.
-              Leave blank to show nothing.
+              Wird einmal über allen Monaten angezeigt — anders als die Vorlage unten nie wiederholt und nie mit
+              Schrift formatiert. Leer lassen, um nichts anzuzeigen.
             </div>
           </div>
           <div className="field">
-            <label htmlFor="anchorTemplate">Month heading template</label>
+            <label htmlFor="anchorTemplate">Vorlage für Monatsüberschriften</label>
             <textarea id="anchorTemplate" value={anchorTemplate} onChange={(e) => setAnchorTemplate(e.target.value)} />
             <div className="hint">
-              Placeholders: <code>{"{month}"}</code> (styled with the font below, if set), <code>{"{entries}"}</code>{" "}
-              (the dates/mentions for that month — always plain, so they render correctly on Discord).
+              Platzhalter: <code>{"{month}"}</code> (mit der Schrift unten formatiert, falls gesetzt), <code>{"{entries}"}</code>{" "}
+              (die Daten/Erwähnungen für diesen Monat — immer unformatiert, damit sie auf Discord korrekt angezeigt werden).
             </div>
           </div>
           <label className="switch">
             <input type="checkbox" checked={anchorUseFont} onChange={(e) => setAnchorUseFont(e.target.checked)} />
-            Use font for month headings
+            Schrift für Monatsüberschriften verwenden
           </label>
           <div className="hint">
-            Styles <code>{"{month}"}</code> with the font set on the <a href="/settings">Settings page</a>, if
-            one's configured. Everything else (dates, mentions) always renders plain.
+            Formatiert <code>{"{month}"}</code> mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten
+            Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert dargestellt.
           </div>
           <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
-            {syncingAnchor ? "Regenerating…" : "Regenerate message now"}
+            {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
           </button>
         </div>
       </div>
 
       {!upcoming ? (
-        <div className="loading">Loading…</div>
+        <div className="loading">Wird geladen…</div>
       ) : (
         <>
           {nextUp.length > 0 && (
             <div className="stat-grid">
               {nextUp.map((b) => (
                 <div className="stat-tile" key={b.dateKey}>
-                  <div className="label">Next up — {relativeDay(b.daysUntil)}</div>
+                  <div className="label">Als Nächstes — {relativeDay(b.daysUntil)}</div>
                   <div className="value" style={{ fontSize: 18 }}>
                     {b.dateKey}
                   </div>
@@ -288,15 +288,16 @@ export default function Birthdays() {
           )}
 
           <div className="card">
-            <h2>Registered birthdays</h2>
+            <h2>Eingetragene Geburtstage</h2>
             <p className="muted small">
-              Add, edit, or remove an entry here — the anchor message updates automatically. Entries marked
-              "self-registered" were added by the member themselves and can still be corrected here if needed.
+              Füge hier einen Eintrag hinzu, bearbeite oder entferne ihn — die Ankernachricht wird automatisch
+              aktualisiert. Mit "selbst registriert" markierte Einträge wurden vom Mitglied selbst hinzugefügt und
+              können bei Bedarf hier weiterhin korrigiert werden.
             </p>
 
             <div className="row" style={{ alignItems: "flex-end", marginBottom: 12 }}>
               <div className="field" style={{ maxWidth: 90 }}>
-                <label htmlFor="entryDay">Day</label>
+                <label htmlFor="entryDay">Tag</label>
                 <input
                   id="entryDay"
                   type="number"
@@ -307,7 +308,7 @@ export default function Birthdays() {
                 />
               </div>
               <div className="field" style={{ maxWidth: 90 }}>
-                <label htmlFor="entryMonth">Month</label>
+                <label htmlFor="entryMonth">Monat</label>
                 <input
                   id="entryMonth"
                   type="number"
@@ -318,7 +319,7 @@ export default function Birthdays() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="entryUserId">Discord user ID</label>
+                <label htmlFor="entryUserId">Discord-Benutzer-ID</label>
                 <input
                   id="entryUserId"
                   type="text"
@@ -332,27 +333,27 @@ export default function Birthdays() {
                 <input
                   id="entryName"
                   type="text"
-                  placeholder="optional if a user ID is set"
+                  placeholder="optional, wenn eine Benutzer-ID gesetzt ist"
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                 />
               </div>
               <button className="primary" onClick={handleSaveEntry} disabled={savingEntry}>
-                {draft.id === null ? "Add" : "Save edit"}
+                {draft.id === null ? "Hinzufügen" : "Änderung speichern"}
               </button>
-              {draft.id !== null && <button onClick={() => setDraft(EMPTY_DRAFT)}>Cancel</button>}
+              {draft.id !== null && <button onClick={() => setDraft(EMPTY_DRAFT)}>Abbrechen</button>}
             </div>
 
             {upcoming.length === 0 ? (
-              <p className="muted">No birthdays registered yet.</p>
+              <p className="muted">Noch keine Geburtstage eingetragen.</p>
             ) : (
               <div className="table-scroll">
                 <table className="stack-on-mobile">
                   <thead>
                     <tr>
-                      <th>Date</th>
+                      <th>Datum</th>
                       <th>Person</th>
-                      <th>Source</th>
+                      <th>Quelle</th>
                       <th></th>
                       <th></th>
                     </tr>
@@ -361,17 +362,17 @@ export default function Birthdays() {
                     {upcoming.flatMap((b) =>
                       b.entries.map((entry) => (
                         <tr key={entry.id}>
-                          <td data-label="Date">{b.dateKey}</td>
+                          <td data-label="Datum">{b.dateKey}</td>
                           <td data-label="Person">{entryLabel(entry)}</td>
-                          <td data-label="Source">
+                          <td data-label="Quelle">
                             <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
-                              {entry.source === "self" ? "self-registered" : "list"}
+                              {entry.source === "self" ? "selbst registriert" : "Liste"}
                             </span>
                           </td>
                           <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
                           <td className="stack-plain">
-                            <button onClick={() => startEdit(entry, b.dateKey)}>Edit</button>{" "}
-                            <button onClick={() => handleDeleteEntry(entry.id)}>Delete</button>
+                            <button onClick={() => startEdit(entry, b.dateKey)}>Bearbeiten</button>{" "}
+                            <button onClick={() => handleDeleteEntry(entry.id)}>Löschen</button>
                           </td>
                         </tr>
                       )),

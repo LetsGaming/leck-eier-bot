@@ -6,7 +6,7 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.TestBirthdayMessage)
-  .setDescription("Test how the birthday message will look like.");
+  .setDescription("Teste, wie die Geburtstagsnachricht aussehen wird.");
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   const user = interaction.user;
@@ -18,7 +18,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const message = buildBirthdayMessage(birthdayEntry, true);
 
   interaction.reply({
-    content: `🎂 Here is how the birthday message will look like:\n\n${message}`,
+    content: `🎂 So wird die Geburtstagsnachricht aussehen:\n\n${message}`,
     flags: MessageFlags.Ephemeral,
   });
 }

@@ -48,7 +48,7 @@ async function hasCommandPermission(
     case CommandPermission.Owner:
       if (!isOwner(interaction)) {
         await interaction.reply({
-          content: "❌ You do not have permission to use this command.",
+          content: "❌ Du hast keine Berechtigung, diesen Befehl zu verwenden.",
           flags: MessageFlags.Ephemeral,
         });
         return false;
@@ -128,7 +128,7 @@ client.on("interactionCreate", async (interaction) => {
 
   if (!cmd)
     return await interaction.reply({
-      content: "❌ Command not found, or disabled.",
+      content: "❌ Befehl nicht gefunden oder deaktiviert.",
       flags: MessageFlags.Ephemeral,
     });
 
@@ -137,7 +137,7 @@ client.on("interactionCreate", async (interaction) => {
     // If guildOnly is false, it skips the guild check entirely
     if (cmd.guildOnly && !isConfigGuild(interaction)) {
       return await interaction.reply({
-        content: "❌ This command can only be used in the main server.",
+        content: "❌ Dieser Befehl kann nur auf dem Hauptserver verwendet werden.",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -148,7 +148,7 @@ client.on("interactionCreate", async (interaction) => {
   } catch (err) {
     logger.error(err);
     const msg = {
-      content: "⚠️ Command error occurred.",
+      content: "⚠️ Beim Befehl ist ein Fehler aufgetreten.",
       flags: MessageFlags.Ephemeral,
     } as const;
     interaction.replied || interaction.deferred

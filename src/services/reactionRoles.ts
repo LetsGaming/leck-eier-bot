@@ -235,16 +235,16 @@ async function applyMappingSelection(
   const { manageable, unmanageable } = partitionManageable(guild, mapping.roleIds);
   if (manageable.length === 0) {
     logger.warn(`Reaction role skipped (panel ${panel.id}, mapping ${mapping.id}): no configured role is currently manageable.`);
-    return { ok: false, message: "Sorry, I can't currently assign that role — an admin needs to check my permissions." };
+    return { ok: false, message: "Entschuldigung, ich kann diese Rolle gerade nicht vergeben — ein Admin muss meine Berechtigungen überprüfen." };
   }
   const unmanageableSuffix =
-    unmanageable.length > 0 ? ` Couldn't give you: ${roleMentions(unmanageable)} (ask an admin).` : "";
+    unmanageable.length > 0 ? ` Konnte dir nicht geben: ${roleMentions(unmanageable)} (frag einen Admin).` : "";
 
   const hasAllRoles = manageable.every((id) => member.roles.cache.has(id));
 
   if (hasAllRoles) {
-    if (!opts.flip) return { ok: true, message: `You already have ${roleMentions(manageable)}.${unmanageableSuffix}` };
-    if (!panel.removable) return { ok: true, message: `${roleMentions(manageable)} can't be removed.${unmanageableSuffix}` };
+    if (!opts.flip) return { ok: true, message: `Du hast bereits ${roleMentions(manageable)}.${unmanageableSuffix}` };
+    if (!panel.removable) return { ok: true, message: `${roleMentions(manageable)} kann nicht entfernt werden.${unmanageableSuffix}` };
     if (unmanageable.length > 0) {
       logger.warn(
         `Reaction role: some roles not manageable (panel ${panel.id}, mapping ${mapping.id}): ${unmanageable.join(", ")}.`,
@@ -253,7 +253,7 @@ async function applyMappingSelection(
     for (const roleId of manageable) {
       await member.roles.remove(roleId).catch((err) => logger.warn(`Failed to revoke role ${roleId}: ${errorMessage(err)}`));
     }
-    return { ok: true, message: `Removed ${roleMentions(manageable)}.${unmanageableSuffix}` };
+    return { ok: true, message: `${roleMentions(manageable)} entfernt.${unmanageableSuffix}` };
   }
 
   if (!panel.allowMultiple) {
@@ -279,7 +279,7 @@ async function applyMappingSelection(
   for (const roleId of toGrant) {
     await member.roles.add(roleId).catch((err) => logger.warn(`Failed to grant role ${roleId}: ${errorMessage(err)}`));
   }
-  return { ok: true, message: `Gave you ${roleMentions(toGrant)}.${unmanageableSuffix}` };
+  return { ok: true, message: `Dir wurde ${roleMentions(toGrant)} gegeben.${unmanageableSuffix}` };
 }
 
 /** Un-react equivalent — only meaningful when `removable`; a flip-style interaction (buttons, `removeReaction` panels) never calls this, it's handled inline by `applyMappingSelection`. */
@@ -342,10 +342,10 @@ async function applyDropdownSelection(
   }
 
   const parts: string[] = [];
-  if (granted.length) parts.push(`Gave you: ${roleMentions(granted)}`);
-  if (revoked.length) parts.push(`Removed: ${roleMentions(revoked)}`);
-  if (kept.length) parts.push(`Kept (not removable): ${roleMentions(kept)}`);
-  return { ok: true, message: parts.length ? parts.join("\n") : "No changes." };
+  if (granted.length) parts.push(`Dir gegeben: ${roleMentions(granted)}`);
+  if (revoked.length) parts.push(`Entfernt: ${roleMentions(revoked)}`);
+  if (kept.length) parts.push(`Behalten (nicht entfernbar): ${roleMentions(kept)}`);
+  return { ok: true, message: parts.length ? parts.join("\n") : "Keine Änderungen." };
 }
 
 // --- Reaction event handlers ---------------------------------------------------
@@ -462,12 +462,12 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
 
   const panel = getCachedPanel(interaction.message.id);
   if (!panel || panel.id !== panelId || !panel.sent) {
-    await interaction.reply({ content: "This button is no longer active.", flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: "Dieser Button ist nicht mehr aktiv.", flags: MessageFlags.Ephemeral });
     return;
   }
   const mapping = panel.mappings.find((m) => m.id === mappingId);
   if (!mapping) {
-    await interaction.reply({ content: "This option no longer exists.", flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: "Diese Option existiert nicht mehr.", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -478,10 +478,10 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
 
   await runSerialized(interaction.message.id, interaction.user.id, async () => {
     const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-    if (!member) return interaction.editReply({ content: "Couldn't find your membership in this server." });
+    if (!member) return interaction.editReply({ content: "Deine Mitgliedschaft auf diesem Server konnte nicht gefunden werden." });
 
     if (!isAllowedToUsePanel(member, panel)) {
-      return interaction.editReply({ content: "You don't have permission to use this." });
+      return interaction.editReply({ content: "Du hast keine Berechtigung, dies zu verwenden." });
     }
 
     const result = await applyMappingSelection(guild, member, panel, mapping, { flip: true });
@@ -496,7 +496,7 @@ export async function handleSelectMenuInteraction(interaction: StringSelectMenuI
 
   const panel = getCachedPanel(interaction.message.id);
   if (!panel || panel.id !== panelId || !panel.sent) {
-    await interaction.reply({ content: "This menu is no longer active.", flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: "Dieses Menü ist nicht mehr aktiv.", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -507,10 +507,10 @@ export async function handleSelectMenuInteraction(interaction: StringSelectMenuI
 
   await runSerialized(interaction.message.id, interaction.user.id, async () => {
     const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-    if (!member) return interaction.editReply({ content: "Couldn't find your membership in this server." });
+    if (!member) return interaction.editReply({ content: "Deine Mitgliedschaft auf diesem Server konnte nicht gefunden werden." });
 
     if (!isAllowedToUsePanel(member, panel)) {
-      return interaction.editReply({ content: "You don't have permission to use this." });
+      return interaction.editReply({ content: "Du hast keine Berechtigung, dies zu verwenden." });
     }
 
     const selectedMappingIds = interaction.values.map(Number);
@@ -528,7 +528,7 @@ function emojiDisplay(mapping: ReactionRoleMapping): string {
 
 function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
   if (mapping.label) return mapping.label;
-  return mapping.roleIds.map((id) => guild.roles.cache.get(id)?.name ?? "Unknown role").join(", ");
+  return mapping.roleIds.map((id) => guild.roles.cache.get(id)?.name ?? "Unbekannte Rolle").join(", ");
 }
 
 /**
@@ -551,7 +551,7 @@ function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
   const description = [panel.description, lines.join("\n")].filter(Boolean).join("\n\n");
   return createEmbed({
     title: styled(panel, panel.title ?? panel.name),
-    description: styled(panel, description || "No roles configured yet."),
+    description: styled(panel, description || "Noch keine Rollen konfiguriert."),
     color: EmbedColor.Info,
   });
 }
@@ -570,7 +570,7 @@ function buildPanelText(panel: ReactionRolePanelWithMappings): string {
             return `${emoji ? `${emoji} — ` : ""}${roleMentions(m.roleIds)}${m.label ? ` — ${m.label}` : ""}`;
           })
       : [];
-  return styled(panel, [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "React to get a role!");
+  return styled(panel, [panel.description, lines.join("\n")].filter(Boolean).join("\n\n") || "Reagiere, um eine Rolle zu erhalten!");
 }
 
 /** Always returns both fields explicitly (never partial) so editing a message that's switching type fully replaces the old content instead of Discord leaving stale fields in place. */
@@ -612,7 +612,7 @@ function buildDropdownRow(
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId(dropdownCustomId(panel.id))
-    .setPlaceholder(panel.allowMultiple ? "Select your roles…" : "Select a role…")
+    .setPlaceholder(panel.allowMultiple ? "Wähle deine Rollen…" : "Wähle eine Rolle…")
     .setMinValues(0)
     .setMaxValues(panel.allowMultiple ? sorted.length : 1);
 

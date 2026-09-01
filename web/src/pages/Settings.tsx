@@ -5,6 +5,12 @@ import SearchableSelect from "../components/SearchableSelect";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import type { GeneralSettings, Me, RoleOption } from "../types";
 
+const ROLE_LABELS: Record<string, string> = {
+  "bot-owner": "Bot-Besitzer",
+  "guild-owner": "Server-Besitzer",
+  admin: "Admin",
+};
+
 export default function Settings({ me }: { me: Me }) {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [fontMap, setFontMap] = useState("");
@@ -27,7 +33,7 @@ export default function Settings({ me }: { me: Me }) {
     try {
       const updated = await api.updateGeneralSettings(patch);
       setSettings(updated);
-      showSuccess("Saved.");
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     }
@@ -38,7 +44,7 @@ export default function Settings({ me }: { me: Me }) {
     try {
       const updated = await api.updateGeneralSettings({ fontMap: fontMap || null });
       setSettings(updated);
-      showSuccess("Saved.");
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -48,13 +54,13 @@ export default function Settings({ me }: { me: Me }) {
 
   return (
     <div>
-      <h2>Settings</h2>
+      <h2>Einstellungen</h2>
 
       <div className="card-grid">
         <div className="card">
-          <h2>General</h2>
+          <h2>Allgemein</h2>
           {!settings ? (
-            <div className="loading">Loading…</div>
+            <div className="loading">Wird geladen…</div>
           ) : (
             <label className="switch">
               <input
@@ -62,20 +68,20 @@ export default function Settings({ me }: { me: Me }) {
                 checked={settings.leaveNotificationsEnabled}
                 onChange={(e) => update({ leaveNotificationsEnabled: e.target.checked })}
               />
-              DM the server owner when a member leaves voluntarily
+              Server-Besitzer per DM benachrichtigen, wenn ein Mitglied freiwillig den Server verlässt
             </label>
           )}
         </div>
 
         <div className="card">
-          <h2>Font</h2>
+          <h2>Schrift</h2>
           <p className="muted small">
-            A "fancy text" font the bot can use when generating messages — set it once here, then turn it on
-            per-feature wherever it applies (the birthday announcement and anchor message, a reaction-role panel's
-            text). Leave blank to never style anything.
+            Eine "Fancy-Text"-Schrift, die der Bot beim Erstellen von Nachrichten verwenden kann — hier einmal
+            festlegen und dann pro Funktion aktivieren, wo sie zutrifft (die Geburtstagsankündigung und
+            Ankernachricht, der Text eines Reaktionsrollen-Panels). Leer lassen, um nichts zu formatieren.
           </p>
           <div className="field">
-            <label htmlFor="fontMap">Font</label>
+            <label htmlFor="fontMap">Schrift</label>
             <input
               id="fontMap"
               type="text"
@@ -84,61 +90,62 @@ export default function Settings({ me }: { me: Me }) {
               placeholder={FONT_REFERENCE}
             />
             <div className="hint">
-              Paste a stylized alphabet matching <code>{FONT_REFERENCE}</code> character for character (52 total)
-              from any "fancy text" generator.
+              Füge ein stilisiertes Alphabet ein, das <code>{FONT_REFERENCE}</code> Zeichen für Zeichen entspricht
+              (insgesamt 52) — aus einem beliebigen "Fancy-Text"-Generator.
             </div>
             {fontMap &&
               ([...fontMap].length === FONT_REFERENCE.length ? (
                 <div className="preview-box" style={{ marginTop: 8 }}>
-                  Preview: {applyFont("The quick brown fox", fontMap)}
+                  Vorschau: {applyFont("The quick brown fox", fontMap)}
                 </div>
               ) : (
                 <div className="preview-box" style={{ marginTop: 8 }}>
-                  <span className="muted">Needs exactly 52 characters (currently {[...fontMap].length}).</span>
+                  <span className="muted">Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).</span>
                 </div>
               ))}
           </div>
           <button className="primary" onClick={handleSaveFont} disabled={savingFont}>
-            {savingFont ? "Saving…" : "Save"}
+            {savingFont ? "Wird gespeichert…" : "Speichern"}
           </button>
         </div>
 
         <div className="card">
-          <h2>Registration</h2>
+          <h2>Registrierung</h2>
           <p className="muted small">
-            When a member is manually given the registration role below, the bot automatically removes the
-            register-gate role from them, so a channel gated on that role (e.g. #register) disappears once
-            they're registered. Leave either field unset to disable this.
+            Wenn einem Mitglied manuell die untenstehende Registrierungsrolle gegeben wird, entfernt der Bot
+            automatisch die Registrierungssperre-Rolle, sodass ein durch diese Rolle gesperrter Kanal (z. B.
+            #register) verschwindet, sobald das Mitglied registriert ist. Lasse ein Feld leer, um dies zu
+            deaktivieren.
           </p>
           {!settings ? (
-            <div className="loading">Loading…</div>
+            <div className="loading">Wird geladen…</div>
           ) : (
             <>
               <div className="field">
-                <label htmlFor="register-gate-role">Register-gate role</label>
+                <label htmlFor="register-gate-role">Registrierungssperre-Rolle</label>
                 <SearchableSelect
                   id="register-gate-role"
                   value={settings.registerGateRoleId ?? ""}
                   onChange={(v) => update({ registerGateRoleId: v || null })}
-                  placeholder="Search roles…"
-                  emptyLabel="— none —"
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— keine —"
                   options={roles.map((r) => ({ value: r.id, label: r.name }))}
                 />
-                <div className="hint">The role that lets a not-yet-registered member see #register.</div>
+                <div className="hint">Die Rolle, die einem noch nicht registrierten Mitglied #register anzeigt.</div>
               </div>
               <div className="field">
-                <label htmlFor="registration-tier-role">Registration role (lowest tier)</label>
+                <label htmlFor="registration-tier-role">Registrierungsrolle (niedrigste Stufe)</label>
                 <SearchableSelect
                   id="registration-tier-role"
                   value={settings.registrationTierRoleId ?? ""}
                   onChange={(v) => update({ registrationTierRoleId: v || null })}
-                  placeholder="Search roles…"
-                  emptyLabel="— none —"
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— keine —"
                   options={roles.map((r) => ({ value: r.id, label: r.name }))}
                 />
                 <div className="hint">
-                  The lowest membership tier role, granted once at manual registration — not a higher tier, since
-                  later promotions must not re-trigger this.
+                  Die niedrigste Mitgliedschaftsstufe, die einmalig bei der manuellen Registrierung vergeben wird —
+                  keine höhere Stufe, da spätere Beförderungen dies nicht erneut auslösen dürfen.
                 </div>
               </div>
               <label className="switch">
@@ -147,23 +154,25 @@ export default function Settings({ me }: { me: Me }) {
                   checked={settings.rulesAcceptedUseDiscordScreening}
                   onChange={(e) => update({ rulesAcceptedUseDiscordScreening: e.target.checked })}
                 />
-                Detect "rules accepted" via Discord's membership screening instead of the register-gate role
+                "Regeln akzeptiert" über Discords Mitgliedschafts-Screening statt der Registrierungssperre-Rolle
+                erkennen
               </label>
               <div className="hint">
-                Off (default): a member is considered to have accepted the rules the moment they're granted the
-                register-gate role above (i.e. reacting to the rules message) — role-based. On: use Discord's own
-                membership screening "pending" flag instead, for servers that rely on that built-in feature rather
-                than a reaction role. Only affects the "Rules accepted" column on{" "}
-                <a href="/members">Member Audit</a>.
+                Aus (Standard): Ein Mitglied gilt als hat-die-Regeln-akzeptiert, sobald es die obige
+                Registrierungssperre-Rolle erhält (z. B. durch Reagieren auf die Regelnachricht) — rollenbasiert. Ein:
+                verwendet stattdessen Discords eigenes "pending"-Flag des Mitgliedschafts-Screenings, für Server, die
+                sich auf diese integrierte Funktion statt auf eine Reaktionsrolle verlassen. Betrifft nur die Spalte
+                "Regeln akzeptiert" in der <a href="/members">Mitgliederprüfung</a>.
               </div>
             </>
           )}
         </div>
 
         <div className="card">
-          <h2>Session</h2>
+          <h2>Sitzung</h2>
           <p>
-            Signed in as <strong>{me.username}</strong> ({me.userId}) — role: <strong>{me.role}</strong>
+            Angemeldet als <strong>{me.username}</strong> ({me.userId}) — Rolle:{" "}
+            <strong>{ROLE_LABELS[me.role] ?? me.role}</strong>
           </p>
         </div>
       </div>

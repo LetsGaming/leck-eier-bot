@@ -8,12 +8,12 @@ export const permission = CommandPermission.None;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.SetMyBirthday)
-  .setDescription("Register your own birthday.")
+  .setDescription("Trage deinen eigenen Geburtstag ein.")
   .addIntegerOption((opt) =>
-    opt.setName("day").setDescription("Day of month").setRequired(true).setMinValue(1).setMaxValue(31),
+    opt.setName("day").setDescription("Tag des Monats").setRequired(true).setMinValue(1).setMaxValue(31),
   )
   .addIntegerOption((opt) =>
-    opt.setName("month").setDescription("Month").setRequired(true).setMinValue(1).setMaxValue(12),
+    opt.setName("month").setDescription("Monat").setRequired(true).setMinValue(1).setMaxValue(12),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -22,7 +22,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!isValidCalendarDate(day, month)) {
     return interaction.reply({
-      embeds: [createErrorEmbed("That's not a valid date.")],
+      embeds: [createErrorEmbed("Das ist kein gültiges Datum.")],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -40,7 +40,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await syncAnchorMessage(interaction.client);
 
   return interaction.reply({
-    embeds: [createSuccessEmbed(`Your birthday has been set to **${dateKey}**.`)],
+    embeds: [createSuccessEmbed(`Dein Geburtstag wurde auf den **${dateKey}** gesetzt.`)],
     flags: MessageFlags.Ephemeral,
   });
 }

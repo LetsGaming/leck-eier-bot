@@ -8,7 +8,7 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.ClearBirthdayChannel)
-  .setDescription("Clear all messages in the birthday announcements channel");
+  .setDescription("Löscht alle Nachrichten im Geburtstags-Ankündigungskanal");
 
 export async function execute(interaction: ChatInputCommandInteraction) {
   // Acknowledge immediately
@@ -17,7 +17,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const { birthdayListChannelId } = getSettings();
   if (!birthdayListChannelId) {
     return interaction.editReply({
-      embeds: [createErrorEmbed("Birthday announcements channel not configured yet. Set it via the dashboard.")],
+      embeds: [createErrorEmbed("Der Geburtstags-Ankündigungskanal ist noch nicht konfiguriert. Lege ihn über das Dashboard fest.")],
     });
   }
 
@@ -30,7 +30,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   );
 
   const successEmbed = createSuccessEmbed(
-    `Cleared ${count} messages from the birthday announcements channel.`,
+    `${count} Nachrichten aus dem Geburtstags-Ankündigungskanal gelöscht.`,
   );
 
   return interaction.editReply({

@@ -12,12 +12,12 @@ import {
 import type { Me } from "../types";
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; end?: boolean }> = [
-  { to: "/", label: "Overview", icon: IconOverview, end: true },
-  { to: "/members", label: "Member Audit", icon: IconMembers },
-  { to: "/reaction-roles", label: "Reaction Roles", icon: IconReactionRoles },
-  { to: "/birthdays", label: "Birthdays", icon: IconBirthdays },
-  { to: "/commands", label: "Commands", icon: IconCommands },
-  { to: "/settings", label: "Settings", icon: IconSettings },
+  { to: "/", label: "Übersicht", icon: IconOverview, end: true },
+  { to: "/members", label: "Mitgliederprüfung", icon: IconMembers },
+  { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
+  { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
+  { to: "/commands", label: "Befehle", icon: IconCommands },
+  { to: "/settings", label: "Einstellungen", icon: IconSettings },
 ];
 
 function MenuIcon() {
@@ -72,7 +72,7 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
       <header className="mobile-topbar">
         <button
           className="menu-toggle"
-          aria-label={navOpen ? "Close menu" : "Open menu"}
+          aria-label={navOpen ? "Menü schließen" : "Menü öffnen"}
           aria-expanded={navOpen}
           onClick={() => setNavOpen((open) => !open)}
         >
@@ -93,10 +93,10 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
         ))}
         <div className="spacer" />
         <div className="user">
-          Signed in as <strong>{me.username}</strong> ({me.role})
+          Angemeldet als <strong>{me.username}</strong> ({me.role})
           <div>
             <button onClick={handleLogout} style={{ marginTop: 8 }}>
-              Log out
+              Abmelden
             </button>
           </div>
         </div>

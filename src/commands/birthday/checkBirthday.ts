@@ -13,12 +13,12 @@ export const permission = CommandPermission.Admin;
 export const data = new SlashCommandBuilder()
   .setName(CommandName.CheckBirthday)
   .setDescription(
-    "Manually checks today's birthdays and optionally sends messages.",
+    "Überprüft manuell die heutigen Geburtstage und sendet optional Nachrichten.",
   )
   .addBooleanOption((opt) =>
     opt
       .setName("sendmessage")
-      .setDescription("If true, the bot will send the birthday messages.")
+      .setDescription("Wenn aktiviert, sendet der Bot die Geburtstagsnachrichten.")
       .setRequired(false),
   );
 
@@ -30,11 +30,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (birthdays.length === 0) {
     const nextBirthday = getNextBirthday();
-    let replyContent = "🎂 No birthdays today!";
+    let replyContent = "🎂 Heute hat niemand Geburtstag!";
 
     if (nextBirthday) {
-      replyContent += `\nThe next birthday is on **${nextBirthday.date.toLocaleDateString()}**: ${nextBirthday.entries
-        .map((e) => e.name ?? "Unknown")
+      replyContent += `\nDer nächste Geburtstag ist am **${nextBirthday.date.toLocaleDateString()}**: ${nextBirthday.entries
+        .map((e) => e.name ?? "Unbekannt")
         .join(", ")}`;
     }
 
@@ -50,21 +50,21 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   // Ephemeral preview
   const previewList = birthdays
-    .map((b) => `• ${b.mention} (${b.name ?? "Unknown"})`)
+    .map((b) => `• ${b.mention} (${b.name ?? "Unbekannt"})`)
     .join("\n");
 
   const embd = createEmbed({
-    title: "🎂 Birthdays Today",
-    description: `Found ${birthdays.length} birthday(s) today.`,
+    title: "🎂 Heutige Geburtstage",
+    description: `${birthdays.length} Geburtstag(e) heute gefunden.`,
     color: EmbedColor.Success,
     fields: [
       {
-        name: "Birthdays",
+        name: "Geburtstage",
         value: previewList,
       },
       {
-        name: "Send Message(s)",
-        value: sendMessage ? "Yes" : "No",
+        name: "Nachricht(en) senden",
+        value: sendMessage ? "Ja" : "Nein",
         inline: true,
       },
     ],

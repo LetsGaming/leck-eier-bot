@@ -17,7 +17,7 @@ const EntryBodySchema = z
     userId: z.string().min(1).nullable().optional(),
     name: z.string().min(1).max(100).nullable().optional(),
   })
-  .refine((b) => b.userId || b.name, { message: "Provide a Discord user or a name." });
+  .refine((b) => b.userId || b.name, { message: "Gib einen Discord-Benutzer oder einen Namen an." });
 
 /** Now the only way birthdays get into the system besides self-registration (`/setmybirthday`, or posting a date in the birthday channel) — there's no more admin-maintained announcement message to parse. */
 export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient): void {
@@ -38,7 +38,7 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
     const body = EntryBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const { day, month, userId, name } = body.data;
-    if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "That's not a valid date." });
+    if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
 
     const mention = userId ? `<@${userId}>` : `@${name}`;
     let id: number;
@@ -46,7 +46,7 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
       id = insertBirthday({ date: toDateKey(day, month), mention, userId: userId ?? null, name: name ?? null });
     } catch (err) {
       // Most likely idx_birthdays_user — that Discord user already has an entry.
-      return reply.code(409).send({ error: `Couldn't add that entry: ${errorMessage(err)}` });
+      return reply.code(409).send({ error: `Eintrag konnte nicht hinzugefügt werden: ${errorMessage(err)}` });
     }
 
     syncAnchorMessage(client).catch((err) =>
@@ -57,18 +57,18 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
 
   app.patch("/birthdays/:id", async (request, reply) => {
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "Invalid birthday id" });
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
 
     const body = EntryBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const { day, month, userId, name } = body.data;
-    if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "That's not a valid date." });
+    if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
 
     const mention = userId ? `<@${userId}>` : `@${name}`;
     try {
       updateBirthdayEntry(id, { date: toDateKey(day, month), mention, userId: userId ?? null, name: name ?? null });
     } catch (err) {
-      return reply.code(409).send({ error: `Couldn't update that entry: ${errorMessage(err)}` });
+      return reply.code(409).send({ error: `Eintrag konnte nicht aktualisiert werden: ${errorMessage(err)}` });
     }
 
     syncAnchorMessage(client).catch((err) =>
@@ -79,7 +79,7 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
 
   app.delete("/birthdays/:id", async (request, reply) => {
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "Invalid birthday id" });
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
 
     deleteBirthday(id);
     syncAnchorMessage(client).catch((err) =>

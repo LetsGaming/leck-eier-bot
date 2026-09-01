@@ -52,7 +52,7 @@ const MappingBodySchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .refine((ids) => new Set(ids).size === ids.length, {
-      message: "Each role can only appear once in a single option.",
+      message: "Jede Rolle darf nur einmal in einer einzelnen Option vorkommen.",
     }),
   label: z.string().max(100).nullable(),
 });
@@ -65,7 +65,7 @@ function parsePanelId(request: { params: unknown }, reply: FastifyReply): number
   const params = request.params as { id?: string };
   const id = Number(params.id);
   if (!Number.isInteger(id)) {
-    reply.code(400).send({ error: "Invalid panel id" });
+    reply.code(400).send({ error: "Ungültige Panel-ID" });
     return null;
   }
   return id;
@@ -83,12 +83,12 @@ function validateMappingForPanel(
   data: { emojiName: string | null; label: string | null; roleIds: string[] },
 ): string | null {
   if (selectionType !== SelectionType.Reactions && data.roleIds.length > 1) {
-    return "Only a reactions panel can grant more than one role per option.";
+    return "Nur ein Reaktionen-Panel kann mehr als eine Rolle pro Option vergeben.";
   }
   if (selectionType === SelectionType.Reactions) {
-    return data.emojiName ? null : "An emoji is required for a reactions panel.";
+    return data.emojiName ? null : "Für ein Reaktionen-Panel ist ein Emoji erforderlich.";
   }
-  return data.label?.trim() ? null : "A label is required for buttons/dropdown options.";
+  return data.label?.trim() ? null : "Für Buttons/Dropdown-Optionen ist eine Beschriftung erforderlich.";
 }
 
 function mappingCap(selectionType: SelectionType): number | null {
@@ -115,7 +115,7 @@ async function trySync(client: BotClient, reply: FastifyReply, panelId: number):
     await syncPanelMessage(client, panelId);
   } catch (err) {
     logger.error(`Failed to sync reaction-role panel ${panelId}: ${errorMessage(err)}`);
-    reply.header("x-sync-warning", "Panel saved, but posting/updating the Discord message failed.");
+    reply.header("x-sync-warning", "Panel gespeichert, aber das Senden/Aktualisieren der Discord-Nachricht ist fehlgeschlagen.");
   }
 }
 
@@ -134,7 +134,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
     return panel;
   });
 
@@ -145,7 +145,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     if (body.data.existingMessageId && body.data.selectionType !== SelectionType.Reactions) {
       return reply
         .code(400)
-        .send({ error: "Attaching to an existing message only works with reactions — buttons and dropdowns need a bot-owned message." });
+        .send({ error: "Das Anhängen an eine bestehende Nachricht funktioniert nur mit Reaktionen — Buttons und Dropdowns benötigen eine bot-eigene Nachricht." });
     }
 
     const panel = createPanel(body.data);
@@ -156,7 +156,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const before = getPanel(id);
-    if (!before) return reply.code(404).send({ error: "Panel not found" });
+    if (!before) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     const body = PanelBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
@@ -179,7 +179,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     // Only the bot's own managed messages get deleted with the panel — an
     // unmanaged panel is attached to someone else's message (e.g. an
@@ -197,9 +197,9 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
     if (!panel.sent) {
-      return reply.code(400).send({ error: "This panel hasn't been sent yet — use Send instead." });
+      return reply.code(400).send({ error: "Dieses Panel wurde noch nicht gesendet — verwende stattdessen \"Senden\"." });
     }
 
     await trySync(client, reply, id);
@@ -211,9 +211,9 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
     if (panel.mappings.length === 0) {
-      return reply.code(400).send({ error: "Add at least one role before sending." });
+      return reply.code(400).send({ error: "Füge mindestens eine Rolle hinzu, bevor du sendest." });
     }
 
     try {
@@ -222,7 +222,7 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
       logger.error(`Failed to send reaction-role panel ${id}: ${errorMessage(err)}`);
       return reply
         .code(502)
-        .send({ error: "Failed to post the message to Discord. Check the bot's permissions and try again." });
+        .send({ error: "Nachricht konnte nicht an Discord gesendet werden. Überprüfe die Berechtigungen des Bots und versuche es erneut." });
     }
 
     setPanelSent(id, true);
@@ -233,18 +233,18 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     const body = MappingBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
     if (panel.mappings.some((m) => m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
-      return reply.code(400).send({ error: "One of those roles is already used by another option on this panel." });
+      return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
     }
     const cap = mappingCap(panel.selectionType);
     if (cap !== null && panel.mappings.length >= cap) {
-      return reply.code(400).send({ error: `Discord allows at most ${cap} options for this selection type.` });
+      return reply.code(400).send({ error: `Discord erlaubt maximal ${cap} Optionen für diesen Auswahltyp.` });
     }
 
     upsertMapping({ panelId: id, position: panel.mappings.length, ...body.data });
@@ -256,18 +256,18 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     const mappingId = Number((request.params as { mappingId?: string }).mappingId);
     const existing = panel.mappings.find((m) => m.id === mappingId);
-    if (!existing) return reply.code(404).send({ error: "Mapping not found on this panel" });
+    if (!existing) return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
 
     const body = MappingBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
     const validationError = validateMappingForPanel(panel.selectionType, body.data);
     if (validationError) return reply.code(400).send({ error: validationError });
     if (panel.mappings.some((m) => m.id !== mappingId && m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
-      return reply.code(400).send({ error: "One of those roles is already used by another option on this panel." });
+      return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
     }
 
     upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...body.data });
@@ -279,11 +279,11 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     const mappingId = Number((request.params as { mappingId?: string }).mappingId);
     if (!panel.mappings.some((m) => m.id === mappingId)) {
-      return reply.code(404).send({ error: "Mapping not found on this panel" });
+      return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
     }
 
     deleteMapping(mappingId);
@@ -295,14 +295,14 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     const id = parsePanelId(request, reply);
     if (id === null) return;
     const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel not found" });
+    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
     const body = ReorderBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
     const knownIds = new Set(panel.mappings.map((m) => m.id));
     if (body.data.orderedIds.length !== panel.mappings.length || !body.data.orderedIds.every((i) => knownIds.has(i))) {
-      return reply.code(400).send({ error: "orderedIds must be exactly this panel's mapping ids" });
+      return reply.code(400).send({ error: "orderedIds müssen genau den Zuordnungs-IDs dieses Panels entsprechen" });
     }
 
     reorderMappings(body.data.orderedIds);

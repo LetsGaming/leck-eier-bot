@@ -64,7 +64,7 @@ interface SimpleEmbedOptions {
  */
 export function createErrorEmbed(message: string, { footer, timestamp = true }: SimpleEmbedOptions = {}): EmbedBuilder {
   return createEmbed({
-    title: "❌ Error",
+    title: "❌ Fehler",
     description: message,
     color: EmbedColor.Error,
     footer,
@@ -74,8 +74,8 @@ export function createErrorEmbed(message: string, { footer, timestamp = true }: 
 
 export function createNoAdminEmbed({ footer, timestamp = true }: SimpleEmbedOptions = {}): EmbedBuilder {
   return createEmbed({
-    title: "❌ Access Denied",
-    description: "You need administrator permissions to use this command.",
+    title: "❌ Zugriff verweigert",
+    description: "Du benötigst Administratorrechte, um diesen Befehl zu verwenden.",
     color: EmbedColor.Error,
     footer,
     timestamp,
@@ -87,7 +87,7 @@ export function createNoAdminEmbed({ footer, timestamp = true }: SimpleEmbedOpti
  */
 export function createSuccessEmbed(message: string, { footer, timestamp = true }: SimpleEmbedOptions = {}): EmbedBuilder {
   return createEmbed({
-    title: "✅ Success",
+    title: "✅ Erfolg",
     description: message,
     color: EmbedColor.Success,
     footer,

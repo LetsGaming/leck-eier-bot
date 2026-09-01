@@ -8,11 +8,11 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.FindUser)
-  .setDescription("Find a user by their servername (cached).")
+  .setDescription("Findet einen Benutzer anhand seines Servernamens (aus dem Cache).")
   .addStringOption((opt) =>
     opt
       .setName("servername")
-      .setDescription("Name to search for")
+      .setDescription("Zu suchender Name")
       .setRequired(true),
   );
 
@@ -21,7 +21,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (!isCacheReady()) {
     return interaction.reply({
-      content: "The member cache is still building...",
+      content: "Der Mitglieder-Cache wird noch aufgebaut...",
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -33,7 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (results.length === 0) {
     return interaction.editReply({
-      embeds: [createErrorEmbed(`No users found matching "${rawSearch}".`)],
+      embeds: [createErrorEmbed(`Keine Benutzer gefunden, die zu "${rawSearch}" passen.`)],
     });
   }
 
@@ -42,7 +42,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     .join("\n\n");
 
   const successEmbed = createSuccessEmbed(
-    `**Search Results for:** "${rawSearch}"\n\n${memberList}`,
+    `**Suchergebnisse für:** "${rawSearch}"\n\n${memberList}`,
   );
 
   return interaction.editReply({ embeds: [successEmbed] });

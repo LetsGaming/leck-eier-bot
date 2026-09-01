@@ -16,7 +16,7 @@ export function registerCommandRoutes(app: FastifyInstance, client: BotClient, c
     const name = (request.params as { name: string }).name;
     const definitions = await listCommandDefinitions();
     const current = definitions.find((d) => d.name === name);
-    if (!current) return reply.code(404).send({ error: "Unknown command" });
+    if (!current) return reply.code(404).send({ error: "Unbekannter Befehl" });
 
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });

@@ -45,10 +45,10 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
       body.data;
 
     if (template !== undefined && (!template.includes("{userMention}") || !template.includes("{userNick}"))) {
-      return reply.code(400).send({ error: "Template must include {userMention} and {userNick}." });
+      return reply.code(400).send({ error: "Die Vorlage muss {userMention} und {userNick} enthalten." });
     }
     if (cronExpression !== undefined && !cron.validate(cronExpression)) {
-      return reply.code(400).send({ error: "Invalid cron expression." });
+      return reply.code(400).send({ error: "Ungültiger Cron-Ausdruck." });
     }
 
     // updateSettings emits SettingsEvent.Settings, which src/index.ts listens
@@ -92,14 +92,14 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
   app.post("/settings/birthday/sync-anchor", async (_request, reply) => {
     const settings = getSettings();
     if (!settings.birthdayListChannelId) {
-      return reply.code(400).send({ error: "Pick a channel for the announcement list first." });
+      return reply.code(400).send({ error: "Wähle zuerst einen Kanal für die Ankündigungsliste aus." });
     }
 
     try {
       await syncAnchorMessage(client);
     } catch (err) {
       logger.error(`Dashboard-triggered anchor sync failed: ${errorMessage(err)}`);
-      return reply.code(502).send({ error: "Failed to update the anchor message." });
+      return reply.code(502).send({ error: "Aktualisierung der Ankernachricht fehlgeschlagen." });
     }
     return { ok: true };
   });

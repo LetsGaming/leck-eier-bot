@@ -59,7 +59,7 @@ export async function startWebServer(client: BotClient, config: Config): Promise
     // on a hard refresh/deep link.
     app.setNotFoundHandler((request, reply) => {
       if (request.method !== "GET" || request.url.startsWith("/api/") || request.url.startsWith("/auth/")) {
-        return reply.code(404).send({ error: "Not found" });
+        return reply.code(404).send({ error: "Nicht gefunden" });
       }
       return reply.sendFile("index.html");
     });

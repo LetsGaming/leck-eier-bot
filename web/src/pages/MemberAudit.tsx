@@ -28,33 +28,33 @@ function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boo
         <img src={entry.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
       </td>
       <td data-label="Name">{entry.displayName}</td>
-      <td className="muted" data-label="Username">
+      <td className="muted" data-label="Benutzername">
         {entry.tag}
       </td>
       <td className="muted" data-label="ID">
         <code>{entry.userId}</code>
       </td>
-      <DateCell label="Joined" iso={entry.joinedAt} />
-      <DateCell label="Rules accepted" iso={entry.rulesAcceptedAt} />
-      {showLeft && <DateCell label="Left" iso={entry.leftAt} />}
+      <DateCell label="Beigetreten" iso={entry.joinedAt} />
+      <DateCell label="Regeln akzeptiert" iso={entry.rulesAcceptedAt} />
+      {showLeft && <DateCell label="Verlassen" iso={entry.leftAt} />}
     </tr>
   );
 }
 
 function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showLeft: boolean }) {
-  if (entries.length === 0) return <p className="muted">Nobody here.</p>;
+  if (entries.length === 0) return <p className="muted">Niemand hier.</p>;
   return (
     <div className="table-scroll">
       <table className="stack-on-mobile">
         <thead>
           <tr>
             <th></th>
-            <th>Display name</th>
-            <th>Username</th>
+            <th>Anzeigename</th>
+            <th>Benutzername</th>
             <th>ID</th>
-            <th>Joined</th>
-            <th>Rules accepted</th>
-            {showLeft && <th>Left</th>}
+            <th>Beigetreten</th>
+            <th>Regeln akzeptiert</th>
+            {showLeft && <th>Verlassen</th>}
           </tr>
         </thead>
         <tbody>
@@ -89,11 +89,11 @@ export default function MemberAudit() {
 
   return (
     <div>
-      <h2>Member Audit</h2>
+      <h2>Mitgliederprüfung</h2>
       <p className="muted">
-        Every member who's ever been seen in the server, current and former. "Rules accepted" and "Left" are only
-        known for events the bot was running for — <code>—</code> means not tracked, not that it never happened.
-        Dates show in your own local timezone.
+        Jedes Mitglied, das jemals auf dem Server gesehen wurde, aktuell und ehemalig. "Regeln akzeptiert" und
+        "Verlassen" sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht
+        erfasst, nicht dass es nie passiert ist. Daten werden in deiner lokalen Zeitzone angezeigt.
       </p>
 
       <div className="card">
@@ -105,23 +105,23 @@ export default function MemberAudit() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Start typing a name…"
+            placeholder="Namen eingeben…"
           />
         </div>
       </div>
 
       {loading && !results ? (
-        <div className="loading">Loading…</div>
+        <div className="loading">Wird geladen…</div>
       ) : (
         results && (
           <>
             <div className="card">
-              <h2>In server ({results.inGuild.length})</h2>
+              <h2>Auf dem Server ({results.inGuild.length})</h2>
               <MemberTable entries={results.inGuild} showLeft={false} />
             </div>
 
             <div className="card">
-              <h2>Left server ({results.left.length})</h2>
+              <h2>Server verlassen ({results.left.length})</h2>
               <MemberTable entries={results.left} showLeft={true} />
             </div>
           </>

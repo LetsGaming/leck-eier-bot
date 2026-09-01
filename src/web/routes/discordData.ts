@@ -10,7 +10,7 @@ export function registerDiscordDataRoutes(app: FastifyInstance, client: BotClien
   function requireGuild(reply: FastifyReply): Guild | null {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) {
-      reply.code(503).send({ error: "Guild not cached yet — try again shortly." });
+      reply.code(503).send({ error: "Server noch nicht im Cache — versuche es gleich noch einmal." });
       return null;
     }
     return guild;

@@ -7,12 +7,12 @@ export const permission = CommandPermission.Admin;
 
 export const data = new SlashCommandBuilder()
   .setName(CommandName.SetBirthdayMessage)
-  .setDescription("Set the template used for birthday messages.")
+  .setDescription("Legt die Vorlage für Geburtstagsnachrichten fest.")
   .addStringOption((opt) =>
     opt
       .setName("template")
       .setDescription(
-        "New template. Placeholders: {userMention}, {everyoneMention}, {userNick}, \\n for new line.",
+        "Neue Vorlage. Platzhalter: {userMention}, {everyoneMention}, {userNick}, \\n für einen Zeilenumbruch.",
       )
       .setRequired(true),
   );
@@ -26,7 +26,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     !newTemplate.includes("{userNick}")
   ) {
     const errorEmbd = createErrorEmbed(
-      "Template must include at least {userMention} or {userNick}. Optionally include {everyoneMention}.",
+      "Die Vorlage muss mindestens {userMention} oder {userNick} enthalten. Optional kann {everyoneMention} verwendet werden.",
     );
     return interaction.reply({
       embeds: [errorEmbd],
@@ -36,7 +36,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   setCurrentTemplate(newTemplate);
 
-  const successEmbd = createSuccessEmbed("Birthday template updated successfully.");
+  const successEmbd = createSuccessEmbed("Geburtstagsvorlage erfolgreich aktualisiert.");
   return interaction.reply({
     embeds: [successEmbd],
     flags: MessageFlags.Ephemeral,

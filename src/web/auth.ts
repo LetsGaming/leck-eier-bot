@@ -93,7 +93,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       return reply
         .code(400)
         .send(
-          `This dashboard isn't reachable at ${request.protocol}://${request.host} — add it to WEB_PUBLIC_URLS and restart the bot.`,
+          `Dieses Dashboard ist unter ${request.protocol}://${request.host} nicht erreichbar — füge es zu WEB_PUBLIC_URLS hinzu und starte den Bot neu.`,
         );
     }
 
@@ -125,7 +125,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
     reply.clearCookie(WEB_OAUTH_STATE_COOKIE_NAME, { path: "/" });
 
     if (query.error) {
-      return reply.code(400).send(`Discord declined the login request: ${query.error}`);
+      return reply.code(400).send(`Discord hat die Anmeldeanfrage abgelehnt: ${query.error}`);
     }
 
     // Must resolve to the same origin /auth/login used — Discord redirects
@@ -136,7 +136,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
     if (!origin) {
       return reply
         .code(400)
-        .send(`This dashboard isn't reachable at ${request.protocol}://${request.host}.`);
+        .send(`Dieses Dashboard ist unter ${request.protocol}://${request.host} nicht erreichbar.`);
     }
 
     const unsignedState = stateCookieRaw ? request.unsignCookie(stateCookieRaw) : null;
@@ -151,7 +151,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       else if (!unsignedState?.valid) reason = "oauth state cookie failed signature verification";
       else reason = "oauth state cookie value did not match the state query parameter";
       logger.warn(`OAuth callback rejected: ${reason}.`);
-      return reply.code(400).send("Invalid or expired login attempt. Please try again.");
+      return reply.code(400).send("Ungültiger oder abgelaufener Anmeldeversuch. Bitte versuche es erneut.");
     }
 
     let accessToken: string;
@@ -173,7 +173,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       accessToken = (await parseJsonResponse<DiscordTokenResponse>(tokenRes, "Discord token exchange")).access_token;
     } catch (err) {
       logger.error(`OAuth token exchange failed: ${errorMessage(err)}`);
-      return reply.code(502).send("Failed to complete Discord login. Please try again.");
+      return reply.code(502).send("Die Discord-Anmeldung konnte nicht abgeschlossen werden. Bitte versuche es erneut.");
     }
 
     let discordUser: DiscordUser;
@@ -186,7 +186,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       ]);
 
       if (memberRes.status === 404) {
-        return reply.code(403).send("You are not a member of the configured server.");
+        return reply.code(403).send("Du bist kein Mitglied des konfigurierten Servers.");
       }
       if (!userRes.ok) throw new Error(`Failed to fetch Discord profile: ${userRes.status}`);
       if (!memberRes.ok) throw new Error(`Failed to fetch guild membership: ${memberRes.status}`);
@@ -195,14 +195,14 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       roleIds = (await parseJsonResponse<DiscordGuildMember>(memberRes, "Discord guild member fetch")).roles;
     } catch (err) {
       logger.error(`OAuth profile fetch failed: ${errorMessage(err)}`);
-      return reply.code(502).send("Failed to fetch your Discord profile. Please try again.");
+      return reply.code(502).send("Dein Discord-Profil konnte nicht abgerufen werden. Bitte versuche es erneut.");
     }
 
     const role = resolveDashboardRole(client, config, discordUser.id, roleIds);
     if (!role) {
       return reply
         .code(403)
-        .send("You need Administrator permission in the server (or be the bot/guild owner) to use the dashboard.");
+        .send("Du benötigst Administratorrechte auf dem Server (oder musst Bot-/Server-Besitzer sein), um das Dashboard zu nutzen.");
     }
 
     const sessionId = randomUUID();
@@ -226,7 +226,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
 
   app.get("/api/me", async (request, reply) => {
     const session = getSessionFromRequest(request);
-    if (!session) return reply.code(401).send({ error: "Not authenticated" });
+    if (!session) return reply.code(401).send({ error: "Nicht authentifiziert" });
     return {
       userId: session.userId,
       username: session.username,
