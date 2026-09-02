@@ -9,6 +9,9 @@ const PatchBodySchema = z.object({
   registerGateRoleId: z.string().nullable().optional(),
   registrationTierRoleId: z.string().nullable().optional(),
   rulesAcceptedUseDiscordScreening: z.boolean().optional(),
+  registerChannelId: z.string().nullable().optional(),
+  roleSelectionChannelId: z.string().nullable().optional(),
+  registerConfirmationTemplate: z.string().min(1).optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -18,6 +21,9 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     registerGateRoleId: settings.registerGateRoleId,
     registrationTierRoleId: settings.registrationTierRoleId,
     rulesAcceptedUseDiscordScreening: settings.rulesAcceptedUseDiscordScreening,
+    registerChannelId: settings.registerChannelId,
+    roleSelectionChannelId: settings.roleSelectionChannelId,
+    registerConfirmationTemplate: settings.registerConfirmationTemplate,
   };
 }
 
@@ -28,8 +34,16 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     const body = PatchBodySchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
 
-    const { leaveNotificationsEnabled, fontMap, registerGateRoleId, registrationTierRoleId, rulesAcceptedUseDiscordScreening } =
-      body.data;
+    const {
+      leaveNotificationsEnabled,
+      fontMap,
+      registerGateRoleId,
+      registrationTierRoleId,
+      rulesAcceptedUseDiscordScreening,
+      registerChannelId,
+      roleSelectionChannelId,
+      registerConfirmationTemplate,
+    } = body.data;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)
@@ -42,6 +56,9 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       ...(registerGateRoleId !== undefined && { registerGateRoleId: registerGateRoleId || null }),
       ...(registrationTierRoleId !== undefined && { registrationTierRoleId: registrationTierRoleId || null }),
       ...(rulesAcceptedUseDiscordScreening !== undefined && { rulesAcceptedUseDiscordScreening }),
+      ...(registerChannelId !== undefined && { registerChannelId: registerChannelId || null }),
+      ...(roleSelectionChannelId !== undefined && { roleSelectionChannelId: roleSelectionChannelId || null }),
+      ...(registerConfirmationTemplate !== undefined && { registerConfirmationTemplate }),
     });
     return serialize(settings);
   });

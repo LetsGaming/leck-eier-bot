@@ -11,6 +11,7 @@ import {
   recordRulesAcceptedIfJustVerified,
 } from "../services/memberRecords.js";
 import { removeBirthdayOnMemberLeave } from "../services/birthdays.js";
+import { deleteRegisterThread } from "./registerWatcher.js";
 import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -39,13 +40,23 @@ function isRecentActionAgainst(
  * `registrationTierRoleId` must be the lowest tier specifically — later
  * promotions swap between higher tiers and must never re-trigger this.
  */
-async function stripRegisterGateRoleIfJustRegistered(oldMember: GuildMember, newMember: GuildMember): Promise<void> {
+async function stripRegisterGateRoleIfJustRegistered(
+  client: BotClient,
+  oldMember: GuildMember,
+  newMember: GuildMember,
+): Promise<void> {
   const { registerGateRoleId, registrationTierRoleId } = getSettings();
   if (!registerGateRoleId || !registrationTierRoleId) return;
 
   const justGotRegistrationTier =
     !oldMember.roles.cache.has(registrationTierRoleId) && newMember.roles.cache.has(registrationTierRoleId);
   if (!justGotRegistrationTier) return;
+
+  // The pending-registration thread's job (see registerWatcher.ts) is done
+  // the moment staff grant the tier role, regardless of whether this member
+  // ever held the gate role in the first place.
+  await deleteRegisterThread(client, newMember.id);
+
   if (!newMember.roles.cache.has(registerGateRoleId)) return;
 
   await newMember.roles.remove(registerGateRoleId, "Registriert — benötigt #register-Sichtbarkeit nicht mehr");
@@ -67,7 +78,7 @@ export default function registerMemberEvents(client: BotClient): void {
     // Discord didn't send enough to diff against — nothing to compare.
     if (!oldMember.partial) {
       recordRulesAcceptedIfJustVerified(oldMember, newMember);
-      stripRegisterGateRoleIfJustRegistered(oldMember, newMember).catch((err) =>
+      stripRegisterGateRoleIfJustRegistered(client, oldMember, newMember).catch((err) =>
         logger.error(`Failed to strip register-gate role from ${newMember.id}: ${errorMessage(err)}`),
       );
     }

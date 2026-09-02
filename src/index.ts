@@ -20,6 +20,7 @@ import { loadCommands } from "./loaders/commandLoader.js";
 import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
+import registerRegisterWatcher from "./events/registerWatcher.js";
 import { getCachedMembers, initMemberCache } from "./services/memberCache.js";
 import { seedMemberRecordsFromCache } from "./services/memberRecords.js";
 import {
@@ -172,6 +173,7 @@ client.on("interactionCreate", async (interaction) => {
     registerMemberEvents(client);
     registerBirthdayWatcher(client);
     registerReactionRoleEvents(client);
+    registerRegisterWatcher(client);
 
     client.once("clientReady", async () => {
       logger.info(`Bot logged in as ${client.user?.tag}`);

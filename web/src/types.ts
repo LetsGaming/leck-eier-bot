@@ -166,6 +166,12 @@ export interface GeneralSettings {
   registrationTierRoleId: string | null;
   /** How "rules accepted" is detected on the Member Audit page. Off (default) = role-based: newly granted registerGateRoleId. On = Discord's native membership-screening `pending` flag. */
   rulesAcceptedUseDiscordScreening: boolean;
+  /** Channel watched for self-service registration-form submissions. Null = the feature is disabled. */
+  registerChannelId: string | null;
+  /** Channel mentioned (as `{roleChannel}`) in the registration confirmation note. */
+  roleSelectionChannelId: string | null;
+  /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders. */
+  registerConfirmationTemplate: string;
 }
 
 /**

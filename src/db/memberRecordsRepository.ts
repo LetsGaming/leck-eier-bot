@@ -10,6 +10,7 @@ interface MemberRecordRow {
   rules_accepted_at: string | null;
   left_at: string | null;
   in_guild: 0 | 1;
+  register_thread_id: string | null;
 }
 
 function rowToRecord(row: MemberRecordRow): MemberRecord {
@@ -22,10 +23,12 @@ function rowToRecord(row: MemberRecordRow): MemberRecord {
     rulesAcceptedAt: row.rules_accepted_at,
     leftAt: row.left_at,
     inGuild: row.in_guild === 1,
+    registerThreadId: row.register_thread_id,
   };
 }
 
-const COLUMNS = "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild";
+const COLUMNS =
+  "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id";
 
 const selectAllStmt = db.prepare<[], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records`);
 const selectByIdStmt = db.prepare<[string], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records WHERE user_id = ?`);
@@ -93,4 +96,20 @@ export function recordRulesAccepted(userId: string, timestamp: string): void {
 
 export function recordLeave(entry: ProfileInput & { timestamp: string }): void {
   recordLeaveStmt.run(entry);
+}
+
+const setRegisterThreadIdStmt = db.prepare<{ userId: string; threadId: string }>(
+  `UPDATE member_records SET register_thread_id = @threadId WHERE user_id = @userId`,
+);
+
+const clearRegisterThreadIdStmt = db.prepare<{ userId: string }>(
+  `UPDATE member_records SET register_thread_id = NULL WHERE user_id = @userId`,
+);
+
+export function setRegisterThreadId(userId: string, threadId: string): void {
+  setRegisterThreadIdStmt.run({ userId, threadId });
+}
+
+export function clearRegisterThreadId(userId: string): void {
+  clearRegisterThreadIdStmt.run({ userId });
 }

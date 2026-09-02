@@ -64,6 +64,12 @@ export interface Settings {
   registrationTierRoleId: string | null;
   /** How "rules accepted" (member_records.rules_accepted_at) is detected. Off (default) = role-based: the member being newly granted `registerGateRoleId` — this bot's own rules-message reaction-role. On = Discord's native membership-screening `pending` flag flipping to false, for guilds that use that feature instead. See `recordRulesAcceptedIfJustVerified()` in services/memberRecords.ts. */
   rulesAcceptedUseDiscordScreening: boolean;
+  /** Channel watched for self-service registration-form submissions. Null = the feature is disabled. See `registerWatcher.ts`. */
+  registerChannelId: string | null;
+  /** Channel mentioned (as `{roleChannel}`) in the registration confirmation note — where a newly-registered member can pick their roles while waiting on staff. */
+  roleSelectionChannelId: string | null;
+  /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders — see DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. */
+  registerConfirmationTemplate: string;
 }
 
 export interface CommandSetting {
@@ -149,6 +155,8 @@ export interface MemberRecord {
   /** ISO UTC. `null` while still in the guild. */
   leftAt: string | null;
   inGuild: boolean;
+  /** Id of the private thread created for this member's pending registration-form submission (registerWatcher.ts). Null once staff complete registration and the thread is deleted (memberEvents.ts), or if none was ever created. */
+  registerThreadId: string | null;
 }
 
 /**

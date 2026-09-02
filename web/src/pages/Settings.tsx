@@ -3,7 +3,7 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
-import type { GeneralSettings, Me, RoleOption } from "../types";
+import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
 
 const ROLE_LABELS: Record<string, string> = {
   "bot-owner": "Bot-Besitzer",
@@ -16,6 +16,9 @@ export default function Settings({ me }: { me: Me }) {
   const [fontMap, setFontMap] = useState("");
   const [savingFont, setSavingFont] = useState(false);
   const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [confirmationTemplate, setConfirmationTemplate] = useState("");
+  const [savingConfirmationTemplate, setSavingConfirmationTemplate] = useState(false);
   const { showError, showSuccess } = useToast();
 
   useEffect(() => {
@@ -24,9 +27,11 @@ export default function Settings({ me }: { me: Me }) {
       .then((s) => {
         setSettings(s);
         setFontMap(s.fontMap ?? "");
+        setConfirmationTemplate(s.registerConfirmationTemplate);
       })
       .catch((err) => showError(errorMessage(err)));
     api.roles().then(setRoles).catch((err) => showError(errorMessage(err)));
+    api.channels().then(setChannels).catch((err) => showError(errorMessage(err)));
   }, [showError]);
 
   async function update(patch: Partial<GeneralSettings>) {
@@ -49,6 +54,19 @@ export default function Settings({ me }: { me: Me }) {
       showError(errorMessage(err));
     } finally {
       setSavingFont(false);
+    }
+  }
+
+  async function handleSaveConfirmationTemplate() {
+    setSavingConfirmationTemplate(true);
+    try {
+      const updated = await api.updateGeneralSettings({ registerConfirmationTemplate: confirmationTemplate });
+      setSettings(updated);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingConfirmationTemplate(false);
     }
   }
 
@@ -164,6 +182,70 @@ export default function Settings({ me }: { me: Me }) {
                 sich auf diese integrierte Funktion statt auf eine Reaktionsrolle verlassen. Betrifft nur die Spalte
                 "Regeln akzeptiert" in der <a href="/members">Mitgliederprüfung</a>.
               </div>
+            </>
+          )}
+        </div>
+
+        <div className="card">
+          <h2>Registrierungsformular</h2>
+          <p className="muted small">
+            Postet ein Mitglied im unten festgelegten Kanal eine Nachricht mit einer "name:"- und einer "sso
+            name:"-Zeile (z. B. das Anmeldeformular), setzt der Bot automatisch den Servernickname im Format{" "}
+            <strong>💙VORNAME — nachname</strong> — der Vorname großgeschrieben und über die globale Schrift (siehe
+            "Schrift" oben) gestylt, der Nachname aus dem sso-Namen klein und ohne Schrift — und legt einen privaten
+            Thread an der Nachricht an, in dem der untenstehende Bestätigungstext gepostet wird. Der Thread wird
+            automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird. Lasse den
+            Kanal leer, um dies zu deaktivieren.
+          </p>
+          {!settings ? (
+            <div className="loading">Wird geladen…</div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="register-channel">Registrierungs-Kanal</label>
+                <SearchableSelect
+                  id="register-channel"
+                  value={settings.registerChannelId ?? ""}
+                  onChange={(v) => update({ registerChannelId: v || null })}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                />
+                <div className="hint">Der Kanal, in dem der Bot auf Formular-Einreichungen achtet.</div>
+              </div>
+              <div className="field">
+                <label htmlFor="role-selection-channel">Rollen-Kanal</label>
+                <SearchableSelect
+                  id="role-selection-channel"
+                  value={settings.roleSelectionChannelId ?? ""}
+                  onChange={(v) => update({ roleSelectionChannelId: v || null })}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                />
+                <div className="hint">
+                  Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="register-confirmation-template">Bestätigungstext</label>
+                <textarea
+                  id="register-confirmation-template"
+                  rows={3}
+                  value={confirmationTemplate}
+                  onChange={(e) => setConfirmationTemplate(e.target.value)}
+                />
+                <div className="hint">
+                  Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile) und <code>{"{roleChannel}"}</code>.
+                </div>
+              </div>
+              <button
+                className="primary"
+                onClick={handleSaveConfirmationTemplate}
+                disabled={savingConfirmationTemplate}
+              >
+                {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+              </button>
             </>
           )}
         </div>

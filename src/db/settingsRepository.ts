@@ -17,6 +17,9 @@ interface SettingsRow {
   register_gate_role_id: string | null;
   registration_tier_role_id: string | null;
   rules_accepted_use_discord_screening: 0 | 1;
+  register_channel_id: string | null;
+  role_selection_channel_id: string | null;
+  register_confirmation_template: string;
 }
 
 function rowToSettings(row: SettingsRow): Settings {
@@ -35,6 +38,9 @@ function rowToSettings(row: SettingsRow): Settings {
     registerGateRoleId: row.register_gate_role_id,
     registrationTierRoleId: row.registration_tier_role_id,
     rulesAcceptedUseDiscordScreening: row.rules_accepted_use_discord_screening === 1,
+    registerChannelId: row.register_channel_id,
+    roleSelectionChannelId: row.role_selection_channel_id,
+    registerConfirmationTemplate: row.register_confirmation_template,
   };
 }
 
@@ -43,7 +49,8 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_cron, birthday_mod_channel_id,
           birthday_anchor_template, birthday_anchor_intro, font_map, birthday_anchor_use_font,
           birthday_announcement_use_font, leave_notifications_enabled,
-          register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening
+          register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening,
+          register_channel_id, role_selection_channel_id, register_confirmation_template
    FROM settings WHERE id = 1`,
 );
 const updateStmt = db.prepare<{
@@ -61,6 +68,9 @@ const updateStmt = db.prepare<{
   registerGateRoleId: string | null;
   registrationTierRoleId: string | null;
   rulesAcceptedUseDiscordScreening: 0 | 1;
+  registerChannelId: string | null;
+  roleSelectionChannelId: string | null;
+  registerConfirmationTemplate: string;
 }>(
   `UPDATE settings SET
      birthday_template = @birthdayTemplate,
@@ -76,7 +86,10 @@ const updateStmt = db.prepare<{
      leave_notifications_enabled = @leaveNotificationsEnabled,
      register_gate_role_id = @registerGateRoleId,
      registration_tier_role_id = @registrationTierRoleId,
-     rules_accepted_use_discord_screening = @rulesAcceptedUseDiscordScreening
+     rules_accepted_use_discord_screening = @rulesAcceptedUseDiscordScreening,
+     register_channel_id = @registerChannelId,
+     role_selection_channel_id = @roleSelectionChannelId,
+     register_confirmation_template = @registerConfirmationTemplate
    WHERE id = 1`,
 );
 
@@ -103,6 +116,9 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     registerGateRoleId: next.registerGateRoleId,
     registrationTierRoleId: next.registrationTierRoleId,
     rulesAcceptedUseDiscordScreening: next.rulesAcceptedUseDiscordScreening ? 1 : 0,
+    registerChannelId: next.registerChannelId,
+    roleSelectionChannelId: next.roleSelectionChannelId,
+    registerConfirmationTemplate: next.registerConfirmationTemplate,
   });
   settingsBus.emit(SettingsEvent.Settings);
   return next;

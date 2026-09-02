@@ -2,7 +2,12 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { DEFAULT_BIRTHDAY_TEMPLATE, DAILY_MIDNIGHT_CRON, DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE } from "../constants.js";
+import {
+  DEFAULT_BIRTHDAY_TEMPLATE,
+  DAILY_MIDNIGHT_CRON,
+  DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE,
+  DEFAULT_REGISTER_CONFIRMATION_TEMPLATE,
+} from "../constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -446,6 +451,22 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE reaction_role_mappings_v21 RENAME TO reaction_role_mappings;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_rr_map_emoji
         ON reaction_role_mappings(panel_id, emoji_id, emoji_name);
+    `);
+  },
+  // v22: self-service registration — a member posts a filled-out form in
+  // register_channel_id, the bot updates their nickname and confirms in a
+  // private thread on that message (registerWatcher.ts). role_selection_
+  // channel_id is only ever read to render {roleChannel} in the confirmation
+  // template; it isn't otherwise enforced by the bot. member_records gets
+  // the new thread's id so it can be looked up and deleted later once staff
+  // manually grant registrationTierRoleId (memberEvents.ts) — nullable and
+  // cleared once deleted, same lifecycle as a plain "pending" flag.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN register_channel_id TEXT;
+      ALTER TABLE settings ADD COLUMN role_selection_channel_id TEXT;
+      ALTER TABLE settings ADD COLUMN register_confirmation_template TEXT NOT NULL DEFAULT '${DEFAULT_REGISTER_CONFIRMATION_TEMPLATE}';
+      ALTER TABLE member_records ADD COLUMN register_thread_id TEXT;
     `);
   },
 ];

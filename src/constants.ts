@@ -57,6 +57,19 @@ export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
 /** Discord's hard cap on a message's `content` length — the anchor message is paginated across multiple messages once the full list exceeds this. See `paginateAnchorParts()`. */
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 
+// --- Self-service registration form ---
+/** `{name}` is the value pulled from the submitted form's `name:` line; `{roleChannel}` is a `#channel` mention of `roleSelectionChannelId`. See `registerWatcher.ts`. */
+export const DEFAULT_REGISTER_CONFIRMATION_TEMPLATE =
+  "Danke {name}! Du wirst in Kürze registriert. Bis dahin kannst du dir schon in {roleChannel} deine Rollen aussuchen.";
+/** Matches a `name:`-labeled line anywhere in a register-form submission (case-insensitive) — see `parseRegisterForm()` in `registerWatcher.ts`. */
+export const REGISTER_FORM_NAME_REGEX = /^\s*name\s*:\s*(.+)$/im;
+/** Matches an `sso name:`-labeled line (case-insensitive) — its last whitespace-separated word becomes the lowercase surname half of the generated nickname. Anchored so a plain `name:` line never matches this. See `parseRegisterForm()` in `registerWatcher.ts`. */
+export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
+/** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `registerWatcher.ts`. */
+export const REGISTER_NICKNAME_EMOJI = "💙";
+/** Discord's hard cap on a member's nickname length. */
+export const DISCORD_NICKNAME_MAX_LENGTH = 32;
+
 // --- Reaction roles ---
 /**
  * How long a bot-initiated reaction removal (unique-mode swaps,
