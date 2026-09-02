@@ -33,7 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     let replyContent = "🎂 Heute hat niemand Geburtstag!";
 
     if (nextBirthday) {
-      replyContent += `\nDer nächste Geburtstag ist am **${nextBirthday.date.toLocaleDateString()}**: ${nextBirthday.entries
+      replyContent += `\nDer nächste Geburtstag ist am **${nextBirthday.date.toLocaleDateString("de-DE")}**: ${nextBirthday.entries
         .map((e) => e.name ?? "Unbekannt")
         .join(", ")}`;
     }

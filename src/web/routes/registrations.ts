@@ -1,0 +1,61 @@
+import type { FastifyInstance } from "fastify";
+import { listRegistrations } from "../../db/memberRecordsRepository.js";
+import { getCachedMembers } from "../../services/memberCache.js";
+import { removeRegistration } from "../../events/registerWatcher.js";
+import { buildAvatarUrl } from "./memberAudit.js";
+import type { BotClient, Config, RegistrationStatus } from "../../types.js";
+
+interface RegistrationEntry {
+  userId: string;
+  username: string;
+  displayName: string;
+  nickname: string | null;
+  avatarUrl: string;
+  status: RegistrationStatus;
+  /** ISO UTC — when the registration was submitted. */
+  submittedAt: string | null;
+  /** Jump link to the private thread. Null once resolved (registered/removed/left) — the thread no longer exists. */
+  threadUrl: string | null;
+  /** Raw `name:` field value, as submitted. */
+  submittedName: string | null;
+  /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */
+  submittedSsoName: string | null;
+  /** Raw `alter:` field value, as submitted. Null if the member left it out. */
+  submittedAge: string | null;
+}
+
+/** Dashboard visibility/control over self-service registration-form submissions — see `registerWatcher.ts`. Shows full history (pending/registered/removed/left), not just what's currently pending. */
+export function registerRegistrationRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
+  app.get("/members/registrations", async () => {
+    const cache = getCachedMembers();
+
+    return listRegistrations().map((record): RegistrationEntry => {
+      const cached = cache.get(record.userId);
+      // registerStatus is guaranteed non-null here — listRegistrations() only
+      // returns rows where it's set.
+      const status = record.registerStatus!;
+      return {
+        userId: record.userId,
+        username: cached?.user.username ?? record.username,
+        displayName: cached?.displayName ?? record.displayName,
+        nickname: cached?.nickname ?? null,
+        avatarUrl: cached?.displayAvatarURL({ size: 64 }) ?? buildAvatarUrl(record.userId, record.avatar),
+        status,
+        submittedAt: record.registerSubmittedAt,
+        threadUrl:
+          status === "pending" && record.registerThreadId
+            ? `https://discord.com/channels/${config.guildId}/${record.registerThreadId}`
+            : null,
+        submittedName: record.registerSubmittedName,
+        submittedSsoName: record.registerSubmittedSsoName,
+        submittedAge: record.registerSubmittedAge,
+      };
+    });
+  });
+
+  app.delete("/members/registrations/:userId", async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    await removeRegistration(client, userId);
+    return reply.code(204).send();
+  });
+}

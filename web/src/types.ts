@@ -9,6 +9,8 @@ export interface Me {
   username: string;
   avatar: string | null;
   role: WebRole;
+  /** IANA timezone name (e.g. "Europe/Berlin") every dashboard date is displayed in — see `setDisplayTimezone` in `../dateFormat`. */
+  timezone: string;
 }
 
 export interface Status {
@@ -201,17 +203,26 @@ export interface MemberAuditResponse {
   left: MemberAuditEntry[];
 }
 
-/** A member who's posted a self-service registration-form submission still awaiting staff review — see `registerWatcher.ts`. */
-export interface PendingRegistration {
+/**
+ * 'pending' = form submitted, awaiting staff action, private thread open.
+ * 'registered' = staff granted the registration-tier role.
+ * 'removed' = manually reset from the dashboard so the member can resubmit.
+ * 'left' = the member left/was kicked/was banned while still 'pending'.
+ */
+export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
+
+/** A member who's ever posted a self-service registration-form submission, regardless of outcome — see `registerWatcher.ts`. */
+export interface Registration {
   userId: string;
   username: string;
   displayName: string;
   nickname: string | null;
   avatarUrl: string;
-  /** ISO UTC — when the private registration thread was created. */
+  status: RegistrationStatus;
+  /** ISO UTC — when the registration was submitted. */
   submittedAt: string | null;
-  /** Jump link to the private thread. */
-  threadUrl: string;
+  /** Jump link to the private thread. Null once resolved — the thread no longer exists. */
+  threadUrl: string | null;
   /** Raw `name:` field value, as submitted. */
   submittedName: string | null;
   /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */

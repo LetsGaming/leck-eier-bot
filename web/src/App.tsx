@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "./api";
+import { setDisplayTimezone } from "./dateFormat";
 import type { Me } from "./types";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -18,7 +19,10 @@ export default function App() {
   useEffect(() => {
     api
       .me()
-      .then(setMe)
+      .then((m) => {
+        setDisplayTimezone(m.timezone);
+        setMe(m);
+      })
       .catch(() => setMe(null));
   }, []);
 

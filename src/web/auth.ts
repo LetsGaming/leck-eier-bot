@@ -232,6 +232,7 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
       username: session.username,
       avatar: session.avatar,
       role: session.role,
+      timezone: config.timezone,
     };
   });
 }

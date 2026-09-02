@@ -157,17 +157,29 @@ export interface MemberRecord {
   /** ISO UTC. `null` while still in the guild. */
   leftAt: string | null;
   inGuild: boolean;
-  /** Id of the private thread created for this member's pending registration-form submission (registerWatcher.ts). Null once the registration is cleared (staff complete it, it's manually removed from the dashboard, or the member leaves/is kicked/banned — memberEvents.ts), or if none was ever created. */
+  /** Id of the private thread created for this member's registration-form submission (registerWatcher.ts). Null once the thread is deleted — staff complete the registration, it's manually removed from the dashboard, or the member leaves/is kicked/banned (memberEvents.ts) — or if none was ever created. Unlike the fields below, this does NOT persist past a terminal status, since the thread itself no longer exists to link to. */
   registerThreadId: string | null;
-  /** ISO UTC — when `registerThreadId` was created. Null alongside it, same lifecycle. Powers the dashboard's "pending registrations" list. */
+  /** ISO UTC — when the registration was submitted. Persists past a terminal status (see `registerStatus`) for the dashboard's history view. */
   registerSubmittedAt: string | null;
-  /** Raw `name:` field value from the registration-form submission. Null alongside `registerThreadId`, same lifecycle. Purely informational. */
+  /** Raw `name:` field value from the registration-form submission. Persists past a terminal status. Purely informational. */
   registerSubmittedName: string | null;
-  /** Raw `sso name:` field value from the registration-form submission (the full value, not just the surname used for the nickname — see `buildRegisterNickname()`). Null alongside `registerThreadId`, same lifecycle. */
+  /** Raw `sso name:` field value from the registration-form submission (the full value, not just the surname used for the nickname — see `buildRegisterNickname()`). Persists past a terminal status. */
   registerSubmittedSsoName: string | null;
-  /** Raw `alter:` field value from the registration-form submission. Null if omitted (optional) or alongside `registerThreadId` once cleared. */
+  /** Raw `alter:` field value from the registration-form submission. Null if omitted (optional). Persists past a terminal status. */
   registerSubmittedAge: string | null;
+  /** Lifecycle of the most recent registration-form submission. Null = never submitted one. Set to 'pending' on submission and never reset to null again — see `savePendingRegistration()`/`completeRegistration()`/`removeRegistration()`/`markRegistrationLeft()` in `memberRecordsRepository.ts`. */
+  registerStatus: RegistrationStatus | null;
 }
+
+/**
+ * 'pending' = form submitted, awaiting staff action, private thread open.
+ * 'registered' = staff granted the registration-tier role.
+ * 'removed' = manually reset from the dashboard so the member can resubmit.
+ * 'left' = the member left/was kicked/was banned while still 'pending'
+ * (leaving after already being 'registered' does NOT overwrite that status
+ * — see `markRegistrationLeft()`'s guard).
+ */
+export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
 
 /**
  * Dashboard RBAC role, resolved at login (`resolveDashboardRole()` in

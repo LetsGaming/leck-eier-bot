@@ -1,6 +1,12 @@
 import { ChannelType, type Message, type PartialMessage } from "discord.js";
 import { getSettings } from "../db/settingsRepository.js";
-import { savePendingRegistration, clearRegisterThreadId, getMemberRecord } from "../db/memberRecordsRepository.js";
+import {
+  savePendingRegistration,
+  getMemberRecord,
+  completeRegistration as dbCompleteRegistration,
+  removeRegistration as dbRemoveRegistration,
+  markRegistrationLeft as dbMarkRegistrationLeft,
+} from "../db/memberRecordsRepository.js";
 import {
   REGISTER_FORM_NAME_REGEX,
   REGISTER_FORM_SSO_NAME_REGEX,
@@ -68,20 +74,19 @@ function renderConfirmation(template: string, name: string, roleSelectionChannel
 }
 
 /**
- * Whether `userId` already has a registration in flight. Self-healing: a
- * `registerThreadId` whose thread no longer exists (manually deleted, etc.)
- * is cleared instead of permanently blocking that member from ever
- * resubmitting.
+ * Whether `userId` has a registration currently in flight (status 'pending'
+ * *and* the Discord thread still actually exists). Self-healing: if the
+ * thread was deleted out of band (e.g. manually by staff in Discord itself),
+ * this returns false rather than permanently blocking a resubmission —
+ * `savePendingRegistration()` unconditionally overwrites on the next
+ * submission regardless of the stale thread id sitting there.
  */
 async function hasActiveRegisterThread(client: BotClient, userId: string): Promise<boolean> {
-  const threadId = getMemberRecord(userId)?.registerThreadId;
-  if (!threadId) return false;
+  const record = getMemberRecord(userId);
+  if (record?.registerStatus !== "pending" || !record.registerThreadId) return false;
 
-  const thread = await client.channels.fetch(threadId).catch(() => null);
-  if (thread?.isThread()) return true;
-
-  clearRegisterThreadId(userId);
-  return false;
+  const thread = await client.channels.fetch(record.registerThreadId).catch(() => null);
+  return thread?.isThread() ?? false;
 }
 
 export default function registerRegisterWatcher(client: BotClient): void {
@@ -160,25 +165,52 @@ export default function registerRegisterWatcher(client: BotClient): void {
   });
 }
 
-/**
- * Deletes the private registration thread for `userId`, if one exists —
- * called once staff manually grant `registrationTierRoleId` (see
- * `stripRegisterGateRoleIfJustRegistered` in `memberEvents.ts`), since the
- * "you'll be registered shortly" note it holds is no longer relevant.
- */
-export async function deleteRegisterThread(client: BotClient, userId: string): Promise<void> {
+/** The private registration thread id for `userId`, but only if a registration is currently 'pending' — a terminal status never has a live thread to delete. */
+function pendingThreadId(userId: string): string | null {
   const record = getMemberRecord(userId);
-  const threadId = record?.registerThreadId;
-  if (!threadId) return;
+  return record?.registerStatus === "pending" ? record.registerThreadId : null;
+}
 
+/** Best-effort delete of a Discord thread — logs and swallows any failure (already gone, missing permissions, etc.) rather than blocking the DB status transition that always follows it. */
+async function deleteDiscordThread(client: BotClient, threadId: string, reason: string): Promise<void> {
   try {
     const thread = await client.channels.fetch(threadId).catch(() => null);
     if (thread?.isThread()) {
-      await thread.delete("Registrierung abgeschlossen");
+      await thread.delete(reason);
     }
   } catch (err) {
-    logger.warn(`Registrierungs-Thread ${threadId} für ${userId} konnte nicht gelöscht werden: ${errorMessage(err)}`);
-  } finally {
-    clearRegisterThreadId(userId);
+    logger.warn(`Registrierungs-Thread ${threadId} konnte nicht gelöscht werden: ${errorMessage(err)}`);
   }
+}
+
+/**
+ * Staff manually granted `registrationTierRoleId` (see
+ * `stripRegisterGateRoleIfJustRegistered` in `memberEvents.ts`) — the
+ * private thread's job is done, but the submitted info stays on the
+ * dashboard's Registrierungen list with status "Registriert" rather than
+ * being deleted.
+ */
+export async function completeRegistration(client: BotClient, userId: string): Promise<void> {
+  const threadId = pendingThreadId(userId);
+  if (threadId) await deleteDiscordThread(client, threadId, "Registrierung abgeschlossen");
+  dbCompleteRegistration(userId);
+}
+
+/** Manually reset from the dashboard's Registrierungen list — deletes the thread and flips status to "Entfernt", letting the member submit the form again. */
+export async function removeRegistration(client: BotClient, userId: string): Promise<void> {
+  const threadId = pendingThreadId(userId);
+  if (threadId) await deleteDiscordThread(client, threadId, "Registrierung manuell zurückgesetzt");
+  dbRemoveRegistration(userId);
+}
+
+/**
+ * The member left/was kicked/was banned (see `guildMemberRemove` in
+ * `memberEvents.ts`) while their registration was still pending — a no-op
+ * (both here and at the DB layer) if they'd already completed registration,
+ * since leaving afterward shouldn't overwrite that status.
+ */
+export async function clearRegistrationOnLeave(client: BotClient, userId: string): Promise<void> {
+  const threadId = pendingThreadId(userId);
+  if (threadId) await deleteDiscordThread(client, threadId, "Mitglied hat den Server verlassen");
+  dbMarkRegistrationLeft(userId);
 }

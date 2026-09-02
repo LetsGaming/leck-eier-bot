@@ -2,18 +2,32 @@ import { useCallback, useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { formatAbsolute, formatRelative } from "../dateFormat";
-import type { MemberAuditEntry, MemberAuditResponse, PendingRegistration } from "../types";
+import type { MemberAuditEntry, MemberAuditResponse, Registration, RegistrationStatus } from "../types";
 
 const DEBOUNCE_MS = 300;
 
-function PendingRegistrationsCard() {
-  const [entries, setEntries] = useState<PendingRegistration[] | null>(null);
+const STATUS_LABELS: Record<RegistrationStatus, string> = {
+  pending: "Ausstehend",
+  registered: "Registriert",
+  removed: "Entfernt",
+  left: "Verlassen",
+};
+
+const STATUS_BADGE_CLASS: Record<RegistrationStatus, string> = {
+  pending: "warn",
+  registered: "ok",
+  removed: "error",
+  left: "error",
+};
+
+function RegistrationsCard() {
+  const [entries, setEntries] = useState<Registration[] | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
 
   const load = useCallback(() => {
     api
-      .pendingRegistrations()
+      .registrations()
       .then(setEntries)
       .catch((err) => showError(errorMessage(err)));
   }, [showError]);
@@ -22,18 +36,18 @@ function PendingRegistrationsCard() {
     load();
   }, [load]);
 
-  async function handleRemove(entry: PendingRegistration) {
+  async function handleRemove(entry: Registration) {
     if (
       !confirm(
-        `Ausstehende Registrierung von ${entry.displayName} entfernen? Der private Thread wird gelöscht und das Mitglied kann das Formular erneut einreichen.`,
+        `Registrierung von ${entry.displayName} zurücksetzen? Der private Thread wird gelöscht und das Mitglied kann das Formular erneut einreichen.`,
       )
     ) {
       return;
     }
     setBusyUserId(entry.userId);
     try {
-      await api.removePendingRegistration(entry.userId);
-      showSuccess("Entfernt.");
+      await api.removeRegistration(entry.userId);
+      showSuccess("Zurückgesetzt.");
       load();
     } catch (err) {
       showError(errorMessage(err));
@@ -46,9 +60,9 @@ function PendingRegistrationsCard() {
 
   return (
     <div className="card">
-      <h2>Ausstehende Registrierungen ({entries.length})</h2>
+      <h2>Registrierungen ({entries.length})</h2>
       {entries.length === 0 ? (
-        <p className="muted">Niemand wartet gerade auf Registrierung.</p>
+        <p className="muted">Noch niemand hat das Registrierungsformular eingereicht.</p>
       ) : (
         <div className="table-scroll">
           <table className="stack-on-mobile">
@@ -57,6 +71,7 @@ function PendingRegistrationsCard() {
                 <th></th>
                 <th>Anzeigename</th>
                 <th>Nickname</th>
+                <th>Status</th>
                 <th>Name (Formular)</th>
                 <th>SSO-Name</th>
                 <th>Alter</th>
@@ -75,6 +90,11 @@ function PendingRegistrationsCard() {
                   <td className="muted" data-label="Nickname">
                     {entry.nickname ?? "—"}
                   </td>
+                  <td data-label="Status">
+                    <span className={`badge ${STATUS_BADGE_CLASS[entry.status]}`}>
+                      {STATUS_LABELS[entry.status]}
+                    </span>
+                  </td>
                   <td data-label="Name (Formular)">{entry.submittedName ?? "—"}</td>
                   <td data-label="SSO-Name">{entry.submittedSsoName ?? "—"}</td>
                   <td data-label="Alter">{entry.submittedAge ?? "—"}</td>
@@ -85,18 +105,24 @@ function PendingRegistrationsCard() {
                     </div>
                   </td>
                   <td data-label="Thread">
-                    <a href={entry.threadUrl} target="_blank" rel="noreferrer">
-                      Thread öffnen
-                    </a>
+                    {entry.threadUrl ? (
+                      <a href={entry.threadUrl} target="_blank" rel="noreferrer">
+                        Thread öffnen
+                      </a>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                   <td>
-                    <button
-                      className="danger"
-                      disabled={busyUserId === entry.userId}
-                      onClick={() => handleRemove(entry)}
-                    >
-                      Entfernen
-                    </button>
+                    {entry.status === "pending" && (
+                      <button
+                        className="danger"
+                        disabled={busyUserId === entry.userId}
+                        onClick={() => handleRemove(entry)}
+                      >
+                        Entfernen
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -195,10 +221,8 @@ export default function MemberAudit() {
       <p className="muted">
         Jedes Mitglied, das jemals auf dem Server gesehen wurde, aktuell und ehemalig. "Regeln akzeptiert" und
         "Verlassen" sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht
-        erfasst, nicht dass es nie passiert ist. Daten werden in deiner lokalen Zeitzone angezeigt.
+        erfasst, nicht dass es nie passiert ist. Daten werden in der konfigurierten Zeitzone angezeigt.
       </p>
-
-      <PendingRegistrationsCard />
 
       <div className="card">
         <div className="field">
@@ -231,6 +255,8 @@ export default function MemberAudit() {
           </>
         )
       )}
+
+      <RegistrationsCard />
     </div>
   );
 }

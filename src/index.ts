@@ -70,6 +70,11 @@ async function hasCommandPermission(
 }
 
 const config = loadConfig();
+// Makes every local-time-dependent Date computation in this process (Date#
+// getHours/getDate/toLocaleString, the "today" boundary birthday matching
+// runs against, etc.) reflect the configured community timezone instead of
+// the container's OS default (commonly UTC) — see docs/CONFIGURATION.md.
+process.env.TZ = config.timezone;
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,

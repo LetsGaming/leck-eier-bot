@@ -16,6 +16,17 @@ export const EnvSchema = z.object({
   DISCORD_GUILD_ID: z.string().min(1).describe("YOUR_GUILD_ID"),
 
   /**
+   * IANA timezone name (e.g. "Europe/Berlin") the bot/dashboard treats as
+   * "local" — every user-facing date/time (dashboard timestamps, Discord
+   * replies that show a date, and what counts as "today" for birthday
+   * matching) is displayed/computed in this zone instead of whatever the
+   * server happens to default to (commonly UTC in a Docker container).
+   * Dates are still always stored in UTC; this only affects display/"what
+   * day is it" logic. Defaults to "Europe/Berlin" if unset.
+   */
+  TIMEZONE: z.string().min(1).describe("Europe/Berlin").optional(),
+
+  /**
    * The dashboard is on by default whenever its required fields below are
    * all present; set this to "false" to force it off regardless.
    */
@@ -50,6 +61,8 @@ export interface Config {
   clientId: string;
   botOwnerId: string;
   guildId: string;
+  /** IANA timezone name — see {@link EnvSchema}'s TIMEZONE. Always a validated, real timezone by the time it lands here. */
+  timezone: string;
   /** Present only when the dashboard is enabled *and* fully configured — see {@link EnvSchema}'s WEB_* fields. */
   web?: WebConfig;
 }

@@ -23,6 +23,12 @@ cp .env.example .env   # then fill in real values
 | `DISCORD_BOT_OWNER_ID` | Discord user ID of the bot owner. Grants `Owner`-permission commands (e.g. `/cleardm`) and full dashboard access, and counts as an admin everywhere else. |
 | `DISCORD_GUILD_ID` | The "main" server's ID. Used both for guild-restricted commands and as the guild the member cache/dashboard are built from. |
 
+## Timezone (optional)
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `TIMEZONE` | no, default `Europe/Berlin` | IANA timezone name (e.g. `America/New_York`). Every user-facing date/time — dashboard timestamps, Discord replies that show a date, and what counts as "today" for birthday matching — uses this instead of the server's default (commonly UTC in a Docker container). Data is still always **stored** in UTC; this only affects display and "what day is it" logic. Validated at startup (`Intl.DateTimeFormat`) — an unrecognized name fails fast with a clear error instead of silently falling back somewhere deep in a formatter. |
+
 ## Dashboard variables (optional)
 
 The [dashboard](DASHBOARD.md) starts automatically once every variable below is set. Leave them all unset, or set `WEB_ENABLED=false`, to run without it — the rest of the bot is unaffected either way.
@@ -65,4 +71,4 @@ These are optional and only affect logging (see [ARCHITECTURE.md](ARCHITECTURE.m
 | --- | --- | --- |
 | `LOG_DIR` | `<cwd>/../logs` | Directory log files are written to. |
 | `LOG_LEVEL` | `info` | Minimum [winston log level](https://github.com/winstonjs/winston#logging-levels) written to files. |
-| `NODE_ENV` | unset | When set to `production`, disables the colorized console transport (file logging is always on). |
+| `NODE_ENV` | unset | No effect on logging — console output is always on (colorized) alongside the rotated file logs. |

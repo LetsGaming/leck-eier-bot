@@ -1,5 +1,5 @@
 import { db } from "./index.js";
-import type { MemberRecord } from "../types.js";
+import type { MemberRecord, RegistrationStatus } from "../types.js";
 
 interface MemberRecordRow {
   user_id: string;
@@ -15,6 +15,7 @@ interface MemberRecordRow {
   register_submitted_name: string | null;
   register_submitted_sso_name: string | null;
   register_submitted_age: string | null;
+  register_status: RegistrationStatus | null;
 }
 
 function rowToRecord(row: MemberRecordRow): MemberRecord {
@@ -32,16 +33,21 @@ function rowToRecord(row: MemberRecordRow): MemberRecord {
     registerSubmittedName: row.register_submitted_name,
     registerSubmittedSsoName: row.register_submitted_sso_name,
     registerSubmittedAge: row.register_submitted_age,
+    registerStatus: row.register_status,
   };
 }
 
 const COLUMNS =
-  "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id, register_submitted_at, register_submitted_name, register_submitted_sso_name, register_submitted_age";
+  "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id, register_submitted_at, register_submitted_name, register_submitted_sso_name, register_submitted_age, register_status";
 
 const selectAllStmt = db.prepare<[], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records`);
 const selectByIdStmt = db.prepare<[string], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records WHERE user_id = ?`);
-const selectPendingRegistrationsStmt = db.prepare<[], MemberRecordRow>(
-  `SELECT ${COLUMNS} FROM member_records WHERE register_thread_id IS NOT NULL AND in_guild = 1`,
+// Every registration ever submitted, not just currently-pending ones — the
+// dashboard shows full history (pending/registered/removed/left) rather
+// than rows disappearing once resolved. Former members are included too
+// (no in_guild filter), so a "left" entry stays visible.
+const selectRegistrationsStmt = db.prepare<[], MemberRecordRow>(
+  `SELECT ${COLUMNS} FROM member_records WHERE register_status IS NOT NULL ORDER BY register_submitted_at DESC`,
 );
 
 interface ProfileInput {
@@ -93,9 +99,9 @@ export function getMemberRecord(userId: string): MemberRecord | null {
   return row ? rowToRecord(row) : null;
 }
 
-/** Every current member with a registration-form submission still awaiting staff review — see `register_thread_id` on `member_records`. */
-export function listPendingRegistrations(): MemberRecord[] {
-  return selectPendingRegistrationsStmt.all().map(rowToRecord);
+/** Every member who's ever submitted a registration form, regardless of outcome — see `register_status` on `member_records`. */
+export function listRegistrations(): MemberRecord[] {
+  return selectRegistrationsStmt.all().map(rowToRecord);
 }
 
 export function upsertJoin(entry: ProfileInput & { joinedAt: string | null }): void {
@@ -124,23 +130,17 @@ interface PendingRegistrationInput {
   age: string | null;
 }
 
+// Overwrites whatever was there before (including a prior terminal status),
+// so a member who was previously 'removed'/'left' can simply submit again —
+// this is the only place register_status is ever set back to 'pending'.
 const savePendingRegistrationStmt = db.prepare<PendingRegistrationInput>(
   `UPDATE member_records SET
      register_thread_id = @threadId,
      register_submitted_at = @submittedAt,
      register_submitted_name = @name,
      register_submitted_sso_name = @ssoName,
-     register_submitted_age = @age
-   WHERE user_id = @userId`,
-);
-
-const clearRegisterThreadIdStmt = db.prepare<{ userId: string }>(
-  `UPDATE member_records SET
-     register_thread_id = NULL,
-     register_submitted_at = NULL,
-     register_submitted_name = NULL,
-     register_submitted_sso_name = NULL,
-     register_submitted_age = NULL
+     register_submitted_age = @age,
+     register_status = 'pending'
    WHERE user_id = @userId`,
 );
 
@@ -148,6 +148,34 @@ export function savePendingRegistration(entry: PendingRegistrationInput): void {
   savePendingRegistrationStmt.run(entry);
 }
 
-export function clearRegisterThreadId(userId: string): void {
-  clearRegisterThreadIdStmt.run({ userId });
+// register_thread_id goes back to NULL on every terminal transition — the
+// Discord thread itself is always deleted at the same time (see
+// registerWatcher.ts), so the id would just be dangling otherwise.
+// register_submitted_name/sso_name/age/at are deliberately left untouched —
+// this is what makes the entry stay visible with its submitted info intact
+// instead of being wiped, per the dashboard's Registrierungen history.
+//
+// Every transition is guarded on the row currently being 'pending', so:
+// - completing/removing/clearing a member who never submitted (status NULL)
+//   is a no-op, not a phantom history entry.
+// - a member who already completed registration and later leaves keeps
+//   their 'registered' status — leaving doesn't overwrite it to 'left'.
+const setRegistrationStatusStmt = db.prepare<{ userId: string; status: RegistrationStatus }>(
+  `UPDATE member_records SET register_status = @status, register_thread_id = NULL
+   WHERE user_id = @userId AND register_status = 'pending'`,
+);
+
+/** Staff granted the registration-tier role — see `stripRegisterGateRoleIfJustRegistered()` in `memberEvents.ts`. */
+export function completeRegistration(userId: string): void {
+  setRegistrationStatusStmt.run({ userId, status: "registered" });
+}
+
+/** Manually reset from the dashboard's Registrierungen list, so the member can submit the form again. */
+export function removeRegistration(userId: string): void {
+  setRegistrationStatusStmt.run({ userId, status: "removed" });
+}
+
+/** The member left/was kicked/was banned while their registration was still pending — see `guildMemberRemove` in `memberEvents.ts`. */
+export function markRegistrationLeft(userId: string): void {
+  setRegistrationStatusStmt.run({ userId, status: "left" });
 }

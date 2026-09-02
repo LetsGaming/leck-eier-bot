@@ -497,6 +497,18 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE member_records ADD COLUMN register_submitted_age TEXT;
     `);
   },
+  // v26: a registration's outcome is now tracked as a persistent status
+  // ('pending' | 'registered' | 'removed' | 'left') instead of the row being
+  // wiped back to nulls once it's resolved — the dashboard's Registrierungen
+  // list (web/routes/pendingRegistrations.ts) shows full history, not just
+  // what's currently pending. register_thread_id still goes back to NULL
+  // once the actual Discord thread is deleted (it no longer exists to link
+  // to), but register_submitted_name/sso_name/age/at are kept for the
+  // record. NULL here means "never submitted a registration form" — the
+  // list filters on this being NOT NULL rather than on register_thread_id.
+  (d) => {
+    d.exec(`ALTER TABLE member_records ADD COLUMN register_status TEXT;`);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

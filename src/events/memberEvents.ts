@@ -11,7 +11,7 @@ import {
   recordRulesAcceptedIfJustVerified,
 } from "../services/memberRecords.js";
 import { removeBirthdayOnMemberLeave } from "../services/birthdays.js";
-import { deleteRegisterThread } from "./registerWatcher.js";
+import { completeRegistration, clearRegistrationOnLeave } from "./registerWatcher.js";
 import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -55,7 +55,7 @@ async function stripRegisterGateRoleIfJustRegistered(
   // The pending-registration thread's job (see registerWatcher.ts) is done
   // the moment staff grant the tier role, regardless of whether this member
   // ever held the gate role in the first place.
-  await deleteRegisterThread(client, newMember.id);
+  await completeRegistration(client, newMember.id);
 
   if (!newMember.roles.cache.has(registerGateRoleId)) return;
 
@@ -106,12 +106,13 @@ export default function registerMemberEvents(client: BotClient): void {
       logger.error(`Failed to remove departed member ${user.id}'s birthday entry: ${errorMessage(err)}`),
     );
 
-    // Same reasoning: a pending registration-form submission (registerWatcher.ts)
-    // is meaningless once the member is gone, regardless of whether they left
-    // voluntarily, were kicked, or were banned — clearing it here (rather than
-    // only on manual dashboard removal or staff completing registration) lets
-    // them start fresh if they ever rejoin.
-    deleteRegisterThread(client, user.id).catch((err) =>
+    // Same reasoning: a *pending* registration-form submission
+    // (registerWatcher.ts) is meaningless once the member is gone, regardless
+    // of whether they left voluntarily, were kicked, or were banned — this
+    // deletes the thread and marks the entry "left" (a no-op if they'd
+    // already completed registration, so that status isn't overwritten) so
+    // they start fresh if they ever rejoin.
+    clearRegistrationOnLeave(client, user.id).catch((err) =>
       logger.error(`Failed to clear departed member ${user.id}'s pending registration: ${errorMessage(err)}`),
     );
 

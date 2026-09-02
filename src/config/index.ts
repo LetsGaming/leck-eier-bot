@@ -28,6 +28,18 @@ export function loadConfig(): Config {
   }
   const env = parsed.data;
 
+  const timezone = env.TIMEZONE || "Europe/Berlin";
+  try {
+    // Intl throws RangeError on an unrecognized IANA name — fail fast at
+    // startup rather than silently falling back somewhere deep in a date
+    // formatter.
+    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+  } catch {
+    const message = `❌ TIMEZONE "${timezone}" is not a recognized IANA timezone name (e.g. "Europe/Berlin").`;
+    logger.error(message);
+    throw new Error(message);
+  }
+
   // Comma-separated list -> normalized, deduplicated origins (no trailing
   // slash, so string comparison against a request's computed origin is a
   // plain equality check everywhere else in the app).
@@ -63,6 +75,7 @@ export function loadConfig(): Config {
     clientId: env.DISCORD_CLIENT_ID,
     botOwnerId: env.DISCORD_BOT_OWNER_ID,
     guildId: env.DISCORD_GUILD_ID,
+    timezone,
     web,
   };
   return cachedConfig;
