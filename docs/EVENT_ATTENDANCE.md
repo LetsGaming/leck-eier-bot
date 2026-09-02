@@ -15,7 +15,9 @@ Events are assumed to never overlap — one voice channel, one event at a time. 
 
 ## How detection works
 
-The bot doesn't hardcode Apollo's application id. Instead, any message in the configured channel is checked for the *shape* of an Apollo event embed: at least one field whose name (after stripping emoji/counts) matches an RSVP label — "Accepted"/"Declined"/"Tentative" or a German equivalent. See `APOLLO_RSVP_FIELD_LABELS` in `src/constants.ts`.
+A message is only processed if it's from **Apollo's own Discord bot user id** (`APOLLO_BOT_USER_ID` in `src/constants.ts`, confirmed against this server) and in the configured channel. An earlier version tried detecting Apollo by embed *shape* instead (any bot message with an RSVP-labeled field) to avoid hardcoding an id — that turned out unreliable in practice (nothing was detected at all), so it was dropped in favor of the exact id. If Apollo's bot account ever changes (a new app, a different server's Apollo instance, etc.), that constant is what needs updating.
+
+Once a message passes that check, its embed is parsed for the actual event data: at least one field whose name (after stripping emoji/counts) matches an RSVP label — "Accepted"/"Declined"/"Tentative" or a German equivalent. See `APOLLO_RSVP_FIELD_LABELS` in `src/constants.ts`.
 
 **Confirmed against a real embed on this server:** the English labels ("Accepted"/"Declined"/"Tentative"), the `<t:...>` timestamp tokens, the `apollo.fyi/workspaces/<id>/events/<id>` link shape, and a signup-cap event's extra quirks — a capacity count like `(2/1)` instead of a plain `(N)`, plus a separate "Waitlist" field (mapped to `accepted`, since a waitlisted member did click Accept) whose entries carry a leading custom-emoji marker that isn't part of the name and gets stripped. The German label guesses are still unconfirmed. If parsing ever doesn't pick up a real event, the labels or the parsing rules in `src/services/apolloEventParser.ts` likely need adjusting — see "Verifying against a real embed" below.
 
@@ -64,8 +66,8 @@ Computed per member from their voice-channel join/leave history for that event (
 Since the exact Apollo embed format hasn't been confirmed on this server, the fastest way to validate (or fix) `src/services/apolloEventParser.ts` after a real event gets posted — no code changes needed, just an env var:
 
 1. Set `LOG_APOLLO_EMBEDS=true` in `.env` and restart the bot (see [CONFIGURATION.md § Debug variables](CONFIGURATION.md#debug-variables)).
-2. Post (or wait for) a real Apollo event in the configured channel — every message there gets its raw embed/component JSON logged before parsing, whether parsing succeeds or not.
+2. Post (or wait for) a real Apollo event, in any channel — every message from Apollo's own bot account gets its raw embed/component JSON logged before parsing, whether parsing succeeds or not, and regardless of the configured channel/settings.
 3. Compare the field names/values against what `APOLLO_RSVP_FIELD_LABELS`/the timestamp-token regex expect, and adjust `src/constants.ts`/`src/services/apolloEventParser.ts` as needed.
-4. Set `LOG_APOLLO_EMBEDS` back to `false` (or remove it) and restart once satisfied — it logs every message in the channel indefinitely otherwise.
+4. Set `LOG_APOLLO_EMBEDS` back to `false` (or remove it) and restart once satisfied — it logs every message from Apollo indefinitely otherwise.
 
 The parser is pure and side-effect-free (no `client`, no DB) — it can also be exercised directly with a synthetic object shaped like `{ embeds: [...], components: [...] }` in a throwaway script, without needing a live Discord connection at all.

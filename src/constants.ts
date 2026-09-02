@@ -80,6 +80,8 @@ export const REGISTER_THREAD_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 export const DISCORD_NICKNAME_MAX_LENGTH = 32;
 
 // --- Apollo event attendance ---
+/** Apollo's (apollo.fyi) own Discord bot user id — detection filters on this directly rather than a "some bot posted an embed that looks RSVP-shaped" heuristic, since a verified app's messages don't reliably behave like a normal bot's for `message.author.bot`/webhook checks. Confirmed against this server's real Apollo messages. */
+export const APOLLO_BOT_USER_ID = "475744554910351370";
 /** How often the bot checks for events that need to start/end tracking — see `sweepApolloEvents()` in `services/eventAttendance.ts`. */
 export const APOLLO_EVENT_SWEEP_INTERVAL_MS = 30 * 1000;
 /** Someone joining the voice channel this many ms after the event's start still counts as "on time" rather than "late" — 0 per the product decision (exact start time), documented here so the ±sweep-interval fuzz this implies is explicit rather than silently baked into the sweep cadence. */
