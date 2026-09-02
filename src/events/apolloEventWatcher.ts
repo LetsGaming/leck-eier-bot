@@ -25,19 +25,23 @@ import type { BotClient } from "../types.js";
 const LOG_APOLLO_EMBEDS = process.env.LOG_APOLLO_EMBEDS === "true";
 
 async function tryHandleApolloMessage(client: BotClient, message: Message | PartialMessage): Promise<void> {
+  // Deliberately independent of settings.apolloEventChannelId and every
+  // other gate below — the whole point of this debug switch is to see a
+  // message's raw shape *before* the channel/settings are configured
+  // correctly, so it can't be gated behind the very configuration it's
+  // meant to help verify. Any bot-authored message with an embed, in any
+  // channel, gets logged while this is on.
+  if (LOG_APOLLO_EMBEDS && message.author?.bot && message.embeds.length > 0) {
+    logger.info(
+      `Apollo-Debug (Kanal ${message.channelId}, Nachricht ${message.id}): embeds=${JSON.stringify(message.embeds)} components=${JSON.stringify(message.components)}`,
+    );
+  }
+
   const settings = getSettings();
   if (!settings.apolloEventChannelId || message.channelId !== settings.apolloEventChannelId) return;
   if (message.author?.id === client.user?.id) return;
   // Apollo posts as a bot/app — a human message in the same channel is just chat, not an event embed.
   if (!message.author?.bot) return;
-
-  // Logged before parsing (and regardless of whether it succeeds) since the
-  // most useful moment to see the raw shape is exactly when parsing fails.
-  if (LOG_APOLLO_EMBEDS) {
-    logger.info(
-      `Apollo-Debug (Nachricht ${message.id}): embeds=${JSON.stringify(message.embeds)} components=${JSON.stringify(message.components)}`,
-    );
-  }
 
   const parsed = parseApolloEventEmbed(message);
   if (!parsed) return;
