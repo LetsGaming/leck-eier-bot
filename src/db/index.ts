@@ -461,18 +461,20 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // the new thread's id so it can be looked up and deleted later once staff
   // manually grant registrationTierRoleId (memberEvents.ts) — nullable and
   // cleared once deleted, same lifecycle as a plain "pending" flag.
-  // register_nickname_use_font follows the same *UseFont convention as
-  // birthday_anchor_use_font/birthday_announcement_use_font — whether the
-  // generated nickname's first-name half renders through the shared
-  // settings.fontMap. Defaults on, matching the feature's intended look.
   (d) => {
     d.exec(`
       ALTER TABLE settings ADD COLUMN register_channel_id TEXT;
       ALTER TABLE settings ADD COLUMN role_selection_channel_id TEXT;
       ALTER TABLE settings ADD COLUMN register_confirmation_template TEXT NOT NULL DEFAULT '${DEFAULT_REGISTER_CONFIRMATION_TEMPLATE}';
-      ALTER TABLE settings ADD COLUMN register_nickname_use_font INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE member_records ADD COLUMN register_thread_id TEXT;
     `);
+  },
+  // v23: register_nickname_use_font follows the same *UseFont convention as
+  // birthday_anchor_use_font/birthday_announcement_use_font — whether the
+  // registration-form nickname's first-name half renders through the shared
+  // settings.fontMap. Defaults on, matching the feature's intended look.
+  (d) => {
+    d.exec(`ALTER TABLE settings ADD COLUMN register_nickname_use_font INTEGER NOT NULL DEFAULT 1;`);
   },
 ];
 
