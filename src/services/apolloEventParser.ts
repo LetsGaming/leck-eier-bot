@@ -39,10 +39,10 @@ export interface ParsedApolloEvent {
   signups: ParsedApolloSignup[];
 }
 
-/** Strips custom-emoji tokens, unicode emoji, a trailing `(N)`/`[N]` count, and remaining punctuation, so an embed field name can be matched against `APOLLO_RSVP_FIELD_LABELS`/a "time"-ish label regardless of exactly how Apollo decorates it. */
+/** Strips custom-emoji tokens, unicode emoji, a trailing `(N)`/`[N]`/`(N/M)` count (the `/M` half shows up once an event has a signup cap — confirmed against a real Apollo embed), and remaining punctuation, so an embed field name can be matched against `APOLLO_RSVP_FIELD_LABELS`/a "time"-ish label regardless of exactly how Apollo decorates it. */
 function normalizeFieldLabel(name: string): string {
   return name
-    .replace(/[([]\s*\d+\s*[)\]]\s*$/, "")
+    .replace(/[([]\s*\d+\s*(?:\/\s*\d+\s*)?[)\]]\s*$/, "")
     .replace(/<a?:\w+:\d+>/g, "")
     .replace(/\p{Extended_Pictographic}/gu, "")
     .replace(/[^\p{L}\p{N} ]/gu, " ")
@@ -59,6 +59,13 @@ function splitRsvpLines(value: string): string[] {
       line
         .replace(/^\s*>\s?/, "")
         .replace(/^\s*(?:\d+[.)]|[-*•])\s*/, "")
+        // A "Waitlist" field's entries lead with Apollo's own custom accepted-
+        // checkmark emoji (e.g. `<:accepted:713124484436983971>`) to mark
+        // "would be accepted but for the cap" — confirmed against a real
+        // embed. That marker isn't part of the member's nickname, unlike a
+        // plain unicode emoji (💙/🌙), which genuinely is on this server and
+        // is deliberately left untouched.
+        .replace(/^<a?:\w+:\d+>\s*/, "")
         .replace(/\s*\(\+\d+\)\s*$/, "")
         .replace(/^[*_~`]+|[*_~`]+$/g, "")
         .trim(),

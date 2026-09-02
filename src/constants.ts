@@ -95,14 +95,22 @@ export const GOOGLE_CALENDAR_DATES_REGEX = /[?&]dates=(\d{8}T\d{6}Z)(?:%2F|\/)(\
 /**
  * Embed field names (after stripping emoji/count-suffix and lowercasing —
  * see `normalizeFieldLabel()`) that identify an Apollo RSVP list, mapped to
- * the choice they represent. Covers English and a guess at German, since
- * Apollo's exact localized labels for this server haven't been confirmed
- * against a real embed yet — see docs/EVENT_ATTENDANCE.md's caveat.
+ * the choice they represent. "Accepted"/"Declined"/"Tentative" are confirmed
+ * against a real embed on this server; the German entries are still a guess
+ * — see docs/EVENT_ATTENDANCE.md's caveat.
+ *
+ * "Waitlist" is a real, confirmed field too — it appears once an event has a
+ * signup cap (shown as "Accepted (2/1)" — actual/limit — rather than a plain
+ * count). Mapped to 'accepted' since a waitlisted member did click Accept,
+ * just didn't make the cut; if that turns out to be the wrong call, give it
+ * its own ApolloRsvpChoice value instead of merging it in here.
  */
 export const APOLLO_RSVP_FIELD_LABELS: Record<string, "accepted" | "declined" | "tentative"> = {
   accepted: "accepted",
   zugesagt: "accepted",
   angenommen: "accepted",
+  waitlist: "accepted",
+  warteliste: "accepted",
   declined: "declined",
   abgesagt: "declined",
   abgelehnt: "declined",
