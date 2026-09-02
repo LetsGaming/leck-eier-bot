@@ -191,11 +191,11 @@ export default function Settings({ me }: { me: Me }) {
           <p className="muted small">
             Postet ein Mitglied im unten festgelegten Kanal eine Nachricht mit einer "name:"- und einer "sso
             name:"-Zeile (z. B. das Anmeldeformular), setzt der Bot automatisch den Servernickname im Format{" "}
-            <strong>💙VORNAME — nachname</strong> — der Vorname großgeschrieben und über die globale Schrift (siehe
-            "Schrift" oben) gestylt, der Nachname aus dem sso-Namen klein und ohne Schrift — und legt einen privaten
-            Thread an der Nachricht an, in dem der untenstehende Bestätigungstext gepostet wird. Der Thread wird
-            automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird. Lasse den
-            Kanal leer, um dies zu deaktivieren.
+            <strong>💙VORNAME — nachname</strong> — der Vorname großgeschrieben (optional über die globale Schrift
+            gestylt, siehe Schalter unten), der Nachname aus dem sso-Namen klein und immer ohne Schrift — und legt
+            einen privaten Thread an der Nachricht an, in dem der untenstehende Bestätigungstext gepostet wird. Der
+            Thread wird automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird.
+            Lasse den Kanal leer, um dies zu deaktivieren.
           </p>
           {!settings ? (
             <div className="loading">Wird geladen…</div>
@@ -227,6 +227,14 @@ export default function Settings({ me }: { me: Me }) {
                   Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
                 </div>
               </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.registerNicknameUseFont}
+                  onChange={(e) => update({ registerNicknameUseFont: e.target.checked })}
+                />
+                Vornamen im generierten Nickname über die globale Schrift (siehe "Schrift" oben) stylen
+              </label>
               <div className="field">
                 <label htmlFor="register-confirmation-template">Bestätigungstext</label>
                 <textarea

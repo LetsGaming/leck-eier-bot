@@ -20,6 +20,7 @@ interface SettingsRow {
   register_channel_id: string | null;
   role_selection_channel_id: string | null;
   register_confirmation_template: string;
+  register_nickname_use_font: 0 | 1;
 }
 
 function rowToSettings(row: SettingsRow): Settings {
@@ -41,6 +42,7 @@ function rowToSettings(row: SettingsRow): Settings {
     registerChannelId: row.register_channel_id,
     roleSelectionChannelId: row.role_selection_channel_id,
     registerConfirmationTemplate: row.register_confirmation_template,
+    registerNicknameUseFont: row.register_nickname_use_font === 1,
   };
 }
 
@@ -50,7 +52,8 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_anchor_template, birthday_anchor_intro, font_map, birthday_anchor_use_font,
           birthday_announcement_use_font, leave_notifications_enabled,
           register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening,
-          register_channel_id, role_selection_channel_id, register_confirmation_template
+          register_channel_id, role_selection_channel_id, register_confirmation_template,
+          register_nickname_use_font
    FROM settings WHERE id = 1`,
 );
 const updateStmt = db.prepare<{
@@ -71,6 +74,7 @@ const updateStmt = db.prepare<{
   registerChannelId: string | null;
   roleSelectionChannelId: string | null;
   registerConfirmationTemplate: string;
+  registerNicknameUseFont: 0 | 1;
 }>(
   `UPDATE settings SET
      birthday_template = @birthdayTemplate,
@@ -89,7 +93,8 @@ const updateStmt = db.prepare<{
      rules_accepted_use_discord_screening = @rulesAcceptedUseDiscordScreening,
      register_channel_id = @registerChannelId,
      role_selection_channel_id = @roleSelectionChannelId,
-     register_confirmation_template = @registerConfirmationTemplate
+     register_confirmation_template = @registerConfirmationTemplate,
+     register_nickname_use_font = @registerNicknameUseFont
    WHERE id = 1`,
 );
 
@@ -119,6 +124,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     registerChannelId: next.registerChannelId,
     roleSelectionChannelId: next.roleSelectionChannelId,
     registerConfirmationTemplate: next.registerConfirmationTemplate,
+    registerNicknameUseFont: next.registerNicknameUseFont ? 1 : 0,
   });
   settingsBus.emit(SettingsEvent.Settings);
   return next;

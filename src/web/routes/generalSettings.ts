@@ -12,6 +12,7 @@ const PatchBodySchema = z.object({
   registerChannelId: z.string().nullable().optional(),
   roleSelectionChannelId: z.string().nullable().optional(),
   registerConfirmationTemplate: z.string().min(1).optional(),
+  registerNicknameUseFont: z.boolean().optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -24,6 +25,7 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     registerChannelId: settings.registerChannelId,
     roleSelectionChannelId: settings.roleSelectionChannelId,
     registerConfirmationTemplate: settings.registerConfirmationTemplate,
+    registerNicknameUseFont: settings.registerNicknameUseFont,
   };
 }
 
@@ -43,6 +45,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       registerChannelId,
       roleSelectionChannelId,
       registerConfirmationTemplate,
+      registerNicknameUseFont,
     } = body.data;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
@@ -59,6 +62,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       ...(registerChannelId !== undefined && { registerChannelId: registerChannelId || null }),
       ...(roleSelectionChannelId !== undefined && { roleSelectionChannelId: roleSelectionChannelId || null }),
       ...(registerConfirmationTemplate !== undefined && { registerConfirmationTemplate }),
+      ...(registerNicknameUseFont !== undefined && { registerNicknameUseFont }),
     });
     return serialize(settings);
   });

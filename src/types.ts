@@ -70,6 +70,8 @@ export interface Settings {
   roleSelectionChannelId: string | null;
   /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders — see DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. */
   registerConfirmationTemplate: string;
+  /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in registerWatcher.ts). Defaults on. */
+  registerNicknameUseFont: boolean;
 }
 
 export interface CommandSetting {

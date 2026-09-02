@@ -38,15 +38,16 @@ function truncateToCodePoints(text: string, maxLength: number): string {
 /**
  * Builds the standard registration nickname: the first-name field in caps,
  * run through the shared global font (settings.fontMap — same one used by
- * the birthday anchor/announcement and reaction-role panels), then the
+ * the birthday anchor/announcement and reaction-role panels) when
+ * useFont/settings.registerNicknameUseFont is on (default), then the
  * lowercase, unstyled surname from the sso-name field. E.g. name "Areum" +
  * sso name "... Shadowray" + fontMap set -> "💙𝐀𝐑𝐄𝐔𝐌 — shadowray". Falls
- * back to plain (unstyled) caps when no font is configured, and drops the
- * surname half (then truncates) if the styled form would exceed Discord's
- * nickname length cap.
+ * back to plain (unstyled) caps when no font is configured or useFont is
+ * off, and drops the surname half (then truncates) if the styled form would
+ * exceed Discord's nickname length cap.
  */
-export function buildRegisterNickname(fields: RegisterFormFields, fontMap: string | null): string {
-  const styledFirstName = applyFont(fields.name.toUpperCase(), fontMap);
+export function buildRegisterNickname(fields: RegisterFormFields, fontMap: string | null, useFont: boolean): string {
+  const styledFirstName = useFont ? applyFont(fields.name.toUpperCase(), fontMap) : fields.name.toUpperCase();
   const full = `${REGISTER_NICKNAME_EMOJI}${styledFirstName} — ${fields.ssoLastName.toLowerCase()}`;
   if ([...full].length <= DISCORD_NICKNAME_MAX_LENGTH) return full;
 
@@ -71,7 +72,7 @@ export default function registerRegisterWatcher(client: BotClient): void {
     const member = message.member;
     if (!member) return;
 
-    const nickname = buildRegisterNickname(fields, settings.fontMap);
+    const nickname = buildRegisterNickname(fields, settings.fontMap, settings.registerNicknameUseFont);
     try {
       await member.setNickname(nickname, "Selbst-Registrierung via #register-Formular");
     } catch (err) {

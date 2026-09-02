@@ -172,6 +172,8 @@ export interface GeneralSettings {
   roleSelectionChannelId: string | null;
   /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders. */
   registerConfirmationTemplate: string;
+  /** Whether the generated nickname's first-name half renders through the global font set above. Defaults on. */
+  registerNicknameUseFont: boolean;
 }
 
 /**
