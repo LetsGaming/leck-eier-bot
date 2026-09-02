@@ -6,6 +6,7 @@
 
 - Docker and Docker Compose
 - A filled-in `.env` (see [CONFIGURATION.md](CONFIGURATION.md)) at the **repository root**
+- The bot invited to your server with the right permissions and Privileged Gateway Intents enabled — see [PERMISSIONS.md](PERMISSIONS.md). If the bot's already in your server from an earlier version, re-check that doc after any update — a new feature can need a permission the original invite didn't grant, and Discord won't tell you; the feature just silently fails.
 
 ### First run
 

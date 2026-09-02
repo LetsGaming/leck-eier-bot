@@ -60,6 +60,23 @@ function renderConfirmation(template: string, name: string, roleSelectionChannel
   return template.replace(/{name}/g, name).replace(/{roleChannel}/g, roleChannel);
 }
 
+/**
+ * Whether `userId` already has a registration in flight. Self-healing: a
+ * `registerThreadId` whose thread no longer exists (manually deleted, etc.)
+ * is cleared instead of permanently blocking that member from ever
+ * resubmitting.
+ */
+async function hasActiveRegisterThread(client: BotClient, userId: string): Promise<boolean> {
+  const threadId = getMemberRecord(userId)?.registerThreadId;
+  if (!threadId) return false;
+
+  const thread = await client.channels.fetch(threadId).catch(() => null);
+  if (thread?.isThread()) return true;
+
+  clearRegisterThreadId(userId);
+  return false;
+}
+
 export default function registerRegisterWatcher(client: BotClient): void {
   const tryHandleSubmission = async (message: Message | PartialMessage): Promise<void> => {
     const settings = getSettings();
@@ -71,6 +88,20 @@ export default function registerRegisterWatcher(client: BotClient): void {
 
     const member = message.member;
     if (!member) return;
+
+    // Already mid-registration — treat any further submission as spam
+    // rather than opening a second private thread for the same member; only
+    // the first submission is ever parsed and acted on.
+    if (await hasActiveRegisterThread(client, member.id)) {
+      try {
+        await message.delete();
+      } catch (err) {
+        logger.warn(
+          `Registrierungsformular: erneute Einreichung von ${member.id} konnte nicht gelöscht werden: ${errorMessage(err)}`,
+        );
+      }
+      return;
+    }
 
     const nickname = buildRegisterNickname(fields, settings.fontMap, settings.registerNicknameUseFont);
     try {
@@ -97,8 +128,10 @@ export default function registerRegisterWatcher(client: BotClient): void {
       await thread.members.add(member.id);
       setRegisterThreadId(member.id, thread.id);
 
+      // Deliberately doesn't reference or link back to the register channel
+      // or the original message — the thread stands on its own.
       const note = renderConfirmation(settings.registerConfirmationTemplate, fields.name, settings.roleSelectionChannelId);
-      await thread.send({ content: `${note}\n\n${message.url}` });
+      await thread.send({ content: note });
     } catch (err) {
       logger.warn(
         `Registrierungsformular: Privater Thread für ${member.id} konnte nicht erstellt werden: ${errorMessage(err)}`,

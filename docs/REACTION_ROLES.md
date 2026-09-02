@@ -76,6 +76,8 @@ This is the `managed` column on `reaction_role_panels` (`false` for an attached 
 
 ## Requirements
 
+See [PERMISSIONS.md](PERMISSIONS.md) for the full picture across every feature, including the invite link. Specific to reaction roles:
+
 - **Manage Roles**, and the bot's highest role positioned **above** every role a panel assigns. This is re-checked on every interaction and by the dashboard (roles you can't currently assign are marked "not assignable" in the role picker) — see `canManageRole()` in `src/services/reactionRoles.ts`.
 - **Manage Messages** in the panel's channel, only if any reactions panel on it uses `removeReaction` or has allow-multiple off (both remove other users' reactions).
 - The `GuildMessageReactions` gateway intent and `Message`/`Channel`/`Reaction`/`User` partials, both already enabled in `src/index.ts` — required so reactions on messages older than the bot's cache (e.g. added while the bot was offline) still fire events instead of being silently dropped.
