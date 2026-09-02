@@ -65,6 +65,8 @@ export const DEFAULT_REGISTER_CONFIRMATION_TEMPLATE =
 export const REGISTER_FORM_NAME_REGEX = /^\s*name\s*:\s*(.+)$/im;
 /** Matches an `sso name:`-labeled line (case-insensitive) — its last whitespace-separated word becomes the lowercase surname half of the generated nickname. Anchored so a plain `name:` line never matches this. See `parseRegisterForm()` in `registerWatcher.ts`. */
 export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
+/** Matches an `alter:`-labeled line (case-insensitive) — purely informational, shown on the dashboard's pending-registrations list but not used to build the nickname. Optional: a submission missing this still counts as valid. See `parseRegisterForm()` in `registerWatcher.ts`. */
+export const REGISTER_FORM_ALTER_REGEX = /^\s*alter\s*:\s*(.+)$/im;
 /** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `registerWatcher.ts`. */
 export const REGISTER_NICKNAME_EMOJI = "💙";
 /** Discord's hard cap on a member's nickname length. */

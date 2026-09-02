@@ -13,8 +13,14 @@ interface PendingRegistrationEntry {
   avatarUrl: string;
   /** ISO UTC — when the private registration thread was created. */
   submittedAt: string | null;
-  /** Jump link to the private thread, for staff who need to see the raw submitted fields. */
+  /** Jump link to the private thread. */
   threadUrl: string;
+  /** Raw `name:` field value, as submitted. */
+  submittedName: string | null;
+  /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */
+  submittedSsoName: string | null;
+  /** Raw `alter:` field value, as submitted. Null if the member left it out. */
+  submittedAge: string | null;
 }
 
 /** Dashboard visibility/control over self-service registration-form submissions still awaiting staff review — see `registerWatcher.ts`. */
@@ -32,6 +38,9 @@ export function registerPendingRegistrationRoutes(app: FastifyInstance, client: 
         avatarUrl: cached?.displayAvatarURL({ size: 64 }) ?? buildAvatarUrl(record.userId, record.avatar),
         submittedAt: record.registerSubmittedAt,
         threadUrl: `https://discord.com/channels/${config.guildId}/${record.registerThreadId}`,
+        submittedName: record.registerSubmittedName,
+        submittedSsoName: record.registerSubmittedSsoName,
+        submittedAge: record.registerSubmittedAge,
       };
     });
   });

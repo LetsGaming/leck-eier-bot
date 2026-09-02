@@ -1,9 +1,10 @@
 import { ChannelType, type Message, type PartialMessage } from "discord.js";
 import { getSettings } from "../db/settingsRepository.js";
-import { setRegisterThreadId, clearRegisterThreadId, getMemberRecord } from "../db/memberRecordsRepository.js";
+import { savePendingRegistration, clearRegisterThreadId, getMemberRecord } from "../db/memberRecordsRepository.js";
 import {
   REGISTER_FORM_NAME_REGEX,
   REGISTER_FORM_SSO_NAME_REGEX,
+  REGISTER_FORM_ALTER_REGEX,
   REGISTER_NICKNAME_EMOJI,
   DISCORD_NICKNAME_MAX_LENGTH,
 } from "../constants.js";
@@ -13,11 +14,15 @@ import type { BotClient } from "../types.js";
 
 export interface RegisterFormFields {
   name: string;
-  /** Last whitespace-separated word of the `sso name:` field — see `buildRegisterNickname()`. */
+  /** Full `sso name:` field value, as submitted — shown as-is on the dashboard. */
+  ssoName: string;
+  /** Last whitespace-separated word of `ssoName` — see `buildRegisterNickname()`. */
   ssoLastName: string;
+  /** Raw `alter:` field value. Optional — a submission missing it is still valid, since it isn't used to build the nickname. */
+  age: string | null;
 }
 
-/** Extracts the `name:` and `sso name:` fields from a register-form submission. Both must be present — returns null otherwise, so a message missing either is left alone as ordinary chat. */
+/** Extracts the `name:`, `sso name:`, and `alter:` fields from a register-form submission. Only `name:`/`sso name:` are required — returns null if either is missing, so a message without them is left alone as ordinary chat. */
 export function parseRegisterForm(content: string): RegisterFormFields | null {
   const name = content.match(REGISTER_FORM_NAME_REGEX)?.[1]?.trim();
   const ssoName = content.match(REGISTER_FORM_SSO_NAME_REGEX)?.[1]?.trim();
@@ -26,7 +31,9 @@ export function parseRegisterForm(content: string): RegisterFormFields | null {
   const ssoLastName = ssoName.split(/\s+/).pop();
   if (!ssoLastName) return null;
 
-  return { name, ssoLastName };
+  const age = content.match(REGISTER_FORM_ALTER_REGEX)?.[1]?.trim() || null;
+
+  return { name, ssoName, ssoLastName, age };
 }
 
 /** Code-point-aware truncation so a supplementary-plane styled character (see utils/font.ts) never gets split in half. */
@@ -126,7 +133,14 @@ export default function registerRegisterWatcher(client: BotClient): void {
         reason: `Registrierungsformular von ${member.user.tag}`,
       });
       await thread.members.add(member.id);
-      setRegisterThreadId(member.id, thread.id, new Date().toISOString());
+      savePendingRegistration({
+        userId: member.id,
+        threadId: thread.id,
+        submittedAt: new Date().toISOString(),
+        name: fields.name,
+        ssoName: fields.ssoName,
+        age: fields.age,
+      });
 
       // Deliberately doesn't reference or link back to the register channel
       // or the original message — the thread stands on its own.

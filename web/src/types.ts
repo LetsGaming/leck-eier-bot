@@ -210,6 +210,12 @@ export interface PendingRegistration {
   avatarUrl: string;
   /** ISO UTC — when the private registration thread was created. */
   submittedAt: string | null;
-  /** Jump link to the private thread, for the raw submitted sso-name/age. */
+  /** Jump link to the private thread. */
   threadUrl: string;
+  /** Raw `name:` field value, as submitted. */
+  submittedName: string | null;
+  /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */
+  submittedSsoName: string | null;
+  /** Raw `alter:` field value, as submitted. Null if the member left it out. */
+  submittedAge: string | null;
 }

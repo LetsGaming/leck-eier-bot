@@ -57,6 +57,9 @@ function PendingRegistrationsCard() {
                 <th></th>
                 <th>Anzeigename</th>
                 <th>Nickname</th>
+                <th>Name (Formular)</th>
+                <th>SSO-Name</th>
+                <th>Alter</th>
                 <th>Eingereicht</th>
                 <th>Thread</th>
                 <th></th>
@@ -72,6 +75,9 @@ function PendingRegistrationsCard() {
                   <td className="muted" data-label="Nickname">
                     {entry.nickname ?? "—"}
                   </td>
+                  <td data-label="Name (Formular)">{entry.submittedName ?? "—"}</td>
+                  <td data-label="SSO-Name">{entry.submittedSsoName ?? "—"}</td>
+                  <td data-label="Alter">{entry.submittedAge ?? "—"}</td>
                   <td className="mono small" data-label="Eingereicht">
                     <div>
                       {formatAbsolute(entry.submittedAt)}

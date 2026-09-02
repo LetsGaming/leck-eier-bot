@@ -161,6 +161,12 @@ export interface MemberRecord {
   registerThreadId: string | null;
   /** ISO UTC — when `registerThreadId` was created. Null alongside it, same lifecycle. Powers the dashboard's "pending registrations" list. */
   registerSubmittedAt: string | null;
+  /** Raw `name:` field value from the registration-form submission. Null alongside `registerThreadId`, same lifecycle. Purely informational. */
+  registerSubmittedName: string | null;
+  /** Raw `sso name:` field value from the registration-form submission (the full value, not just the surname used for the nickname — see `buildRegisterNickname()`). Null alongside `registerThreadId`, same lifecycle. */
+  registerSubmittedSsoName: string | null;
+  /** Raw `alter:` field value from the registration-form submission. Null if omitted (optional) or alongside `registerThreadId` once cleared. */
+  registerSubmittedAge: string | null;
 }
 
 /**

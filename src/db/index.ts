@@ -483,6 +483,20 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   (d) => {
     d.exec(`ALTER TABLE member_records ADD COLUMN register_submitted_at TEXT;`);
   },
+  // v25: the raw name:/sso name:/alter: fields from a registration-form
+  // submission, persisted so the dashboard's pending-registrations list can
+  // show them directly instead of requiring staff to open the private
+  // thread. Purely informational (alter isn't used to build the nickname —
+  // see buildRegisterNickname() in registerWatcher.ts). Nulled alongside
+  // register_thread_id/register_submitted_at whenever a registration is
+  // cleared, same lifecycle.
+  (d) => {
+    d.exec(`
+      ALTER TABLE member_records ADD COLUMN register_submitted_name TEXT;
+      ALTER TABLE member_records ADD COLUMN register_submitted_sso_name TEXT;
+      ALTER TABLE member_records ADD COLUMN register_submitted_age TEXT;
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;
