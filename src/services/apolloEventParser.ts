@@ -54,10 +54,18 @@ function normalizeFieldLabel(name: string): string {
 /** Splits an RSVP field's raw value into one cleaned name per line — see docs/EVENT_ATTENDANCE.md for the exact rules and why they're a best-effort approximation pending a real Apollo sample. */
 function splitRsvpLines(value: string): string[] {
   return value
+    // Apollo prefixes the WHOLE field value with Discord's ">>> " ("block
+    // quote rest of message") marker exactly once, not a "> " prefix on
+    // every individual line — confirmed against a real embed, where a
+    // multi-signup field looked like ">>> Alice\nBob" (only Alice's line
+    // had any `>`). Stripped here, before splitting, so it doesn't end up
+    // stuck to the first name only.
+    .replace(/^\s*>{1,3}\s?/, "")
     .split(/\r?\n/)
     .map((line) =>
       line
-        .replace(/^\s*>\s?/, "")
+        // Defensive fallback in case a per-line "> " quote ever shows up too.
+        .replace(/^\s*>{1,3}\s?/, "")
         .replace(/^\s*(?:\d+[.)]|[-*•])\s*/, "")
         // A "Waitlist" field's entries lead with Apollo's own custom accepted-
         // checkmark emoji (e.g. `<:accepted:713124484436983971>`) to mark

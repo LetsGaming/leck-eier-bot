@@ -12,6 +12,32 @@ import type {
   MemberAuditEntry,
 } from "../types";
 
+const DEBOUNCE_MS = 300;
+const PAGE_SIZE = 10;
+
+// Mirrors APOLLO_ATTENDANCE_TIER_*_MINUTES in src/constants.ts — display thresholds only.
+const TIER_MILD_MINUTES = 5;
+const TIER_MODERATE_MINUTES = 15;
+const TIER_SEVERE_MINUTES = 30;
+
+type SeverityTier = "fine" | "mild" | "moderate" | "severe";
+
+/** Both lateness and early-leave are graded on the same scale — under 5 min is still logged, just neutrally colored. */
+function severityTier(minutes: number | null): SeverityTier | null {
+  if (minutes === null) return null;
+  if (minutes < TIER_MILD_MINUTES) return "fine";
+  if (minutes < TIER_MODERATE_MINUTES) return "mild";
+  if (minutes < TIER_SEVERE_MINUTES) return "moderate";
+  return "severe";
+}
+
+const TIER_BADGE_CLASS: Record<SeverityTier, string> = {
+  fine: "ok",
+  mild: "warn",
+  moderate: "moderate",
+  severe: "severe",
+};
+
 const EVENT_STATUS_LABELS: Record<ApolloEventStatus, string> = {
   scheduled: "Geplant",
   active: "Läuft",
@@ -52,6 +78,35 @@ const ATTENDANCE_BADGE_CLASS: Record<AttendanceStatus, string> = {
 };
 
 const PROBLEM_ATTENDANCE_STATUSES: AttendanceStatus[] = ["no_show", "left_early", "late"];
+
+/**
+ * Lateness and early-leave are independent facts — someone can be both late
+ * AND leave early at once, so both are always shown together, never
+ * collapsed into a single "worse tier wins" badge. `no_show`/`not_tracked`
+ * have no arrival/departure to show and stay a single plain badge.
+ */
+function ResultCell({ signup }: { signup: EventSignup }) {
+  if (signup.attendanceStatus === null) return <span className="muted">—</span>;
+  if (signup.attendanceStatus === "no_show" || signup.attendanceStatus === "not_tracked") {
+    return <span className={`badge ${ATTENDANCE_BADGE_CLASS[signup.attendanceStatus]}`}>{ATTENDANCE_LABELS[signup.attendanceStatus]}</span>;
+  }
+
+  const arrivalTier = severityTier(signup.lateMinutes);
+  const departureTier = severityTier(signup.earlyMinutes);
+
+  return (
+    <div className="stack-plain" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.25rem" }}>
+      {arrivalTier && (
+        <span className={`badge ${TIER_BADGE_CLASS[arrivalTier]}`}>
+          {signup.lateMinutes! > 0 ? `${signup.lateMinutes} Min. zu spät` : "Pünktlich"}
+        </span>
+      )}
+      {departureTier && (
+        <span className={`badge ${TIER_BADGE_CLASS[departureTier]}`}>{`${signup.earlyMinutes} Min. zu früh gegangen`}</span>
+      )}
+    </div>
+  );
+}
 
 function SignupRow({
   signup,
@@ -101,13 +156,7 @@ function SignupRow({
         {signup.withdrawnAt && <div className="muted small">zurückgezogen</div>}
       </td>
       <td data-label="Ergebnis">
-        {signup.attendanceStatus ? (
-          <span className={`badge ${ATTENDANCE_BADGE_CLASS[signup.attendanceStatus]}`}>
-            {ATTENDANCE_LABELS[signup.attendanceStatus]}
-          </span>
-        ) : (
-          <span className="muted">—</span>
-        )}
+        <ResultCell signup={signup} />
       </td>
       <td className="mono small" data-label="Beigetreten">
         {formatAbsolute(signup.firstJoinedAt)}
@@ -136,13 +185,35 @@ function SignupRow({
 
 export default function EventAttendancePage() {
   const [events, setEvents] = useState<EventAttendance[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [members, setMembers] = useState<MemberAuditEntry[]>([]);
   const [query, setQuery] = useState("");
   const [onlyProblems, setOnlyProblems] = useState(false);
   const { showError, showSuccess } = useToast();
 
+  const trimmedSearch = searchInput.trim();
   useEffect(() => {
-    api.eventAttendance().then(setEvents).catch((err) => showError(errorMessage(err)));
+    const timer = setTimeout(() => {
+      setSearchQuery(trimmedSearch);
+      setPage(1);
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [trimmedSearch]);
+
+  useEffect(() => {
+    api
+      .eventAttendance(page, searchQuery)
+      .then((r) => {
+        setEvents(r.events);
+        setTotal(r.total);
+      })
+      .catch((err) => showError(errorMessage(err)));
+  }, [page, searchQuery, showError]);
+
+  useEffect(() => {
     api
       .memberAudit("")
       .then((r) => setMembers(r.inGuild))
@@ -154,6 +225,25 @@ export default function EventAttendancePage() {
       const updated = await api.linkEventSignup(signupId, userId);
       setEvents((prev) => prev?.map((e) => (e.id === eventId ? updated : e)) ?? null);
       showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    }
+  }
+
+  async function handleDelete(event: EventAttendance): Promise<void> {
+    if (!confirm(`Event "${event.title}" und alle zugehörigen Anmeldungen/Anwesenheitsdaten unwiderruflich löschen?`)) return;
+    try {
+      await api.deleteEventAttendance(event.id);
+      showSuccess("Event gelöscht.");
+      const remaining = total - 1;
+      const lastPage = Math.max(1, Math.ceil(remaining / PAGE_SIZE));
+      if (page > lastPage) {
+        setPage(lastPage);
+      } else {
+        const r = await api.eventAttendance(page, searchQuery);
+        setEvents(r.events);
+        setTotal(r.total);
+      }
     } catch (err) {
       showError(errorMessage(err));
     }
@@ -183,6 +273,8 @@ export default function EventAttendancePage() {
 
   if (!filteredEvents) return <div className="loading">Wird geladen…</div>;
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   return (
     <div>
       <h2>Event-Anwesenheit</h2>
@@ -190,6 +282,30 @@ export default function EventAttendancePage() {
         Vom Apollo-Bot geparste Events: wer sich angemeldet hat, und wer tatsächlich im Event-Sprachkanal war.
         Konfigurierbar unter <a href="/settings">Einstellungen</a>.
       </p>
+
+      <div className="card">
+        <div className="field">
+          <label htmlFor="event-title-search">Ereignisse durchsuchen</label>
+          <input
+            id="event-title-search"
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Titel eingeben…"
+          />
+        </div>
+        <div className="stack-plain" style={{ justifyContent: "space-between" }}>
+          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            Zurück
+          </button>
+          <span className="muted small">
+            Seite {page} von {totalPages}
+          </span>
+          <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            Weiter
+          </button>
+        </div>
+      </div>
 
       <div className="card">
         <div className="field">
@@ -209,7 +325,7 @@ export default function EventAttendancePage() {
       </div>
 
       {filteredEvents.length === 0 ? (
-        <p className="muted">Noch kein Apollo-Event erkannt.</p>
+        <p className="muted">Kein Apollo-Event gefunden.</p>
       ) : (
         filteredEvents.map((event) => {
           const counts = {
@@ -232,7 +348,10 @@ export default function EventAttendancePage() {
                 {event.trackingIncomplete && <span className="badge warn">Tracking unvollständig</span>}{" "}
                 <a href={event.messageUrl} target="_blank" rel="noreferrer">
                   Zur Nachricht
-                </a>
+                </a>{" "}
+                <button className="danger" onClick={() => handleDelete(event)}>
+                  Event löschen
+                </button>
               </p>
               <p className="muted small">
                 Zugesagt {counts.accepted} · Vielleicht {counts.tentative} · Abgesagt {counts.declined}

@@ -38,6 +38,8 @@ interface SignupRow {
   attendance_status: string | null;
   first_joined_at: string | null;
   last_left_at: string | null;
+  late_minutes: number | null;
+  early_minutes: number | null;
 }
 
 interface VoiceLogRow {
@@ -80,6 +82,8 @@ function rowToSignup(row: SignupRow): ApolloEventSignup {
     attendanceStatus: row.attendance_status as AttendanceStatus | null,
     firstJoinedAt: row.first_joined_at,
     lastLeftAt: row.last_left_at,
+    lateMinutes: row.late_minutes,
+    earlyMinutes: row.early_minutes,
   };
 }
 
@@ -96,11 +100,17 @@ function rowToVoiceLog(row: VoiceLogRow): ApolloEventVoiceLogRow {
 const EVENT_COLUMNS = `id, apollo_event_id, message_id, channel_id, title, starts_at, ends_at, status,
   voice_channel_id, activated_at, completed_at, tracking_incomplete, created_at, updated_at`;
 const SIGNUP_COLUMNS = `id, event_id, raw_name, normalized_name, choice, user_id, match_source, withdrawn_at,
-  attendance_status, first_joined_at, last_left_at`;
+  attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes`;
 const VOICE_LOG_COLUMNS = "id, event_id, user_id, action, at";
 
-const selectAllEventsStmt = db.prepare<[], EventRow>(
-  `SELECT ${EVENT_COLUMNS} FROM apollo_events ORDER BY starts_at DESC, title ASC`,
+const selectEventsPageStmt = db.prepare<{ query: string; pageSize: number; offset: number }, EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM apollo_events
+   WHERE LOWER(title) LIKE @query
+   ORDER BY starts_at DESC, title ASC
+   LIMIT @pageSize OFFSET @offset`,
+);
+const countEventsStmt = db.prepare<{ query: string }, { total: number }>(
+  `SELECT COUNT(*) AS total FROM apollo_events WHERE LOWER(title) LIKE @query`,
 );
 const selectEventByIdStmt = db.prepare<[number], EventRow>(`SELECT ${EVENT_COLUMNS} FROM apollo_events WHERE id = ?`);
 const selectEventByApolloIdStmt = db.prepare<[string], EventRow>(
@@ -203,9 +213,12 @@ const setSignupAttendanceStmt = db.prepare<{
   attendanceStatus: string | null;
   firstJoinedAt: string | null;
   lastLeftAt: string | null;
+  lateMinutes: number | null;
+  earlyMinutes: number | null;
 }>(
   `UPDATE apollo_event_signups SET
-     attendance_status = @attendanceStatus, first_joined_at = @firstJoinedAt, last_left_at = @lastLeftAt
+     attendance_status = @attendanceStatus, first_joined_at = @firstJoinedAt, last_left_at = @lastLeftAt,
+     late_minutes = @lateMinutes, early_minutes = @earlyMinutes
    WHERE id = @id`,
 );
 
@@ -279,8 +292,34 @@ function withSignups(event: ApolloEvent): ApolloEvent & { signups: ApolloEventSi
   return { ...event, signups: listSignups(event.id) };
 }
 
-export function listEventsWithSignups(): Array<ApolloEvent & { signups: ApolloEventSignup[] }> {
-  return selectAllEventsStmt.all().map(rowToEvent).map(withSignups);
+export interface EventsPageQuery {
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+  /** Case-insensitive substring match against the event title. Empty/omitted matches everything. */
+  query?: string;
+}
+
+export interface EventsPage {
+  events: Array<ApolloEvent & { signups: ApolloEventSignup[] }>;
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * A page of events, newest-first, optionally title-filtered — the only way
+ * the dashboard's event list is ever read. Deliberately not "date search"
+ * too: `starts_at` is stored as ISO UTC, not text a typed date like "12.09"
+ * would substring-match against, and newest-first pagination already covers
+ * "find a recent event" well enough for a first pass.
+ */
+export function listEventsPage({ page, pageSize, query }: EventsPageQuery): EventsPage {
+  const likeQuery = `%${(query ?? "").trim().toLowerCase()}%`;
+  const offset = Math.max(0, page - 1) * pageSize;
+  const events = selectEventsPageStmt.all({ query: likeQuery, pageSize, offset }).map(rowToEvent).map(withSignups);
+  const total = countEventsStmt.get({ query: likeQuery })!.total;
+  return { events, total, page, pageSize };
 }
 
 /** 'scheduled' events whose start time has passed — sweepApolloEvents() activates these. */
@@ -396,6 +435,8 @@ export interface SignupAttendanceUpdate {
   attendanceStatus: AttendanceStatus | null;
   firstJoinedAt: string | null;
   lastLeftAt: string | null;
+  lateMinutes: number | null;
+  earlyMinutes: number | null;
 }
 
 /** The only function that writes attendance fields — never touches signup intent. Called from `finalizeAttendance()`/`recomputeAttendanceForEvent()` in `services/eventAttendance.ts`, never from a re-parse. */

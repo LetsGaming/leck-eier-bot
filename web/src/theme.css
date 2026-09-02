@@ -382,6 +382,18 @@ th {
   color: var(--danger);
 }
 
+/* Severity tiers for lateness/early-leave (Event-Anwesenheit) — "fine"/"mild"
+   reuse .ok/.warn above; these two darken further for "moderate"/"severe". */
+.badge.moderate {
+  background: rgba(232, 115, 12, 0.18);
+  color: #e8730c;
+}
+
+.badge.severe {
+  background: rgba(161, 34, 38, 0.2);
+  color: #a12226;
+}
+
 .mapping-row {
   display: flex;
   flex-wrap: wrap;

@@ -265,6 +265,10 @@ export interface EventSignup {
   attendanceStatus: AttendanceStatus | null;
   firstJoinedAt: string | null;
   lastLeftAt: string | null;
+  /** Minutes late arriving — independent of `earlyMinutes` (a person can be both late AND leave early at once; neither fact overrides the other). */
+  lateMinutes: number | null;
+  /** Minutes their final departure was before the event ended, only when they never returned. Independent of `lateMinutes`. */
+  earlyMinutes: number | null;
   /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed. Null while still present. */
   withdrawnAt: string | null;
 }
@@ -283,4 +287,12 @@ export interface EventAttendance {
   messageUrl: string;
   voiceChannelId: string | null;
   signups: EventSignup[];
+}
+
+/** One page of `EventAttendance` history — see `GET /api/events/attendance`. */
+export interface EventAttendancePage {
+  events: EventAttendance[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

@@ -612,6 +612,22 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX IF NOT EXISTS idx_apollo_voice_log_event ON apollo_event_voice_log(event_id, user_id, at);
     `);
   },
+  // v29: exact lateness/earliness (in minutes), persisted alongside
+  // attendance_status/first_joined_at/last_left_at by the same
+  // finalizeAttendance()/recomputeAttendanceForEvent() code path — see
+  // deriveAttendance() in services/eventAttendance.ts. Computed once at
+  // derivation time rather than re-derived from the two timestamps at read
+  // time, since telling "left and never came back" from "left, came back,
+  // left again" needs the full voice-log replay deriveAttendance() already
+  // does, not just the two persisted timestamps. Both are independent facts
+  // (someone can be late AND leave early) and are shown together on the
+  // dashboard, never one hiding the other.
+  (d) => {
+    d.exec(`
+      ALTER TABLE apollo_event_signups ADD COLUMN late_minutes INTEGER;
+      ALTER TABLE apollo_event_signups ADD COLUMN early_minutes INTEGER;
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

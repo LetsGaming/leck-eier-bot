@@ -84,10 +84,24 @@ export const DISCORD_NICKNAME_MAX_LENGTH = 32;
 export const APOLLO_BOT_USER_ID = "475744554910351370";
 /** How often the bot checks for events that need to start/end tracking — see `sweepApolloEvents()` in `services/eventAttendance.ts`. */
 export const APOLLO_EVENT_SWEEP_INTERVAL_MS = 30 * 1000;
-/** Someone joining the voice channel this many ms after the event's start still counts as "on time" rather than "late" — 0 per the product decision (exact start time), documented here so the ±sweep-interval fuzz this implies is explicit rather than silently baked into the sweep cadence. */
-export const APOLLO_EVENT_ON_TIME_GRACE_MS = 0;
+/** Someone joining the voice channel up to this many ms after the event's start still counts as "on time" rather than "late" — 5 minutes, per the product decision that a small delay is fine (though still logged as an exact lateness figure — see `lateMinutes` in `deriveAttendance()`), not flagged as a problem. */
+export const APOLLO_EVENT_ON_TIME_GRACE_MS = 5 * 60 * 1000;
+/** Mirrors `APOLLO_EVENT_ON_TIME_GRACE_MS` for the other end of the event: leaving up to this many ms before the event's end (with no return) still counts as having stayed, not `left_early` — same "under 5 minutes is fine, but still logged" rule. */
+export const APOLLO_EVENT_EARLY_LEAVE_GRACE_MS = 5 * 60 * 1000;
 /** Assumed event length when Apollo's embed only yields one timestamp (should be rare — Apollo normally gives both start and end). */
 export const APOLLO_EVENT_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+/**
+ * Severity-tier boundaries (in minutes) for coloring how late an arrival or
+ * how early a departure was — shared by the dashboard's badge coloring
+ * (`severityTier()` in `web/src/pages/EventAttendance.tsx`). Below the first
+ * boundary is "fine" (still shown, just neutrally colored); each further
+ * boundary darkens the color. Applied symmetrically to lateness and
+ * earliness — they're independent facts and can both apply to the same
+ * person at once.
+ */
+export const APOLLO_ATTENDANCE_TIER_MILD_MINUTES = 5;
+export const APOLLO_ATTENDANCE_TIER_MODERATE_MINUTES = 15;
+export const APOLLO_ATTENDANCE_TIER_SEVERE_MINUTES = 30;
 /** Matches the numeric event id in an apollo.fyi event link — the real link shape is `apollo.fyi/workspaces/<id>/events/<id>` (arbitrary path segments before the final `events/<id>` or short-form `e/<id>`), not `apollo.fyi/events/<id>` directly. See `parseApolloEventEmbed()` in `services/apolloEventParser.ts`. */
 export const APOLLO_EVENT_URL_REGEX = /apollo\.fyi(?:\/[^/\s]+)*\/(?:e|events)\/(\d+)/i;
 /** Matches a Discord timestamp token, e.g. `<t:1756832423:F>` — Apollo's "Time" field uses these for the event's start/end. */

@@ -248,6 +248,10 @@ export interface ApolloEventSignup {
   attendanceStatus: AttendanceStatus | null;
   firstJoinedAt: string | null;
   lastLeftAt: string | null;
+  /** Minutes after `startsAt` this member first joined — 0 if on time or joined early. Independent of `earlyMinutes`; both can be non-null/positive at once. Null alongside the other attendance fields. */
+  lateMinutes: number | null;
+  /** Minutes before `endsAt` this member's final departure was, only when they never returned. Null if they stayed until the end (or the event isn't finished/tracked). Independent of `lateMinutes`. */
+  earlyMinutes: number | null;
 }
 
 /** One join/leave/snapshot row in the tracked voice channel for an active event — the source of truth `deriveAttendance()` replays. Logged for every non-bot member who touches the channel, not just signed-up ones, so a manual name-link made after the fact can still reconstruct real attendance. */

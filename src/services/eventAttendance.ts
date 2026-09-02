@@ -13,7 +13,7 @@ import {
   setSignupAttendance,
   getEventById,
 } from "../db/eventAttendanceRepository.js";
-import { APOLLO_EVENT_ON_TIME_GRACE_MS } from "../constants.js";
+import { APOLLO_EVENT_EARLY_LEAVE_GRACE_MS, APOLLO_EVENT_ON_TIME_GRACE_MS } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { ApolloEvent, ApolloEventVoiceLogRow, AttendanceStatus, BotClient } from "../types.js";
 
@@ -21,20 +21,32 @@ export interface DerivedAttendance {
   status: "on_time" | "late" | "no_show" | "left_early";
   firstJoinedAt: string | null;
   lastLeftAt: string | null;
+  /** Minutes after `startsAt` the first join was — 0 if on time or early. Independent of `earlyMinutes`; both can be set at once (late AND left early are separate facts). Null only alongside `firstJoinedAt: null` (no_show). */
+  lateMinutes: number | null;
+  /** Minutes before `endsAt` the final departure was, only when the replay ends not-present (i.e. never returned). Null if they were present at the end, or never joined at all. */
+  earlyMinutes: number | null;
 }
 
 /**
  * Replays one user's voice-log rows for an event into a final attendance
  * status. Pure and side-effect-free — this is the single place the
- * on_time/late/no_show/left_early rules live, used both to finalize a
- * completed event and to recompute after a manual name-link.
+ * on_time/late/no_show/left_early rules (and the exact lateMinutes/
+ * earlyMinutes figures) live, used both to finalize a completed event and to
+ * recompute after a manual name-link.
  *
  * A rejoin naturally un-flags "left early": presence is recomputed from the
- * full replay rather than latched on the first leave.
+ * full replay rather than latched on the first leave. Arriving within
+ * `APOLLO_EVENT_ON_TIME_GRACE_MS` of the start, or making a final departure
+ * within `APOLLO_EVENT_EARLY_LEAVE_GRACE_MS` of the end, still counts as
+ * on_time/stayed for `status` — but the actual minutes are always returned
+ * regardless of status, so even a "fine" delay is still visible, not hidden.
  */
 export function deriveAttendance(log: ApolloEventVoiceLogRow[], startsAt: string, endsAt: string): DerivedAttendance {
   const sorted = [...log].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
-  const onTimeCutoff = new Date(new Date(startsAt).getTime() + APOLLO_EVENT_ON_TIME_GRACE_MS).toISOString();
+  const startMs = new Date(startsAt).getTime();
+  const endMs = new Date(endsAt).getTime();
+  const onTimeCutoffMs = startMs + APOLLO_EVENT_ON_TIME_GRACE_MS;
+  const earlyLeaveCutoffMs = endMs - APOLLO_EVENT_EARLY_LEAVE_GRACE_MS;
 
   let present = false;
   let firstJoinedAt: string | null = null;
@@ -46,7 +58,7 @@ export function deriveAttendance(log: ApolloEventVoiceLogRow[], startsAt: string
       present = true;
       if (firstJoinedAt === null) {
         firstJoinedAt = row.at;
-        baseStatus = row.action === "present_at_start" || row.at <= onTimeCutoff ? "on_time" : "late";
+        baseStatus = row.action === "present_at_start" || new Date(row.at).getTime() <= onTimeCutoffMs ? "on_time" : "late";
       }
     } else if (row.action === "leave") {
       present = false;
@@ -56,9 +68,19 @@ export function deriveAttendance(log: ApolloEventVoiceLogRow[], startsAt: string
     }
   }
 
-  if (firstJoinedAt === null) return { status: "no_show", firstJoinedAt: null, lastLeftAt: null };
-  if (!present) return { status: "left_early", firstJoinedAt, lastLeftAt };
-  return { status: baseStatus!, firstJoinedAt, lastLeftAt };
+  if (firstJoinedAt === null) {
+    return { status: "no_show", firstJoinedAt: null, lastLeftAt: null, lateMinutes: null, earlyMinutes: null };
+  }
+
+  const lateMinutes = Math.max(0, Math.round((new Date(firstJoinedAt).getTime() - startMs) / 60_000));
+
+  if (!present) {
+    const earlyMinutes = lastLeftAt ? Math.max(0, Math.round((endMs - new Date(lastLeftAt).getTime()) / 60_000)) : null;
+    const beyondGrace = lastLeftAt !== null && new Date(lastLeftAt).getTime() < earlyLeaveCutoffMs;
+    return { status: beyondGrace ? "left_early" : baseStatus!, firstJoinedAt, lastLeftAt, lateMinutes, earlyMinutes };
+  }
+
+  return { status: baseStatus!, firstJoinedAt, lastLeftAt, lateMinutes, earlyMinutes: null };
 }
 
 /** Users whose most recent voice-log action leaves them "present" per a straight replay — used by `catchUpApolloEvents()` to diff against who's actually in the channel after a restart. */
@@ -80,7 +102,13 @@ function trackableSignups(eventId: number) {
 async function markAllNotTracked(eventId: number, reason: string): Promise<void> {
   markTrackingIncomplete(eventId);
   for (const signup of trackableSignups(eventId)) {
-    setSignupAttendance(signup.id, { attendanceStatus: "not_tracked" as AttendanceStatus, firstJoinedAt: null, lastLeftAt: null });
+    setSignupAttendance(signup.id, {
+      attendanceStatus: "not_tracked" as AttendanceStatus,
+      firstJoinedAt: null,
+      lastLeftAt: null,
+      lateMinutes: null,
+      earlyMinutes: null,
+    });
   }
   logger.warn(reason);
 }
@@ -105,6 +133,8 @@ export function recomputeAttendanceForEvent(eventId: number): void {
       attendanceStatus: derived.status,
       firstJoinedAt: derived.firstJoinedAt,
       lastLeftAt: derived.lastLeftAt,
+      lateMinutes: derived.lateMinutes,
+      earlyMinutes: derived.earlyMinutes,
     });
   }
 }

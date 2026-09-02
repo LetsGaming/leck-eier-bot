@@ -7,6 +7,7 @@ import type {
   CreatePanelInput,
   EmojiOption,
   EventAttendance,
+  EventAttendancePage,
   GeneralSettings,
   Mapping,
   MappingInput,
@@ -68,7 +69,8 @@ export const api = {
   registrations: () => request<Registration[]>("/members/registrations"),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
 
-  eventAttendance: () => request<EventAttendance[]>("/events/attendance"),
+  eventAttendance: (page: number, query: string) =>
+    request<EventAttendancePage>(`/events/attendance?page=${page}&q=${encodeURIComponent(query)}`),
   linkEventSignup: (signupId: number, userId: string | null) =>
     request<EventAttendance>(`/events/attendance/signups/${signupId}`, { method: "PATCH", ...json({ userId }) }),
   deleteEventAttendance: (id: number) => request<void>(`/events/attendance/${id}`, { method: "DELETE" }),
