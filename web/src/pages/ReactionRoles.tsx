@@ -5,6 +5,7 @@ import RoleCheckboxList from "../components/RoleCheckboxList";
 import MessagePreview from "../components/MessagePreview";
 import SearchableSelect from "../components/SearchableSelect";
 import { useToast } from "../components/ToastContext";
+import { useConfirm } from "../components/ConfirmContext";
 import type {
   Channel,
   CreatePanelInput,
@@ -116,6 +117,7 @@ export default function ReactionRoles() {
   const [editDraft, setEditDraft] = useState<MappingDraft>(emptyMappingDraft());
   const [busy, setBusy] = useState(false);
   const { showError, showSuccess } = useToast();
+  const confirmDialog = useConfirm();
 
   function loadAll() {
     Promise.all([api.panels(), api.channels(), api.roles(), api.emojis(), api.generalSettings()])
@@ -233,12 +235,18 @@ export default function ReactionRoles() {
   }
 
   async function handleDeletePanel() {
-    if (typeof selectedId !== "number") return;
-    const confirmMsg =
-      selected && !selected.managed
-        ? "Dieses Panel löschen? Die angehängte Discord-Nachricht bleibt unangetastet — nur die Reaktionsrollen-Konfiguration wird entfernt."
-        : "Dieses Panel und die zugehörige Discord-Nachricht löschen?";
-    if (!confirm(confirmMsg)) return;
+    if (typeof selectedId !== "number" || !selected) return;
+    const message =
+      !selected.managed
+        ? "Die angehängte Discord-Nachricht bleibt unangetastet — nur die Reaktionsrollen-Konfiguration wird entfernt."
+        : "Das Panel und die zugehörige Discord-Nachricht werden unwiderruflich gelöscht.";
+    const ok = await confirmDialog({
+      title: "Panel löschen",
+      message,
+      requireText: selected.managed ? selected.name : undefined,
+      confirmLabel: "Löschen",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await api.deletePanel(selectedId);

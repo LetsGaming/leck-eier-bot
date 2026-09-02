@@ -23,9 +23,40 @@ export default function Overview() {
       .catch((err) => showError(errorMessage(err)));
   }, [showError]);
 
+  const hasAttentionItems = !!status && (status.pendingRegistrationCount > 0 || status.unmatchedSignupCount > 0);
+
   return (
     <div>
       <h2>Übersicht</h2>
+
+      {status && hasAttentionItems && (
+        <div className="card attention-card">
+          <h2>Braucht deine Aufmerksamkeit</h2>
+          <ul className="attention-list">
+            {status.pendingRegistrationCount > 0 && (
+              <li>
+                <Link to="/members">
+                  <span className="badge warn">{status.pendingRegistrationCount}</span>{" "}
+                  {status.pendingRegistrationCount === 1
+                    ? "Registrierung wartet auf Prüfung"
+                    : "Registrierungen warten auf Prüfung"}
+                </Link>
+              </li>
+            )}
+            {status.unmatchedSignupCount > 0 && (
+              <li>
+                <Link to="/events?problems=1">
+                  <span className="badge warn">{status.unmatchedSignupCount}</span>{" "}
+                  {status.unmatchedSignupCount === 1
+                    ? "Event-Anmeldung braucht manuelle Zuordnung"
+                    : "Event-Anmeldungen brauchen manuelle Zuordnung"}
+                </Link>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {!status ? (
         <div className="loading">Wird geladen…</div>
       ) : (
@@ -58,6 +89,12 @@ export default function Overview() {
       )}
       <div className="card">
         <h2>Schnellzugriff</h2>
+        <p>
+          <Link to="/members">Mitgliederprüfung öffnen</Link>
+        </p>
+        <p>
+          <Link to="/events">Event-Anwesenheit öffnen</Link>
+        </p>
         <p>
           <Link to="/reaction-roles">Reaktionsrollen-Panels verwalten</Link>
         </p>

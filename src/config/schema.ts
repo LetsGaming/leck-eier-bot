@@ -10,10 +10,22 @@ import { z } from "zod";
  * `.env.example` (see scripts/generateEnvExample.ts).
  */
 export const EnvSchema = z.object({
-  DISCORD_TOKEN: z.string().min(1).describe("YOUR_BOT_TOKEN"),
-  DISCORD_CLIENT_ID: z.string().min(1).describe("YOUR_APPLICATION_ID"),
-  DISCORD_BOT_OWNER_ID: z.string().min(1).describe("YOUR_DISCORD_USER_ID"),
-  DISCORD_GUILD_ID: z.string().min(1).describe("YOUR_GUILD_ID"),
+  /**
+   * Dev-only escape hatch: skips the real Discord gateway login and OAuth
+   * dashboard login entirely, replacing them with a synthetic guild/roles/
+   * channels/bot-owner session so the dashboard can be built and inspected
+   * (design review, screenshotting, UI work) with no real Discord
+   * application at all. `loadConfig()` fills every other required field
+   * below with a mock default when this is `true`, and `startWebServer`
+   * (via `registerAuthRoutes`) exposes `/auth/dev-login` to skip the OAuth
+   * round-trip. Never set this in production — see docs/CONFIGURATION.md.
+   */
+  DEV_MOCK_DISCORD: z.enum(["true", "false"]).describe("false").optional(),
+
+  DISCORD_TOKEN: z.string().min(1).describe("YOUR_BOT_TOKEN").optional(),
+  DISCORD_CLIENT_ID: z.string().min(1).describe("YOUR_APPLICATION_ID").optional(),
+  DISCORD_BOT_OWNER_ID: z.string().min(1).describe("YOUR_DISCORD_USER_ID").optional(),
+  DISCORD_GUILD_ID: z.string().min(1).describe("YOUR_GUILD_ID").optional(),
 
   /**
    * IANA timezone name (e.g. "Europe/Berlin") the bot/dashboard treats as
@@ -65,4 +77,6 @@ export interface Config {
   timezone: string;
   /** Present only when the dashboard is enabled *and* fully configured — see {@link EnvSchema}'s WEB_* fields. */
   web?: WebConfig;
+  /** See {@link EnvSchema}'s DEV_MOCK_DISCORD. Always `false` outside of deliberate local dev use. */
+  devMockDiscord: boolean;
 }

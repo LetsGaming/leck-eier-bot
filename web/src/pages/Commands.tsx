@@ -63,20 +63,26 @@ export default function Commands() {
                     </td>
                     <td data-label="Berechtigung">{PERMISSION_LABELS[c.permission ?? "none"] ?? c.permission}</td>
                     <td data-label="Aktiviert">
-                      <input
-                        type="checkbox"
-                        checked={c.enabled}
-                        disabled={pending === c.name}
-                        onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
-                      />
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          aria-label={`/${c.name} aktiviert`}
+                          checked={c.enabled}
+                          disabled={pending === c.name}
+                          onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
+                        />
+                      </label>
                     </td>
                     <td data-label="Nur auf Server">
-                      <input
-                        type="checkbox"
-                        checked={c.guildOnly}
-                        disabled={pending === c.name}
-                        onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
-                      />
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          aria-label={`/${c.name} nur auf Server`}
+                          checked={c.guildOnly}
+                          disabled={pending === c.name}
+                          onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
+                        />
+                      </label>
                     </td>
                   </tr>
                 ))}

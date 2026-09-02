@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "web/src/theme.css"
+        ],
+        "createdAt": "2026-09-02T23:19:12.491Z",
+        "reason": "Deliberate Discord-embed mimicry in .message-preview-embed — Discord's own embeds genuinely have a colored left-border accent; confirmed false positive across two prior /impeccable critique runs (2026-09-02)"
+      }
+    ]
+  }
+}

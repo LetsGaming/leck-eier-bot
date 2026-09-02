@@ -27,6 +27,29 @@ export function loadConfig(): Config {
     throw new Error(message);
   }
   const env = parsed.data;
+  const devMockDiscord = env.DEV_MOCK_DISCORD === "true";
+
+  if (!devMockDiscord) {
+    const missing = (
+      [
+        ["DISCORD_TOKEN", env.DISCORD_TOKEN],
+        ["DISCORD_CLIENT_ID", env.DISCORD_CLIENT_ID],
+        ["DISCORD_BOT_OWNER_ID", env.DISCORD_BOT_OWNER_ID],
+        ["DISCORD_GUILD_ID", env.DISCORD_GUILD_ID],
+      ] as const
+    )
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length > 0) {
+      const message = `❌ Missing required environment variable(s): ${missing.join(", ")}.\n\nCopy .env.example to .env and fill in real values (see docs/CONFIGURATION.md), or set DEV_MOCK_DISCORD=true for a no-credentials local dashboard build.`;
+      logger.error(message);
+      throw new Error(message);
+    }
+  } else {
+    logger.warn(
+      "DEV_MOCK_DISCORD=true — running with a synthetic Discord guild/session, no real bot login or OAuth. Never use this in production.",
+    );
+  }
 
   const timezone = env.TIMEZONE || "Europe/Berlin";
   try {
@@ -53,15 +76,19 @@ export function loadConfig(): Config {
   ];
 
   const webRequested = env.WEB_ENABLED !== "false";
-  const webComplete = publicUrls.length > 0 && !!env.WEB_SESSION_SECRET && !!env.DISCORD_CLIENT_SECRET;
+  // Mock mode needs no real OAuth app, so it fills in placeholder web
+  // fields itself rather than requiring WEB_SESSION_SECRET/CLIENT_SECRET
+  // just to reach the dashboard — DEV_MOCK_DISCORD=true is meant to be the
+  // only line a fresh checkout needs.
+  const webComplete = devMockDiscord || (publicUrls.length > 0 && !!env.WEB_SESSION_SECRET && !!env.DISCORD_CLIENT_SECRET);
 
   let web: Config["web"];
   if (webRequested && webComplete) {
     web = {
       port: env.WEB_PORT ?? 3000,
-      publicUrls,
-      sessionSecret: env.WEB_SESSION_SECRET!,
-      clientSecret: env.DISCORD_CLIENT_SECRET!,
+      publicUrls: publicUrls.length > 0 ? publicUrls : ["http://localhost:3000"],
+      sessionSecret: env.WEB_SESSION_SECRET ?? "dev-mock-session-secret-do-not-use-in-production!",
+      clientSecret: env.DISCORD_CLIENT_SECRET ?? "dev-mock-client-secret",
     };
   } else if (webRequested) {
     logger.warn(
@@ -71,12 +98,13 @@ export function loadConfig(): Config {
   }
 
   cachedConfig = {
-    token: env.DISCORD_TOKEN,
-    clientId: env.DISCORD_CLIENT_ID,
-    botOwnerId: env.DISCORD_BOT_OWNER_ID,
-    guildId: env.DISCORD_GUILD_ID,
+    token: env.DISCORD_TOKEN ?? "dev-mock-token",
+    clientId: env.DISCORD_CLIENT_ID ?? "dev-mock-client-id",
+    botOwnerId: env.DISCORD_BOT_OWNER_ID ?? "1000000000000000001",
+    guildId: env.DISCORD_GUILD_ID ?? "1000000000000000002",
     timezone,
     web,
+    devMockDiscord,
   };
   return cachedConfig;
 }

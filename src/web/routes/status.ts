@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { listPanels } from "../../db/reactionRolesRepository.js";
 import { getCachedMembers, isCacheReady } from "../../services/memberCache.js";
+import { countPendingRegistrations } from "../../db/memberRecordsRepository.js";
+import { countUnmatchedSignups } from "../../db/eventAttendanceRepository.js";
 import type { BotClient, Config } from "../../types.js";
 
 export function registerStatusRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
@@ -13,6 +15,11 @@ export function registerStatusRoutes(app: FastifyInstance, client: BotClient, co
       guildMemberCount: guild?.memberCount ?? null,
       cachedMemberCount: isCacheReady() ? getCachedMembers().size : 0,
       reactionRolePanelCount: listPanels().length,
+      // Attention counts — see Overview.tsx, which links each straight into
+      // the relevant page's already-existing filter instead of duplicating
+      // the review UI here.
+      pendingRegistrationCount: countPendingRegistrations(),
+      unmatchedSignupCount: countUnmatchedSignups(),
     };
   });
 }

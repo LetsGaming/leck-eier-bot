@@ -51,6 +51,12 @@ const lines: string[] = [
   `WEB_SESSION_SECRET=${example("WEB_SESSION_SECRET", shape.WEB_SESSION_SECRET)}`,
   `DISCORD_CLIENT_SECRET=${example("DISCORD_CLIENT_SECRET", shape.DISCORD_CLIENT_SECRET)}`,
   "",
+  "# Dev-only — skips the real Discord bot login and OAuth dashboard login",
+  "# entirely, replacing them with a synthetic guild/session so the dashboard",
+  "# can be built and inspected with no Discord application at all. Never set",
+  "# this in production.",
+  `DEV_MOCK_DISCORD=${example("DEV_MOCK_DISCORD", shape.DEV_MOCK_DISCORD)}`,
+  "",
 ];
 
 const outPath = path.resolve(__dirname, "..", ".env.example");

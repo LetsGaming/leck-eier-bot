@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
+import { useConfirm } from "../components/ConfirmContext";
 import SearchableSelect from "../components/SearchableSelect";
 import { formatAbsolute } from "../dateFormat";
 import type {
@@ -191,8 +193,13 @@ export default function EventAttendancePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [members, setMembers] = useState<MemberAuditEntry[]>([]);
   const [query, setQuery] = useState("");
-  const [onlyProblems, setOnlyProblems] = useState(false);
+  // Overview's "N Anmeldungen brauchen Zuordnung" attention link jumps
+  // straight here with the filter pre-applied via ?problems=1, so an admin
+  // doesn't have to know this checkbox exists to find what's waiting on them.
+  const [searchParams] = useSearchParams();
+  const [onlyProblems, setOnlyProblems] = useState(searchParams.get("problems") === "1");
   const { showError, showSuccess } = useToast();
+  const confirmDialog = useConfirm();
 
   const trimmedSearch = searchInput.trim();
   useEffect(() => {
@@ -231,7 +238,13 @@ export default function EventAttendancePage() {
   }
 
   async function handleDelete(event: EventAttendance): Promise<void> {
-    if (!confirm(`Event "${event.title}" und alle zugehörigen Anmeldungen/Anwesenheitsdaten unwiderruflich löschen?`)) return;
+    const ok = await confirmDialog({
+      title: "Event löschen",
+      message: "Alle zugehörigen Anmeldungen und Anwesenheitsdaten werden unwiderruflich gelöscht.",
+      requireText: event.title,
+      confirmLabel: "Löschen",
+    });
+    if (!ok) return;
     try {
       await api.deleteEventAttendance(event.id);
       showSuccess("Event gelöscht.");

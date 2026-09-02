@@ -68,6 +68,8 @@ export const api = {
   memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
   registrations: () => request<Registration[]>("/members/registrations"),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
+  approveRegistration: (userId: string) =>
+    request<void>(`/members/registrations/${userId}/approve`, { method: "POST" }),
 
   eventAttendance: (page: number, query: string) =>
     request<EventAttendancePage>(`/events/attendance?page=${page}&q=${encodeURIComponent(query)}`),

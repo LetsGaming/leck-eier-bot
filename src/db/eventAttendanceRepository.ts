@@ -112,6 +112,10 @@ const selectEventsPageStmt = db.prepare<{ query: string; pageSize: number; offse
 const countEventsStmt = db.prepare<{ query: string }, { total: number }>(
   `SELECT COUNT(*) AS total FROM apollo_events WHERE LOWER(title) LIKE @query`,
 );
+const countUnmatchedSignupsStmt = db.prepare<[], { total: number }>(
+  `SELECT COUNT(*) AS total FROM apollo_event_signups
+   WHERE match_source IN ('unmatched', 'ambiguous') AND withdrawn_at IS NULL`,
+);
 const selectEventByIdStmt = db.prepare<[number], EventRow>(`SELECT ${EVENT_COLUMNS} FROM apollo_events WHERE id = ?`);
 const selectEventByApolloIdStmt = db.prepare<[string], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM apollo_events WHERE apollo_event_id = ?`,
@@ -320,6 +324,11 @@ export function listEventsPage({ page, pageSize, query }: EventsPageQuery): Even
   const events = selectEventsPageStmt.all({ query: likeQuery, pageSize, offset }).map(rowToEvent).map(withSignups);
   const total = countEventsStmt.get({ query: likeQuery })!.total;
   return { events, total, page, pageSize };
+}
+
+/** Signups across every event still needing a manual member link — surfaced on Overview as an attention count (see docs/EVENT_ATTENDANCE.md). */
+export function countUnmatchedSignups(): number {
+  return countUnmatchedSignupsStmt.get()!.total;
 }
 
 /** 'scheduled' events whose start time has passed — sweepApolloEvents() activates these. */

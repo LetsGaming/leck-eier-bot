@@ -3,6 +3,8 @@ import { listRegistrations } from "../../db/memberRecordsRepository.js";
 import { getCachedMembers } from "../../services/memberCache.js";
 import { removeRegistration } from "../../events/registerWatcher.js";
 import { buildAvatarUrl } from "./memberAudit.js";
+import { getSettings } from "../../db/settingsRepository.js";
+import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Config, RegistrationStatus } from "../../types.js";
 
 interface RegistrationEntry {
@@ -56,6 +58,37 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
   app.delete("/members/registrations/:userId", async (request, reply) => {
     const { userId } = request.params as { userId: string };
     await removeRegistration(client, userId);
+    return reply.code(204).send();
+  });
+
+  // Grants the configured tier role directly from the dashboard — the same
+  // action staff previously had to perform by hand in Discord. Granting the
+  // role fires the bot's own `guildMemberUpdate` handling
+  // (stripRegisterGateRoleIfJustRegistered in memberEvents.ts), which
+  // completes the registration (deletes the thread, flips DB status) as a
+  // side effect — this route only needs to add the role, never touch the DB.
+  app.post("/members/registrations/:userId/approve", async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const { registrationTierRoleId } = getSettings();
+    if (!registrationTierRoleId) {
+      return reply
+        .code(400)
+        .send({ error: "Registrierungsrolle ist nicht konfiguriert — siehe Einstellungen." });
+    }
+
+    const guild = client.guilds.cache.get(config.guildId);
+    if (!guild) {
+      return reply.code(503).send({ error: "Server noch nicht im Cache — versuche es gleich noch einmal." });
+    }
+
+    try {
+      const member = await guild.members.fetch(userId);
+      await member.roles.add(registrationTierRoleId, "Manuell über Dashboard genehmigt");
+    } catch (err) {
+      logger.warn(`Registrierung für ${userId} konnte nicht über das Dashboard genehmigt werden: ${errorMessage(err)}`);
+      return reply.code(502).send({ error: "Die Rolle konnte nicht vergeben werden. Ist der Bot berechtigt?" });
+    }
+
     return reply.code(204).send();
   });
 }

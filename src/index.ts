@@ -35,6 +35,7 @@ import { syncAllPanels } from "./services/reactionRoles.js";
 import { getSettings } from "./db/settingsRepository.js";
 import { settingsBus, SettingsEvent } from "./services/settingsBus.js";
 import { startWebServer } from "./web/server.js";
+import { createMockClient } from "./web/mockDiscordClient.js";
 import type { BotClient } from "./types.js";
 
 /**
@@ -76,6 +77,23 @@ const config = loadConfig();
 // runs against, etc.) reflect the configured community timezone instead of
 // the container's OS default (commonly UTC) — see docs/CONFIGURATION.md.
 process.env.TZ = config.timezone;
+
+// Dev-only escape hatch (see docs/CONFIGURATION.md): skips the real Discord
+// gateway login, slash-command registration, and every event
+// module/watcher entirely, so the dashboard can be built and inspected
+// with zero real Discord application. Nothing below this block runs in
+// mock mode.
+if (config.devMockDiscord) {
+  const mockClient = createMockClient(config);
+  startWebServer(mockClient, config).catch((err) => {
+    logger.error(`❌ Mock dashboard failed to start: ${errorMessage(err)}`);
+    process.exit(1);
+  });
+} else {
+  startRealBot();
+}
+
+function startRealBot(): void {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -215,3 +233,4 @@ client.on("interactionCreate", async (interaction) => {
     process.exit(1);
   }
 })();
+}

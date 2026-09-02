@@ -12,10 +12,29 @@ import {
 } from "./NavIcons";
 import type { Me } from "../types";
 
-const NAV_ITEMS: Array<{ to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; end?: boolean }> = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  end?: boolean;
+  /** Reads a pending-work count off `NavBadgeCounts` for this item's badge. */
+  countKey?: keyof NavBadgeCounts;
+}
+
+interface NavBadgeCounts {
+  pendingRegistrationCount: number;
+  unmatchedSignupCount: number;
+}
+
+// Grouped (with a visual divider, see below) rather than one flat list:
+// "needs attention" items accumulate ongoing work an admin checks
+// regularly, "setup & config" items are visited far less often.
+const ATTENTION_NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Übersicht", icon: IconOverview, end: true },
-  { to: "/members", label: "Mitgliederprüfung", icon: IconMembers },
-  { to: "/events", label: "Event-Anwesenheit", icon: IconEvents },
+  { to: "/members", label: "Mitgliederprüfung", icon: IconMembers, countKey: "pendingRegistrationCount" },
+  { to: "/events", label: "Event-Anwesenheit", icon: IconEvents, countKey: "unmatchedSignupCount" },
+];
+const SETUP_NAV_ITEMS: NavItem[] = [
   { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
   { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
   { to: "/commands", label: "Befehle", icon: IconCommands },
@@ -38,9 +57,45 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+function NavLinks({ items, counts }: { items: NavItem[]; counts: NavBadgeCounts | null }) {
+  return (
+    <>
+      {items.map((item) => {
+        const count = item.countKey && counts ? counts[item.countKey] : 0;
+        return (
+          <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
+            <item.icon />
+            {item.label}
+            {count > 0 && (
+              <span className="badge warn nav-badge" aria-label={`${count} ausstehend`}>
+                {count}
+              </span>
+            )}
+          </NavLink>
+        );
+      })}
+    </>
+  );
+}
+
 export default function Layout({ me, onLogout, children }: LayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
+  const [counts, setCounts] = useState<NavBadgeCounts | null>(null);
   const location = useLocation();
+
+  // Refetched on every navigation so approving a registration or resolving
+  // an unmatched signup clears the sidebar badge without a full reload.
+  useEffect(() => {
+    api
+      .status()
+      .then((s) =>
+        setCounts({
+          pendingRegistrationCount: s.pendingRegistrationCount,
+          unmatchedSignupCount: s.unmatchedSignupCount,
+        }),
+      )
+      .catch(() => {});
+  }, [location.pathname]);
 
   // Below the mobile breakpoint the sidebar is an off-canvas drawer — close
   // it on every navigation so picking a page doesn't leave it covering the
@@ -87,12 +142,9 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
 
       <nav className={`sidebar${navOpen ? " open" : ""}`}>
         <h1>leck-eier-bot</h1>
-        {NAV_ITEMS.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
-            <item.icon />
-            {item.label}
-          </NavLink>
-        ))}
+        <NavLinks items={ATTENTION_NAV_ITEMS} counts={counts} />
+        <div className="nav-divider" role="separator" />
+        <NavLinks items={SETUP_NAV_ITEMS} counts={counts} />
         <div className="spacer" />
         <div className="user">
           Angemeldet als <strong>{me.username}</strong> ({me.role})

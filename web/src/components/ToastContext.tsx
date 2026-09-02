@@ -36,9 +36,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback(
     (kind: ToastKind, message: string) => {
-      const id = nextId.current++;
-      setToasts((prev) => [...prev, { id, kind, message }]);
-      setTimeout(() => dismiss(id), DISMISS_MS[kind]);
+      setToasts((prev) => {
+        // A repeated identical error (e.g. a still-loading dependency
+        // rejecting the same request twice in a row) shouldn't stack two
+        // duplicate toasts — that reads as the app stumbling rather than a
+        // second, distinct problem.
+        if (prev.some((t) => t.kind === kind && t.message === message)) return prev;
+        const id = nextId.current++;
+        setTimeout(() => dismiss(id), DISMISS_MS[kind]);
+        return [...prev, { id, kind, message }];
+      });
     },
     [dismiss],
   );
@@ -49,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showError, showSuccess }}>
       {children}
-      <div className="toast-container">
+      <div className="toast-container" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             <span>{t.message}</span>

@@ -51,6 +51,9 @@ const selectByIdStmt = db.prepare<[string], MemberRecordRow>(`SELECT ${COLUMNS} 
 const selectRegistrationsStmt = db.prepare<[], MemberRecordRow>(
   `SELECT ${COLUMNS} FROM member_records WHERE register_status IS NOT NULL ORDER BY register_submitted_at DESC`,
 );
+const countPendingRegistrationsStmt = db.prepare<[], { total: number }>(
+  `SELECT COUNT(*) AS total FROM member_records WHERE register_status = 'pending'`,
+);
 
 interface ProfileInput {
   userId: string;
@@ -104,6 +107,11 @@ export function getMemberRecord(userId: string): MemberRecord | null {
 /** Every member who's ever submitted a registration form, regardless of outcome — see `register_status` on `member_records`. */
 export function listRegistrations(): MemberRecord[] {
   return selectRegistrationsStmt.all().map(rowToRecord);
+}
+
+/** Registrations awaiting staff review — surfaced on Overview as an attention count. */
+export function countPendingRegistrations(): number {
+  return countPendingRegistrationsStmt.get()!.total;
 }
 
 export function upsertJoin(entry: ProfileInput & { joinedAt: string | null }): void {

@@ -20,6 +20,8 @@ export interface Status {
   guildMemberCount: number | null;
   cachedMemberCount: number;
   reactionRolePanelCount: number;
+  pendingRegistrationCount: number;
+  unmatchedSignupCount: number;
 }
 
 export interface Channel {

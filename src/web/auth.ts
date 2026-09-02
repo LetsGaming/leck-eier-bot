@@ -87,6 +87,27 @@ function resolveDashboardRole(client: BotClient, config: Config, userId: string,
 export function registerAuthRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
   const web = config.web!; // callers only invoke this once config.web is confirmed present
 
+  if (config.devMockDiscord) {
+    // Dev-only: skips the Discord OAuth round-trip entirely and logs in as
+    // a synthetic bot-owner, matching the guild built by createMockClient.
+    // Gated on the same flag `src/index.ts` uses to skip the real gateway
+    // login — see docs/CONFIGURATION.md. Never reachable when that flag is
+    // unset, so this never exists in a real deployment.
+    app.get("/auth/dev-login", async (request, reply) => {
+      const sessionId = randomUUID();
+      createSession({
+        id: sessionId,
+        userId: "mock-admin-id",
+        username: "Dev Admin",
+        avatar: null,
+        role: "bot-owner",
+        expiresAt: Date.now() + WEB_SESSION_TTL_MS,
+      });
+      setSessionCookie(reply, sessionId, request.protocol === "https");
+      return reply.redirect("/");
+    });
+  }
+
   app.get("/auth/login", async (request, reply) => {
     const origin = resolveRequestOrigin(request, web.publicUrls);
     if (!origin) {

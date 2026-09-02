@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
+import { useConfirm } from "../components/ConfirmContext";
 import { formatAbsolute, formatRelative } from "../dateFormat";
 import type { MemberAuditEntry, MemberAuditResponse, Registration, RegistrationStatus } from "../types";
 
@@ -24,6 +25,7 @@ function RegistrationsCard() {
   const [entries, setEntries] = useState<Registration[] | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
+  const confirmDialog = useConfirm();
 
   const load = useCallback(() => {
     api
@@ -36,14 +38,36 @@ function RegistrationsCard() {
     load();
   }, [load]);
 
-  async function handleRemove(entry: Registration) {
-    if (
-      !confirm(
-        `Registrierung von ${entry.displayName} zurücksetzen? Der private Thread wird gelöscht und das Mitglied kann das Formular erneut einreichen.`,
-      )
-    ) {
-      return;
+  async function handleApprove(entry: Registration) {
+    const ok = await confirmDialog({
+      title: "Registrierung genehmigen",
+      message: `${entry.displayName} erhält die konfigurierte Registrierungsrolle und wird damit als registriert markiert. Der private Thread wird automatisch geschlossen.`,
+      confirmLabel: "Genehmigen",
+    });
+    if (!ok) return;
+
+    setBusyUserId(entry.userId);
+    try {
+      await api.approveRegistration(entry.userId);
+      showSuccess("Genehmigt — Rolle vergeben.");
+      load();
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusyUserId(null);
     }
+  }
+
+  async function handleRemove(entry: Registration) {
+    const ok = await confirmDialog({
+      title: "Registrierung zurücksetzen",
+      message:
+        "Der private Thread wird unwiderruflich gelöscht und das Mitglied kann das Formular erneut einreichen. Diese Aktion kann nicht rückgängig gemacht werden.",
+      requireText: entry.displayName,
+      confirmLabel: "Zurücksetzen",
+    });
+    if (!ok) return;
+
     setBusyUserId(entry.userId);
     try {
       await api.removeRegistration(entry.userId);
@@ -113,15 +137,20 @@ function RegistrationsCard() {
                       <span className="muted">—</span>
                     )}
                   </td>
-                  <td>
+                  <td className="stack-plain" style={{ display: "flex", gap: 8 }}>
                     {entry.status === "pending" && (
-                      <button
-                        className="danger"
-                        disabled={busyUserId === entry.userId}
-                        onClick={() => handleRemove(entry)}
-                      >
-                        Entfernen
-                      </button>
+                      <>
+                        <button disabled={busyUserId === entry.userId} onClick={() => handleApprove(entry)}>
+                          Genehmigen
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={busyUserId === entry.userId}
+                          onClick={() => handleRemove(entry)}
+                        >
+                          Entfernen
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
