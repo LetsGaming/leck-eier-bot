@@ -72,6 +72,18 @@ export function IconMembers(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconEvents(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <polyline points="8 14 11 17 16 12" />
+    </Icon>
+  );
+}
+
 export function IconSettings(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

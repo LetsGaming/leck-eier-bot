@@ -11,11 +11,13 @@ Portal → your application → **Bot** page → **Privileged Gateway Intents**.
 | **Server Members Intent** | `GatewayIntentBits.GuildMembers` — the member cache, join/leave tracking, Member Audit. |
 | **Message Content Intent** | `GatewayIntentBits.MessageContent` — reading the *text* of messages in the birthday channel (self-registration) and the register channel (registration-form parsing). Without it, message events still fire but `message.content` arrives empty. |
 
+`GatewayIntentBits.GuildVoiceStates` is also requested (event attendance tracking — `events/apolloEventWatcher.ts`) but is **not** privileged, so it needs no Developer Portal toggle and isn't in the table above.
+
 ## Bot permissions (invite / re-authorize)
 
 | Permission | Why | Where |
 | --- | --- | --- |
-| **View Channels** | Baseline — see any channel it needs to act in. | everywhere |
+| **View Channels** | Baseline — see any channel it needs to act in. Includes the configured event voice channel — without this on it, the bot can't see who's inside it at all, and event attendance silently never tracks. | everywhere |
 | **Send Messages** | Replies, embeds, the birthday anchor message, reaction-role panels. | everywhere |
 | **Embed Links** | Every embed the bot posts (errors/success replies, birthday anchor, reaction-role panels). | `utils/embedUtils.ts`, `services/reactionRoles.ts` |
 | **Add Reactions** | Seeding a reactions-panel's emoji on its message. | `services/reactionRoles.ts` |

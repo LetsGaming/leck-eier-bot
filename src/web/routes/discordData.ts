@@ -4,6 +4,7 @@ import { canManageRole } from "../../services/reactionRoles.js";
 import type { BotClient, Config } from "../../types.js";
 
 const TEXT_CHANNEL_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
+const VOICE_CHANNEL_TYPES = new Set([ChannelType.GuildVoice, ChannelType.GuildStageVoice]);
 
 /** Dropdown data for the dashboard — channels/roles/emojis of the single configured guild, straight from the gateway cache. */
 export function registerDiscordDataRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
@@ -21,6 +22,15 @@ export function registerDiscordDataRoutes(app: FastifyInstance, client: BotClien
     if (!guild) return;
     return guild.channels.cache
       .filter((c) => TEXT_CHANNEL_TYPES.has(c.type))
+      .map((c) => ({ id: c.id, name: c.name, position: "position" in c ? c.position : 0 }))
+      .sort((a, b) => a.position - b.position);
+  });
+
+  app.get("/discord/voice-channels", async (_request, reply) => {
+    const guild = requireGuild(reply);
+    if (!guild) return;
+    return guild.channels.cache
+      .filter((c) => VOICE_CHANNEL_TYPES.has(c.type))
       .map((c) => ({ id: c.id, name: c.name, position: "position" in c ? c.position : 0 }))
       .sort((a, b) => a.position - b.position);
   });

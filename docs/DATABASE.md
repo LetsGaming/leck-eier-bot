@@ -151,6 +151,16 @@ One row per Discord user ever seen in the configured guild, current or former (`
 | `left_at` | `TEXT` | ISO UTC. Set on `guildMemberRemove`. `null` while still in the guild. |
 | `in_guild` | `INTEGER NOT NULL DEFAULT 1` (0/1) | `0` once `left_at` is set; flips back to `1` (and `left_at` back to `null`) on a rejoin — `rules_accepted_at` is left alone on a rejoin, since screening isn't redone. |
 
+### `apollo_events` / `apollo_event_signups` / `apollo_event_voice_log`
+
+Backs [EVENT_ATTENDANCE.md](EVENT_ATTENDANCE.md) — see that doc for the full parsing/tracking design. `settings` also gains two columns here: `apollo_event_channel_id` (where the bot watches for Apollo's event embeds) and `event_voice_channel_id` (the one voice channel every tracked event happens in).
+
+`apollo_events` — one row per Apollo event embed, keyed preferably by `apollo_event_id` (parsed from an `apollo.fyi/.../events/<id>` link, nullable) and otherwise by `message_id` (Apollo edits the same message in place as RSVPs change). `status` walks `scheduled -> active -> completed` (or `-> cancelled` if the message is deleted while still `scheduled`). `starts_at`/`ends_at` freeze once `status` leaves `scheduled` — a later Apollo edit mid-event can't move an in-flight measurement's goalposts. `voice_channel_id` snapshots `settings.event_voice_channel_id` at activation. `tracking_incomplete` flags an event the bot was offline for some/all of.
+
+`apollo_event_signups` — one row per signed-up member, with two column groups written by two independent code paths that must never touch each other's columns: **intent** (`raw_name`, `normalized_name`, `choice`, `user_id`, `match_source`, `withdrawn_at`) is rewritten on every re-parse of the Apollo message; **attendance** (`attendance_status`, `first_joined_at`, `last_left_at`) is written only by `finalizeAttendance()`/`recomputeAttendanceForEvent()` in `src/services/eventAttendance.ts`, derived from the voice log. `match_source` is `'auto'` (name/mention resolved automatically), `'manual'` (a dashboard admin linked it — never overwritten by a later re-parse), `'unmatched'`, or `'ambiguous'`.
+
+`apollo_event_voice_log` — an append-only log of every join/leave (plus `present_at_start`/`present_at_end` snapshot rows) in the tracked voice channel while an event is active, for every non-bot member who touches the channel (not just resolved signups, so a manual link made after the fact can still reconstruct real attendance). This is the source of truth; `attendance_status` above is a cache derived from replaying it — see `deriveAttendance()`.
+
 ## Access pattern
 
 Raw SQL lives in `src/db/`:
@@ -162,6 +172,7 @@ Raw SQL lives in `src/db/`:
 - `src/db/reactionRolesRepository.ts` — panel/mapping CRUD (`listPanels`, `getPanel`, `createPanel`, `updatePanel`, `deletePanel`, `setPanelMessageId`, `upsertMapping`, `deleteMapping`, `reorderMappings`).
 - `src/db/sessionsRepository.ts` — `createSession`, `getSession`, `deleteSession`, `sweepExpiredSessions`.
 - `src/db/memberRecordsRepository.ts` — `listAllMemberRecords`, `getMemberRecord`, `upsertJoin`, `updateProfile`, `recordRulesAccepted`, `recordLeave`.
+- `src/db/eventAttendanceRepository.ts` — event/signup/voice-log CRUD (`upsertApolloEvent`, `listEventsWithSignups`, `listDueScheduledEvents`/`listDueActiveEvents`/`listActiveEvents`, `setEventActive`/`setEventCompleted`/`setEventCancelled`, `replaceEventSignups` (intent only), `linkSignupToUser`, `setSignupAttendance` (attendance only), `appendVoiceLog`, `listVoiceLog`/`listVoiceLogForUser`).
 
 `src/services/*.ts` (business logic) and `src/web/routes/*.ts` (dashboard API handlers) are the only consumers of these repositories; nothing outside `src/db/` writes SQL directly. Repository writes that other parts of the app need to react to live (settings, command overrides, reaction-role panels/mappings) emit an event on the shared `settingsBus` (`src/services/settingsBus.ts`) after writing.
 

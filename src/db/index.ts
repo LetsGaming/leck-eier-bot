@@ -7,6 +7,7 @@ import {
   DAILY_MIDNIGHT_CRON,
   DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE,
   DEFAULT_REGISTER_CONFIRMATION_TEMPLATE,
+  DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE,
 } from "../constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -500,14 +501,116 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // v26: a registration's outcome is now tracked as a persistent status
   // ('pending' | 'registered' | 'removed' | 'left') instead of the row being
   // wiped back to nulls once it's resolved — the dashboard's Registrierungen
-  // list (web/routes/pendingRegistrations.ts) shows full history, not just
-  // what's currently pending. register_thread_id still goes back to NULL
-  // once the actual Discord thread is deleted (it no longer exists to link
-  // to), but register_submitted_name/sso_name/age/at are kept for the
-  // record. NULL here means "never submitted a registration form" — the
-  // list filters on this being NOT NULL rather than on register_thread_id.
+  // list (web/routes/registrations.ts) shows full history, not just what's
+  // currently pending. register_thread_id still goes back to NULL once the
+  // actual Discord thread is deleted (it no longer exists to link to), but
+  // register_submitted_name/sso_name/age/at are kept for the record. NULL
+  // here means "never submitted a registration form" — the list filters on
+  // this being NOT NULL rather than on register_thread_id.
   (d) => {
     d.exec(`ALTER TABLE member_records ADD COLUMN register_status TEXT;`);
+  },
+  // v27: optional full automation — settings.register_auto_complete grants
+  // registrationTierRoleId immediately on a valid submission instead of
+  // waiting for staff, using auto_register_confirmation_template for the
+  // thread message instead of register_confirmation_template. The thread
+  // still opens (so the member has a place to see that message) but only
+  // stays open for REGISTER_AUTO_THREAD_LIFETIME_MS — member_records.
+  // register_thread_expires_at (set only in the auto-complete path) is what
+  // sweepExpiredRegisterThreads() in registerWatcher.ts checks to delete it
+  // later; a manually-completed/removed/left registration never sets this.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN register_auto_complete INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN auto_register_confirmation_template TEXT NOT NULL DEFAULT '${DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE}';
+      ALTER TABLE member_records ADD COLUMN register_thread_expires_at TEXT;
+    `);
+  },
+  // v28: Apollo event attendance tracking — see services/apolloEventParser.ts,
+  // services/eventAttendance.ts, and events/apolloEventWatcher.ts.
+  //
+  // apollo_events: one row per Apollo event embed. apollo_event_id is the
+  // numeric id parsed from an apollo.fyi/events/<id> link and is the
+  // preferred identity (nullable — a partial unique index lets multiple
+  // NULLs coexist); message_id is the fallback identity, since Apollo edits
+  // the same message in place as RSVPs change. status walks
+  // scheduled -> active -> completed (or -> cancelled if the message is
+  // deleted while still scheduled). voice_channel_id snapshots
+  // settings.event_voice_channel_id at activation, so a later setting change
+  // never rewrites history. tracking_incomplete flags an event whose window
+  // the bot was offline for some/all of (see catchUpApolloEvents()).
+  //
+  // apollo_event_signups: one row per signed-up member. Two independent
+  // column groups written by two independent code paths, which is the whole
+  // point — an Apollo re-parse (replaceEventSignups()) must never clobber
+  // attendance data, and the attendance tracker must never touch RSVP
+  // intent:
+  //   - intent: raw_name, normalized_name, choice, user_id, match_source,
+  //     withdrawn_at — rewritten on every re-parse of the Apollo message.
+  //   - attendance: attendance_status, first_joined_at, last_left_at —
+  //     written only by finalizeAttendance()/recomputeAttendanceForEvent(),
+  //     derived from apollo_event_voice_log, never by a re-parse.
+  // UNIQUE(event_id, normalized_name) is the natural key for the upsert in
+  // replaceEventSignups().
+  //
+  // apollo_event_voice_log: an append-only log of every join/leave (plus
+  // present_at_start/present_at_end snapshot rows) in the tracked voice
+  // channel while an event is active. This is the source of truth;
+  // attendance_status above is a cache derived from it by
+  // deriveAttendance() — replaying the log is what makes a rejoin-before-end
+  // correctly un-flag "left early" and lets a manual name-link performed
+  // after the event still reconstruct real attendance.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN apollo_event_channel_id TEXT;
+      ALTER TABLE settings ADD COLUMN event_voice_channel_id TEXT;
+
+      CREATE TABLE IF NOT EXISTS apollo_events (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        apollo_event_id     TEXT,
+        message_id          TEXT NOT NULL UNIQUE,
+        channel_id          TEXT NOT NULL,
+        title               TEXT NOT NULL,
+        starts_at           TEXT NOT NULL,
+        ends_at             TEXT NOT NULL,
+        status              TEXT NOT NULL DEFAULT 'scheduled',
+        voice_channel_id    TEXT,
+        activated_at        TEXT,
+        completed_at        TEXT,
+        tracking_incomplete INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_apollo_events_apollo_id
+        ON apollo_events(apollo_event_id) WHERE apollo_event_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_apollo_events_status_starts ON apollo_events(status, starts_at);
+
+      CREATE TABLE IF NOT EXISTS apollo_event_signups (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id          INTEGER NOT NULL REFERENCES apollo_events(id) ON DELETE CASCADE,
+        raw_name          TEXT NOT NULL,
+        normalized_name   TEXT NOT NULL,
+        choice            TEXT NOT NULL,
+        user_id           TEXT,
+        match_source      TEXT NOT NULL,
+        withdrawn_at      TEXT,
+        attendance_status TEXT,
+        first_joined_at   TEXT,
+        last_left_at      TEXT,
+        UNIQUE (event_id, normalized_name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_apollo_signups_event ON apollo_event_signups(event_id);
+      CREATE INDEX IF NOT EXISTS idx_apollo_signups_user ON apollo_event_signups(user_id);
+
+      CREATE TABLE IF NOT EXISTS apollo_event_voice_log (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL REFERENCES apollo_events(id) ON DELETE CASCADE,
+        user_id  TEXT NOT NULL,
+        action   TEXT NOT NULL,
+        at       TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_apollo_voice_log_event ON apollo_event_voice_log(event_id, user_id, at);
+    `);
   },
 ];
 

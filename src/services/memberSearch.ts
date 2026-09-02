@@ -61,3 +61,39 @@ export function searchCachedMembers(query: string, limit: number = FIND_USER_RES
   );
   return [...matched.values()].slice(0, limit);
 }
+
+export type NameResolution =
+  | { status: "matched"; userId: string }
+  | { status: "unmatched" }
+  | { status: "ambiguous"; userIds: string[] };
+
+/**
+ * Resolves a single free-text name (e.g. one line of an Apollo RSVP list) to
+ * exactly one guild member, by exact match after normalization —
+ * deliberately NOT `matchesSearch()`'s substring logic, which would
+ * false-positive here (e.g. "Lu" substring-matching both "Luna" and "Lucy").
+ * Almost always resolves cleanly since this server's nickname convention
+ * (see `buildRegisterNickname()` in `events/registerWatcher.ts`) is what
+ * `unfancy()`/`normalizeForSearch()` were built to undo; an unstyled name
+ * that doesn't match anyone is the rare edge case this reports as
+ * `unmatched` for manual reconciliation rather than guessing.
+ */
+export function resolveMemberByExactName(rawName: string): NameResolution {
+  const target = normalizeForSearch(rawName);
+  if (!target) return { status: "unmatched" };
+
+  const matches = [...getCachedMembers().values()].filter((member) =>
+    [member.user.username, member.user.globalName, member.nickname, member.displayName].some(
+      (candidate) => normalizeForSearch(candidate) === target,
+    ),
+  );
+
+  if (matches.length === 0) return { status: "unmatched" };
+  if (matches.length === 1) return { status: "matched", userId: matches[0]!.id };
+  return { status: "ambiguous", userIds: matches.map((m) => m.id) };
+}
+
+/** The same normalization `resolveMemberByExactName()` matches against, exposed so callers can compute a stable natural key (e.g. `apollo_event_signups.normalized_name`) without needing the live member cache. */
+export function normalizeSignupName(rawName: string): string {
+  return normalizeForSearch(rawName);
+}

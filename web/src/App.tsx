@@ -10,6 +10,7 @@ import ReactionRoles from "./pages/ReactionRoles";
 import Birthdays from "./pages/Birthdays";
 import Commands from "./pages/Commands";
 import MemberAudit from "./pages/MemberAudit";
+import EventAttendance from "./pages/EventAttendance";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/birthdays" element={<Birthdays />} />
         <Route path="/commands" element={<Commands />} />
         <Route path="/members" element={<MemberAudit />} />
+        <Route path="/events" element={<EventAttendance />} />
         <Route path="/settings" element={<Settings me={me} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

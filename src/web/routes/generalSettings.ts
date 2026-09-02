@@ -13,6 +13,10 @@ const PatchBodySchema = z.object({
   roleSelectionChannelId: z.string().nullable().optional(),
   registerConfirmationTemplate: z.string().min(1).optional(),
   registerNicknameUseFont: z.boolean().optional(),
+  registerAutoComplete: z.boolean().optional(),
+  autoRegisterConfirmationTemplate: z.string().min(1).optional(),
+  apolloEventChannelId: z.string().nullable().optional(),
+  eventVoiceChannelId: z.string().nullable().optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -26,6 +30,10 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     roleSelectionChannelId: settings.roleSelectionChannelId,
     registerConfirmationTemplate: settings.registerConfirmationTemplate,
     registerNicknameUseFont: settings.registerNicknameUseFont,
+    registerAutoComplete: settings.registerAutoComplete,
+    autoRegisterConfirmationTemplate: settings.autoRegisterConfirmationTemplate,
+    apolloEventChannelId: settings.apolloEventChannelId,
+    eventVoiceChannelId: settings.eventVoiceChannelId,
   };
 }
 
@@ -46,6 +54,10 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       roleSelectionChannelId,
       registerConfirmationTemplate,
       registerNicknameUseFont,
+      registerAutoComplete,
+      autoRegisterConfirmationTemplate,
+      apolloEventChannelId,
+      eventVoiceChannelId,
     } = body.data;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
@@ -63,6 +75,10 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       ...(roleSelectionChannelId !== undefined && { roleSelectionChannelId: roleSelectionChannelId || null }),
       ...(registerConfirmationTemplate !== undefined && { registerConfirmationTemplate }),
       ...(registerNicknameUseFont !== undefined && { registerNicknameUseFont }),
+      ...(registerAutoComplete !== undefined && { registerAutoComplete }),
+      ...(autoRegisterConfirmationTemplate !== undefined && { autoRegisterConfirmationTemplate }),
+      ...(apolloEventChannelId !== undefined && { apolloEventChannelId: apolloEventChannelId || null }),
+      ...(eventVoiceChannelId !== undefined && { eventVoiceChannelId: eventVoiceChannelId || null }),
     });
     return serialize(settings);
   });

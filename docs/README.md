@@ -8,6 +8,7 @@ Reference docs for `leck-eier-bot`. Start with the root [README](../README.md) f
 | [PERMISSIONS.md](PERMISSIONS.md) | Every Privileged Gateway Intent and bot permission the invite/authorize link needs, and how to update them on a bot already in your server |
 | [DASHBOARD.md](DASHBOARD.md) | Setting up the web dashboard: the Discord OAuth2 app, required redirect URIs, multi-domain access, who's allowed to log in, what each page does |
 | [REACTION_ROLES.md](REACTION_ROLES.md) | Reaction-role panels: modes (toggle/unique/verify), the `removeReaction` option, bot permission requirements |
+| [EVENT_ATTENDANCE.md](EVENT_ATTENDANCE.md) | Apollo event RSVP parsing, name matching, the scheduled/active/completed tracking state machine, and what on-time/late/no-show/left-early mean |
 | [COMMANDS.md](COMMANDS.md) | Every slash command, its options, and who can run it |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Project layout, startup sequence, live reconfiguration, the permission model, how the dashboard backend is wired |
 | [DATABASE.md](DATABASE.md) | SQLite schema, the migration runner, where the file lives, inspecting/backing it up |

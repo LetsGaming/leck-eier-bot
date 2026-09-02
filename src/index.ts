@@ -21,6 +21,7 @@ import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
 import registerRegisterWatcher from "./events/registerWatcher.js";
+import registerApolloEventWatcher from "./events/apolloEventWatcher.js";
 import { getCachedMembers, initMemberCache } from "./services/memberCache.js";
 import { seedMemberRecordsFromCache } from "./services/memberRecords.js";
 import {
@@ -82,6 +83,10 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
+    // Non-privileged — no Developer Portal toggle needed. Required for
+    // `voiceStateUpdate` events and for a voice channel's `.members` to be
+    // populated at all — see events/apolloEventWatcher.ts.
+    GatewayIntentBits.GuildVoiceStates,
   ],
   // Required so reactions on messages the bot hasn't cached (e.g. added
   // before this process started) still fire messageReactionAdd/Remove
@@ -179,6 +184,7 @@ client.on("interactionCreate", async (interaction) => {
     registerBirthdayWatcher(client);
     registerReactionRoleEvents(client);
     registerRegisterWatcher(client);
+    registerApolloEventWatcher(client);
 
     client.once("clientReady", async () => {
       logger.info(`Bot logged in as ${client.user?.tag}`);

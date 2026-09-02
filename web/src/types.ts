@@ -176,6 +176,14 @@ export interface GeneralSettings {
   registerConfirmationTemplate: string;
   /** Whether the generated nickname's first-name half renders through the global font set above. Defaults on. */
   registerNicknameUseFont: boolean;
+  /** Off by default. When on, a valid registration-form submission immediately grants the registration-tier role instead of waiting for staff. The private thread still opens (with `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after an hour. Has no effect if `registrationTierRoleId` isn't set. */
+  registerAutoComplete: boolean;
+  /** Posted in the private thread instead of `registerConfirmationTemplate` when `registerAutoComplete` successfully grants the tier role. Same `{name}`/`{roleChannel}` placeholders. */
+  autoRegisterConfirmationTemplate: string;
+  /** Channel the Apollo bot posts event RSVP embeds in. Null = event attendance tracking is disabled. */
+  apolloEventChannelId: string | null;
+  /** The one voice channel every tracked event happens in. Null = tracking never activates even if an event is parsed. */
+  eventVoiceChannelId: string | null;
 }
 
 /**
@@ -229,4 +237,50 @@ export interface Registration {
   submittedSsoName: string | null;
   /** Raw `alter:` field value, as submitted. Null if the member left it out. */
   submittedAge: string | null;
+}
+
+/** What a member clicked on Apollo's event embed. */
+export type ApolloRsvpChoice = "accepted" | "declined" | "tentative";
+
+/** How a signup's `rawName` was resolved to a guild member. */
+export type SignupMatchSource = "auto" | "manual" | "unmatched" | "ambiguous";
+
+/** scheduled -> active -> completed, or -> cancelled if the Apollo message is deleted while still scheduled. */
+export type ApolloEventStatus = "scheduled" | "active" | "completed" | "cancelled";
+
+/** on_time/late/no_show/left_early are derived from the tracked voice channel; not_tracked means the bot missed the whole window or the voice channel wasn't configured/visible. Null means not yet computed — still scheduled, or the signup is 'declined' (never tracked). */
+export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "not_tracked";
+
+/** One signed-up member on an `EventAttendance` entry. */
+export interface EventSignup {
+  id: number;
+  /** As it appeared in Apollo's embed, exactly. */
+  rawName: string;
+  choice: ApolloRsvpChoice;
+  userId: string | null;
+  displayName: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+  matchSource: SignupMatchSource;
+  attendanceStatus: AttendanceStatus | null;
+  firstJoinedAt: string | null;
+  lastLeftAt: string | null;
+  /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed. Null while still present. */
+  withdrawnAt: string | null;
+}
+
+/** One Apollo-managed event with its full sign-up/attendance list — see `services/eventAttendance.ts` on the backend for the state machine and derivation rules. */
+export interface EventAttendance {
+  id: number;
+  apolloEventId: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status: ApolloEventStatus;
+  /** The bot was offline for some/all of this event's tracking window — timestamps may be approximate. */
+  trackingIncomplete: boolean;
+  /** Jump link to the original Apollo message. */
+  messageUrl: string;
+  voiceChannelId: string | null;
+  signups: EventSignup[];
 }

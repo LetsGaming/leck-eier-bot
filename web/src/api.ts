@@ -6,6 +6,7 @@ import type {
   CommandDef,
   CreatePanelInput,
   EmojiOption,
+  EventAttendance,
   GeneralSettings,
   Mapping,
   MappingInput,
@@ -59,12 +60,18 @@ export const api = {
   status: () => request<Status>("/status"),
 
   channels: () => request<Channel[]>("/discord/channels"),
+  voiceChannels: () => request<Channel[]>("/discord/voice-channels"),
   roles: () => request<RoleOption[]>("/discord/roles"),
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
   memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
   registrations: () => request<Registration[]>("/members/registrations"),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
+
+  eventAttendance: () => request<EventAttendance[]>("/events/attendance"),
+  linkEventSignup: (signupId: number, userId: string | null) =>
+    request<EventAttendance>(`/events/attendance/signups/${signupId}`, { method: "PATCH", ...json({ userId }) }),
+  deleteEventAttendance: (id: number) => request<void>(`/events/attendance/${id}`, { method: "DELETE" }),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),

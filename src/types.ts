@@ -72,6 +72,14 @@ export interface Settings {
   registerConfirmationTemplate: string;
   /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in registerWatcher.ts). Defaults on. */
   registerNicknameUseFont: boolean;
+  /** Off by default. When on, a valid registration-form submission immediately grants `registrationTierRoleId` instead of waiting for staff — see `registerWatcher.ts`. The private thread still opens (posting `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after `REGISTER_AUTO_THREAD_LIFETIME_MS`. Has no effect if `registrationTierRoleId` isn't set. */
+  registerAutoComplete: boolean;
+  /** Posted in the private thread instead of `registerConfirmationTemplate` when `registerAutoComplete` successfully grants the tier role. Same `{name}`/`{roleChannel}` placeholders — see DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE. */
+  autoRegisterConfirmationTemplate: string;
+  /** Channel the Apollo bot posts event RSVP embeds in. Null = Apollo event attendance tracking is disabled. See `apolloEventWatcher.ts`. */
+  apolloEventChannelId: string | null;
+  /** The one voice channel every tracked event happens in. Null = tracking never activates even if an event is parsed (see `sweepApolloEvents()`). */
+  eventVoiceChannelId: string | null;
 }
 
 export interface CommandSetting {
@@ -169,6 +177,8 @@ export interface MemberRecord {
   registerSubmittedAge: string | null;
   /** Lifecycle of the most recent registration-form submission. Null = never submitted one. Set to 'pending' on submission and never reset to null again — see `savePendingRegistration()`/`completeRegistration()`/`removeRegistration()`/`markRegistrationLeft()` in `memberRecordsRepository.ts`. */
   registerStatus: RegistrationStatus | null;
+  /** ISO UTC — set only when `settings.registerAutoComplete` completes a registration, keeping the thread open a while longer instead of deleting it immediately. `sweepExpiredRegisterThreads()` in `registerWatcher.ts` deletes the thread once this passes. Null otherwise (including for a manually-completed/removed/left registration, which deletes the thread right away). */
+  registerThreadExpiresAt: string | null;
 }
 
 /**
@@ -180,6 +190,75 @@ export interface MemberRecord {
  * — see `markRegistrationLeft()`'s guard).
  */
 export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
+
+/** What a member clicked on Apollo's event embed. */
+export type ApolloRsvpChoice = "accepted" | "declined" | "tentative";
+
+/** How a signup's `raw_name` was resolved to a guild member — see `resolveMemberByExactName()` in `services/memberSearch.ts`. */
+export type SignupMatchSource = "auto" | "manual" | "unmatched" | "ambiguous";
+
+/**
+ * scheduled -> active -> completed, or -> cancelled if the Apollo message is
+ * deleted while still scheduled. See `sweepApolloEvents()` in
+ * `services/eventAttendance.ts`.
+ */
+export type ApolloEventStatus = "scheduled" | "active" | "completed" | "cancelled";
+
+/** on_time/late/no_show/left_early are derived from `apollo_event_voice_log` by `deriveAttendance()`; not_tracked means the bot missed the whole window (offline) or the voice channel wasn't configured/visible when the event activated. Null (on a signup) means not yet computed — still scheduled, or the signup is 'declined' (never tracked at all). */
+export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "not_tracked";
+
+/** A single Apollo-managed event, parsed from its RSVP embed. See migration v28 in `db/index.ts` for the full column rationale. */
+export interface ApolloEvent {
+  id: number;
+  /** Numeric id from the event's `apollo.fyi/events/<id>` link. Null if it couldn't be found — `messageId` is then the only identity. */
+  apolloEventId: string | null;
+  messageId: string;
+  channelId: string;
+  title: string;
+  /** ISO UTC. Frozen once `status` leaves 'scheduled' — a later Apollo edit can't move an in-flight measurement's goalposts. */
+  startsAt: string;
+  /** ISO UTC. Same freeze rule as `startsAt`. */
+  endsAt: string;
+  status: ApolloEventStatus;
+  /** Snapshot of `settings.eventVoiceChannelId` taken at activation — a later setting change never rewrites an event's own history. Null until activated. */
+  voiceChannelId: string | null;
+  activatedAt: string | null;
+  completedAt: string | null;
+  /** The bot was offline for some/all of this event's tracking window — see `catchUpApolloEvents()`. Timestamps on this event's signups may be approximate. */
+  trackingIncomplete: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One signed-up member on an `ApolloEvent`. Two independent field groups — see migration v28's doc comment in `db/index.ts` for why they're never written by the same code path. */
+export interface ApolloEventSignup {
+  id: number;
+  eventId: number;
+  /** As it appeared in Apollo's embed, exactly. */
+  rawName: string;
+  /** `normalizeForSearch(rawName)` — the natural key alongside `eventId` for re-parse upserts. */
+  normalizedName: string;
+  choice: ApolloRsvpChoice;
+  /** Null until resolved (or if resolution failed/was ambiguous). */
+  userId: string | null;
+  matchSource: SignupMatchSource;
+  /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed (rows are just deleted instead, pre-activation). Null while still present. */
+  withdrawnAt: string | null;
+  /** Null while the event is still 'scheduled', and always null for a 'declined' choice (never tracked). */
+  attendanceStatus: AttendanceStatus | null;
+  firstJoinedAt: string | null;
+  lastLeftAt: string | null;
+}
+
+/** One join/leave/snapshot row in the tracked voice channel for an active event — the source of truth `deriveAttendance()` replays. Logged for every non-bot member who touches the channel, not just signed-up ones, so a manual name-link made after the fact can still reconstruct real attendance. */
+export interface ApolloEventVoiceLogRow {
+  id: number;
+  eventId: number;
+  userId: string;
+  action: "present_at_start" | "join" | "leave" | "present_at_end";
+  /** ISO UTC, clamped into [startsAt, endsAt]. */
+  at: string;
+}
 
 /**
  * Dashboard RBAC role, resolved at login (`resolveDashboardRole()` in

@@ -72,3 +72,11 @@ These are optional and only affect logging (see [ARCHITECTURE.md](ARCHITECTURE.m
 | `LOG_DIR` | `<cwd>/../logs` | Directory log files are written to. |
 | `LOG_LEVEL` | `info` | Minimum [winston log level](https://github.com/winstonjs/winston#logging-levels) written to files. |
 | `NODE_ENV` | unset | No effect on logging — console output is always on (colorized) alongside the rotated file logs. |
+
+## Debug variables
+
+Also optional, also read directly from `process.env` rather than the validated schema — same reasoning as the logging variables above (a debug toggle, not something the app needs to start):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LOG_APOLLO_EMBEDS` | `false` (any value other than exactly `true`) | Logs the raw embed/component JSON of every message in the configured Apollo event channel, before parsing — the fastest way to validate or fix `src/services/apolloEventParser.ts` against a real Apollo message without editing any code. Set it, restart, let a real event get posted/edited, then check the logs. See [EVENT_ATTENDANCE.md](EVENT_ATTENDANCE.md#verifying-against-a-real-embed). |

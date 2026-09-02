@@ -31,6 +31,10 @@ src/
     reactionRoles.ts             Reaction-role event handling, panel cache, posting/syncing panels
     settingsBus.ts               EventEmitter that decouples DB writes from their live-reconfiguration
                                    effects (cron rescheduling, command reload, panel cache invalidation)
+    memberSearch.ts               Name normalization/matching against the live member cache — used by
+                                   /finduser and Apollo event-signup name resolution
+    apolloEventParser.ts          Pure parser: Apollo RSVP embed -> title/start/end/signups (see EVENT_ATTENDANCE.md)
+    eventAttendance.ts            deriveAttendance() + the scheduled/active/completed sweep + startup catch-up
 
   loaders/
     commandLoader.ts            Recursively discovers command modules and registers them on the client
@@ -39,6 +43,8 @@ src/
     memberEvents.ts              guildMemberAdd/Update/Remove — cache maintenance + leave notifications + member_records tracking
     birthdayWatcher.ts            messageCreate/Update on the birthday channel — triggers a re-scan
     reactionRoleEvents.ts         messageReactionAdd/Remove — delegates to services/reactionRoles.ts
+    apolloEventWatcher.ts         messageCreate/Update/Delete on the Apollo channel + voiceStateUpdate —
+                                   parses events, tracks attendance (see EVENT_ATTENDANCE.md)
 
   commands/
     birthday/                    checkbirthday, clearbirthdaychannel,

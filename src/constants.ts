@@ -69,8 +69,47 @@ export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
 export const REGISTER_FORM_ALTER_REGEX = /^\s*alter\s*:\s*(.+)$/im;
 /** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `registerWatcher.ts`. */
 export const REGISTER_NICKNAME_EMOJI = "💙";
+/** `{name}`/`{roleChannel}` — same placeholders as DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. Posted instead of the normal template when `settings.registerAutoComplete` is on and the tier role was granted successfully. */
+export const DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE =
+  "Willkommen {name}! Du bist jetzt vollständig registriert. Schau dir gerne schon in {roleChannel} deine Rollen an. Dieser Thread schließt sich in einer Stunde automatisch.";
+/** How long the private thread stays open after an auto-completed registration before being deleted — see `sweepExpiredRegisterThreads()` in `registerWatcher.ts`. Not configurable by design. */
+export const REGISTER_AUTO_THREAD_LIFETIME_MS = 60 * 60 * 1000;
+/** How often the bot checks for auto-completed registration threads past their lifetime. */
+export const REGISTER_THREAD_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 /** Discord's hard cap on a member's nickname length. */
 export const DISCORD_NICKNAME_MAX_LENGTH = 32;
+
+// --- Apollo event attendance ---
+/** How often the bot checks for events that need to start/end tracking — see `sweepApolloEvents()` in `services/eventAttendance.ts`. */
+export const APOLLO_EVENT_SWEEP_INTERVAL_MS = 30 * 1000;
+/** Someone joining the voice channel this many ms after the event's start still counts as "on time" rather than "late" — 0 per the product decision (exact start time), documented here so the ±sweep-interval fuzz this implies is explicit rather than silently baked into the sweep cadence. */
+export const APOLLO_EVENT_ON_TIME_GRACE_MS = 0;
+/** Assumed event length when Apollo's embed only yields one timestamp (should be rare — Apollo normally gives both start and end). */
+export const APOLLO_EVENT_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+/** Matches the numeric event id in an apollo.fyi event link — the real link shape is `apollo.fyi/workspaces/<id>/events/<id>` (arbitrary path segments before the final `events/<id>` or short-form `e/<id>`), not `apollo.fyi/events/<id>` directly. See `parseApolloEventEmbed()` in `services/apolloEventParser.ts`. */
+export const APOLLO_EVENT_URL_REGEX = /apollo\.fyi(?:\/[^/\s]+)*\/(?:e|events)\/(\d+)/i;
+/** Matches a Discord timestamp token, e.g. `<t:1756832423:F>` — Apollo's "Time" field uses these for the event's start/end. */
+export const DISCORD_TIMESTAMP_TOKEN_REGEX = /<t:(-?\d+)(?::[tTdDfFR])?>/g;
+/** Fallback start/end source when timestamp tokens are missing — the `dates=` param on Apollo's "add to Google Calendar" link, e.g. `dates=20260902T165000Z/20260902T175000Z`. */
+export const GOOGLE_CALENDAR_DATES_REGEX = /[?&]dates=(\d{8}T\d{6}Z)(?:%2F|\/)(\d{8}T\d{6}Z)/i;
+/**
+ * Embed field names (after stripping emoji/count-suffix and lowercasing —
+ * see `normalizeFieldLabel()`) that identify an Apollo RSVP list, mapped to
+ * the choice they represent. Covers English and a guess at German, since
+ * Apollo's exact localized labels for this server haven't been confirmed
+ * against a real embed yet — see docs/EVENT_ATTENDANCE.md's caveat.
+ */
+export const APOLLO_RSVP_FIELD_LABELS: Record<string, "accepted" | "declined" | "tentative"> = {
+  accepted: "accepted",
+  zugesagt: "accepted",
+  angenommen: "accepted",
+  declined: "declined",
+  abgesagt: "declined",
+  abgelehnt: "declined",
+  tentative: "tentative",
+  vielleicht: "tentative",
+  unentschlossen: "tentative",
+};
 
 // --- Reaction roles ---
 /**

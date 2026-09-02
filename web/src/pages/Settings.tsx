@@ -17,8 +17,11 @@ export default function Settings({ me }: { me: Me }) {
   const [savingFont, setSavingFont] = useState(false);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [voiceChannels, setVoiceChannels] = useState<Channel[]>([]);
   const [confirmationTemplate, setConfirmationTemplate] = useState("");
   const [savingConfirmationTemplate, setSavingConfirmationTemplate] = useState(false);
+  const [autoConfirmationTemplate, setAutoConfirmationTemplate] = useState("");
+  const [savingAutoConfirmationTemplate, setSavingAutoConfirmationTemplate] = useState(false);
   const { showError, showSuccess } = useToast();
 
   useEffect(() => {
@@ -28,10 +31,12 @@ export default function Settings({ me }: { me: Me }) {
         setSettings(s);
         setFontMap(s.fontMap ?? "");
         setConfirmationTemplate(s.registerConfirmationTemplate);
+        setAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
       })
       .catch((err) => showError(errorMessage(err)));
     api.roles().then(setRoles).catch((err) => showError(errorMessage(err)));
     api.channels().then(setChannels).catch((err) => showError(errorMessage(err)));
+    api.voiceChannels().then(setVoiceChannels).catch((err) => showError(errorMessage(err)));
   }, [showError]);
 
   async function update(patch: Partial<GeneralSettings>) {
@@ -67,6 +72,19 @@ export default function Settings({ me }: { me: Me }) {
       showError(errorMessage(err));
     } finally {
       setSavingConfirmationTemplate(false);
+    }
+  }
+
+  async function handleSaveAutoConfirmationTemplate() {
+    setSavingAutoConfirmationTemplate(true);
+    try {
+      const updated = await api.updateGeneralSettings({ autoRegisterConfirmationTemplate: autoConfirmationTemplate });
+      setSettings(updated);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingAutoConfirmationTemplate(false);
     }
   }
 
@@ -194,8 +212,10 @@ export default function Settings({ me }: { me: Me }) {
             <strong>💙VORNAME — nachname</strong> — der Vorname großgeschrieben (optional über die globale Schrift
             gestylt, siehe Schalter unten), der Nachname aus dem sso-Namen klein und immer ohne Schrift — und legt
             einen privaten Thread an der Nachricht an, in dem der untenstehende Bestätigungstext gepostet wird. Der
-            Thread wird automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird.
-            Lasse den Kanal leer, um dies zu deaktivieren.
+            Thread wird automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird
+            — manuell durch ein Team-Mitglied, oder sofort automatisch, wenn der Schalter unten aktiviert ist (dann
+            bleibt der Thread noch eine Stunde offen und zeigt den zweiten Bestätigungstext). Lasse den Kanal leer,
+            um dies zu deaktivieren.
           </p>
           {!settings ? (
             <div className="loading">Wird geladen…</div>
@@ -254,6 +274,86 @@ export default function Settings({ me }: { me: Me }) {
               >
                 {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
               </button>
+
+              <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid var(--border)" }} />
+
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.registerAutoComplete}
+                  onChange={(e) => update({ registerAutoComplete: e.target.checked })}
+                />
+                Registrierung automatisch abschließen (Registrierungsrolle sofort vergeben, ohne manuelle Prüfung)
+              </label>
+              <div className="hint">
+                Aus (Standard): Der Thread bleibt offen, bis ein Team-Mitglied die Registrierungsrolle (siehe oben)
+                manuell vergibt. Ein: Der Bot vergibt die Registrierungsrolle sofort bei Formular-Einreichung — der
+                Thread öffnet sich trotzdem, zeigt aber den untenstehenden Text und schließt sich automatisch nach
+                einer Stunde. Ohne gesetzte Registrierungsrolle (siehe oben) hat dieser Schalter keine Wirkung.
+              </div>
+              <div className="field">
+                <label htmlFor="auto-register-confirmation-template">Bestätigungstext (automatische Registrierung)</label>
+                <textarea
+                  id="auto-register-confirmation-template"
+                  rows={3}
+                  value={autoConfirmationTemplate}
+                  onChange={(e) => setAutoConfirmationTemplate(e.target.value)}
+                />
+                <div className="hint">
+                  Wird stattdessen gepostet, wenn die automatische Registrierung erfolgreich war. Gleiche
+                  Platzhalter: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code>.
+                </div>
+              </div>
+              <button
+                className="primary"
+                onClick={handleSaveAutoConfirmationTemplate}
+                disabled={savingAutoConfirmationTemplate}
+              >
+                {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="card">
+          <h2>Event-Anwesenheit (Apollo)</h2>
+          <p className="muted small">
+            Postet der Apollo-Bot im unten festgelegten Kanal ein Event mit Zusagen/Absagen/Vielleicht-Liste, erkennt
+            der Bot das automatisch, gleicht die Namen mit den Servermitgliedern ab und prüft beim Start des Events,
+            wer sich im festgelegten Sprachkanal befindet — inklusive Verspätungen und vorzeitigem Verlassen bis zum
+            Ende des Events. Das Ergebnis erscheint unter{" "}
+            <a href="/events">Event-Anwesenheit</a> im Menü. Lasse einen Kanal leer, um dies zu deaktivieren.
+          </p>
+          {!settings ? (
+            <div className="loading">Wird geladen…</div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="apollo-event-channel">Apollo-Event-Kanal</label>
+                <SearchableSelect
+                  id="apollo-event-channel"
+                  value={settings.apolloEventChannelId ?? ""}
+                  onChange={(v) => update({ apolloEventChannelId: v || null })}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                />
+                <div className="hint">Der Kanal, in dem Apollo seine Event-Nachrichten postet.</div>
+              </div>
+              <div className="field">
+                <label htmlFor="event-voice-channel">Event-Sprachkanal</label>
+                <SearchableSelect
+                  id="event-voice-channel"
+                  value={settings.eventVoiceChannelId ?? ""}
+                  onChange={(v) => update({ eventVoiceChannelId: v || null })}
+                  placeholder="Sprachkanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={voiceChannels.map((c) => ({ value: c.id, label: `🔊 ${c.name}` }))}
+                />
+                <div className="hint">
+                  Der eine Sprachkanal, in dem alle Events stattfinden. Der Bot muss ihn sehen können.
+                </div>
+              </div>
             </>
           )}
         </div>

@@ -6,6 +6,9 @@ import {
   completeRegistration as dbCompleteRegistration,
   removeRegistration as dbRemoveRegistration,
   markRegistrationLeft as dbMarkRegistrationLeft,
+  completeRegistrationKeepThread,
+  listExpiredRegisterThreads,
+  clearExpiredRegisterThread,
 } from "../db/memberRecordsRepository.js";
 import {
   REGISTER_FORM_NAME_REGEX,
@@ -13,6 +16,8 @@ import {
   REGISTER_FORM_ALTER_REGEX,
   REGISTER_NICKNAME_EMOJI,
   DISCORD_NICKNAME_MAX_LENGTH,
+  REGISTER_AUTO_THREAD_LIFETIME_MS,
+  REGISTER_THREAD_SWEEP_INTERVAL_MS,
 } from "../constants.js";
 import { applyFont } from "../utils/font.js";
 import logger, { errorMessage } from "../utils/logger.js";
@@ -147,9 +152,32 @@ export default function registerRegisterWatcher(client: BotClient): void {
         age: fields.age,
       });
 
+      // settings.registerAutoComplete skips the staff-review step entirely —
+      // grant the tier role immediately instead of leaving the entry
+      // 'pending'. The role grant is attempted (and, on success, the DB
+      // status flipped) *before* posting the thread message, so the choice
+      // of template below always matches what actually happened. Granting
+      // the role also fires the normal guildMemberUpdate handling in
+      // memberEvents.ts (register-gate role stripped, etc.) — that handler's
+      // own completeRegistration() call becomes a no-op here since status is
+      // already 'registered' by the time it runs (see its doc comment).
+      let autoCompleted = false;
+      if (settings.registerAutoComplete && settings.registrationTierRoleId) {
+        try {
+          await member.roles.add(settings.registrationTierRoleId, "Automatische Registrierung");
+          completeRegistrationKeepThread(member.id, new Date(Date.now() + REGISTER_AUTO_THREAD_LIFETIME_MS).toISOString());
+          autoCompleted = true;
+        } catch (err) {
+          logger.warn(
+            `Registrierungsformular: automatische Rollenvergabe für ${member.id} fehlgeschlagen: ${errorMessage(err)}`,
+          );
+        }
+      }
+
       // Deliberately doesn't reference or link back to the register channel
       // or the original message — the thread stands on its own.
-      const note = renderConfirmation(settings.registerConfirmationTemplate, fields.name, settings.roleSelectionChannelId);
+      const template = autoCompleted ? settings.autoRegisterConfirmationTemplate : settings.registerConfirmationTemplate;
+      const note = renderConfirmation(template, fields.name, settings.roleSelectionChannelId);
       await thread.send({ content: note });
     } catch (err) {
       logger.warn(
@@ -163,6 +191,31 @@ export default function registerRegisterWatcher(client: BotClient): void {
       logger.error(`Registrierungsformular-Verarbeitung fehlgeschlagen: ${errorMessage(err)}`),
     );
   });
+
+  // Catches up on anything that expired while the bot was offline, then
+  // keeps sweeping periodically — see sweepExpiredRegisterThreads().
+  sweepExpiredRegisterThreads(client).catch((err) =>
+    logger.error(`Bereinigung abgelaufener Registrierungs-Threads fehlgeschlagen: ${errorMessage(err)}`),
+  );
+  setInterval(() => {
+    sweepExpiredRegisterThreads(client).catch((err) =>
+      logger.error(`Bereinigung abgelaufener Registrierungs-Threads fehlgeschlagen: ${errorMessage(err)}`),
+    );
+  }, REGISTER_THREAD_SWEEP_INTERVAL_MS);
+}
+
+/**
+ * Deletes the private thread for every auto-completed registration
+ * (settings.registerAutoComplete) whose one-hour lifetime has passed. Run
+ * once at startup (to catch up on anything missed while offline) and then
+ * on REGISTER_THREAD_SWEEP_INTERVAL_MS — see `registerRegisterWatcher()`.
+ */
+export async function sweepExpiredRegisterThreads(client: BotClient): Promise<void> {
+  const expired = listExpiredRegisterThreads(new Date().toISOString());
+  for (const { userId, threadId } of expired) {
+    await deleteDiscordThread(client, threadId, "Automatische Registrierung — Zeitlimit erreicht");
+    clearExpiredRegisterThread(userId);
+  }
 }
 
 /** The private registration thread id for `userId`, but only if a registration is currently 'pending' — a terminal status never has a live thread to delete. */

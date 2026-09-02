@@ -4,6 +4,7 @@ import { api } from "../api";
 import {
   IconBirthdays,
   IconCommands,
+  IconEvents,
   IconMembers,
   IconOverview,
   IconReactionRoles,
@@ -14,6 +15,7 @@ import type { Me } from "../types";
 const NAV_ITEMS: Array<{ to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; end?: boolean }> = [
   { to: "/", label: "Übersicht", icon: IconOverview, end: true },
   { to: "/members", label: "Mitgliederprüfung", icon: IconMembers },
+  { to: "/events", label: "Event-Anwesenheit", icon: IconEvents },
   { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
   { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
   { to: "/commands", label: "Befehle", icon: IconCommands },
