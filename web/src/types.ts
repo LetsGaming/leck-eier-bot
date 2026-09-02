@@ -200,3 +200,16 @@ export interface MemberAuditResponse {
   inGuild: MemberAuditEntry[];
   left: MemberAuditEntry[];
 }
+
+/** A member who's posted a self-service registration-form submission still awaiting staff review — see `registerWatcher.ts`. */
+export interface PendingRegistration {
+  userId: string;
+  username: string;
+  displayName: string;
+  nickname: string | null;
+  avatarUrl: string;
+  /** ISO UTC — when the private registration thread was created. */
+  submittedAt: string | null;
+  /** Jump link to the private thread, for the raw submitted sso-name/age. */
+  threadUrl: string;
+}

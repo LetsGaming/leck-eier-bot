@@ -1,10 +1,106 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { formatAbsolute, formatRelative } from "../dateFormat";
-import type { MemberAuditEntry, MemberAuditResponse } from "../types";
+import type { MemberAuditEntry, MemberAuditResponse, PendingRegistration } from "../types";
 
 const DEBOUNCE_MS = 300;
+
+function PendingRegistrationsCard() {
+  const [entries, setEntries] = useState<PendingRegistration[] | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
+
+  const load = useCallback(() => {
+    api
+      .pendingRegistrations()
+      .then(setEntries)
+      .catch((err) => showError(errorMessage(err)));
+  }, [showError]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleRemove(entry: PendingRegistration) {
+    if (
+      !confirm(
+        `Ausstehende Registrierung von ${entry.displayName} entfernen? Der private Thread wird gelöscht und das Mitglied kann das Formular erneut einreichen.`,
+      )
+    ) {
+      return;
+    }
+    setBusyUserId(entry.userId);
+    try {
+      await api.removePendingRegistration(entry.userId);
+      showSuccess("Entfernt.");
+      load();
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  if (!entries) return null;
+
+  return (
+    <div className="card">
+      <h2>Ausstehende Registrierungen ({entries.length})</h2>
+      {entries.length === 0 ? (
+        <p className="muted">Niemand wartet gerade auf Registrierung.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="stack-on-mobile">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Anzeigename</th>
+                <th>Nickname</th>
+                <th>Eingereicht</th>
+                <th>Thread</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr key={entry.userId}>
+                  <td className="stack-plain">
+                    <img src={entry.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
+                  </td>
+                  <td data-label="Anzeigename">{entry.displayName}</td>
+                  <td className="muted" data-label="Nickname">
+                    {entry.nickname ?? "—"}
+                  </td>
+                  <td className="mono small" data-label="Eingereicht">
+                    <div>
+                      {formatAbsolute(entry.submittedAt)}
+                      <div className="muted small">{formatRelative(entry.submittedAt)}</div>
+                    </div>
+                  </td>
+                  <td data-label="Thread">
+                    <a href={entry.threadUrl} target="_blank" rel="noreferrer">
+                      Thread öffnen
+                    </a>
+                  </td>
+                  <td>
+                    <button
+                      className="danger"
+                      disabled={busyUserId === entry.userId}
+                      onClick={() => handleRemove(entry)}
+                    >
+                      Entfernen
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DateCell({ label, iso }: { label: string; iso: string | null }) {
   return (
@@ -95,6 +191,8 @@ export default function MemberAudit() {
         "Verlassen" sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht
         erfasst, nicht dass es nie passiert ist. Daten werden in deiner lokalen Zeitzone angezeigt.
       </p>
+
+      <PendingRegistrationsCard />
 
       <div className="card">
         <div className="field">

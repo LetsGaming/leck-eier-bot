@@ -157,8 +157,10 @@ export interface MemberRecord {
   /** ISO UTC. `null` while still in the guild. */
   leftAt: string | null;
   inGuild: boolean;
-  /** Id of the private thread created for this member's pending registration-form submission (registerWatcher.ts). Null once staff complete registration and the thread is deleted (memberEvents.ts), or if none was ever created. */
+  /** Id of the private thread created for this member's pending registration-form submission (registerWatcher.ts). Null once the registration is cleared (staff complete it, it's manually removed from the dashboard, or the member leaves/is kicked/banned — memberEvents.ts), or if none was ever created. */
   registerThreadId: string | null;
+  /** ISO UTC — when `registerThreadId` was created. Null alongside it, same lifecycle. Powers the dashboard's "pending registrations" list. */
+  registerSubmittedAt: string | null;
 }
 
 /**

@@ -106,6 +106,15 @@ export default function registerMemberEvents(client: BotClient): void {
       logger.error(`Failed to remove departed member ${user.id}'s birthday entry: ${errorMessage(err)}`),
     );
 
+    // Same reasoning: a pending registration-form submission (registerWatcher.ts)
+    // is meaningless once the member is gone, regardless of whether they left
+    // voluntarily, were kicked, or were banned — clearing it here (rather than
+    // only on manual dashboard removal or staff completing registration) lets
+    // them start fresh if they ever rejoin.
+    deleteRegisterThread(client, user.id).catch((err) =>
+      logger.error(`Failed to clear departed member ${user.id}'s pending registration: ${errorMessage(err)}`),
+    );
+
     try {
       // 3. Wait for Audit Logs to sync
       await new Promise((resolve) => setTimeout(resolve, AUDIT_LOG_SYNC_DELAY_MS));

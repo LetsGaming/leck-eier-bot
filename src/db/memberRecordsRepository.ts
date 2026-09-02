@@ -11,6 +11,7 @@ interface MemberRecordRow {
   left_at: string | null;
   in_guild: 0 | 1;
   register_thread_id: string | null;
+  register_submitted_at: string | null;
 }
 
 function rowToRecord(row: MemberRecordRow): MemberRecord {
@@ -24,14 +25,18 @@ function rowToRecord(row: MemberRecordRow): MemberRecord {
     leftAt: row.left_at,
     inGuild: row.in_guild === 1,
     registerThreadId: row.register_thread_id,
+    registerSubmittedAt: row.register_submitted_at,
   };
 }
 
 const COLUMNS =
-  "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id";
+  "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id, register_submitted_at";
 
 const selectAllStmt = db.prepare<[], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records`);
 const selectByIdStmt = db.prepare<[string], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records WHERE user_id = ?`);
+const selectPendingRegistrationsStmt = db.prepare<[], MemberRecordRow>(
+  `SELECT ${COLUMNS} FROM member_records WHERE register_thread_id IS NOT NULL AND in_guild = 1`,
+);
 
 interface ProfileInput {
   userId: string;
@@ -82,6 +87,11 @@ export function getMemberRecord(userId: string): MemberRecord | null {
   return row ? rowToRecord(row) : null;
 }
 
+/** Every current member with a registration-form submission still awaiting staff review — see `register_thread_id` on `member_records`. */
+export function listPendingRegistrations(): MemberRecord[] {
+  return selectPendingRegistrationsStmt.all().map(rowToRecord);
+}
+
 export function upsertJoin(entry: ProfileInput & { joinedAt: string | null }): void {
   upsertJoinStmt.run(entry);
 }
@@ -98,16 +108,16 @@ export function recordLeave(entry: ProfileInput & { timestamp: string }): void {
   recordLeaveStmt.run(entry);
 }
 
-const setRegisterThreadIdStmt = db.prepare<{ userId: string; threadId: string }>(
-  `UPDATE member_records SET register_thread_id = @threadId WHERE user_id = @userId`,
+const setRegisterThreadIdStmt = db.prepare<{ userId: string; threadId: string; submittedAt: string }>(
+  `UPDATE member_records SET register_thread_id = @threadId, register_submitted_at = @submittedAt WHERE user_id = @userId`,
 );
 
 const clearRegisterThreadIdStmt = db.prepare<{ userId: string }>(
-  `UPDATE member_records SET register_thread_id = NULL WHERE user_id = @userId`,
+  `UPDATE member_records SET register_thread_id = NULL, register_submitted_at = NULL WHERE user_id = @userId`,
 );
 
-export function setRegisterThreadId(userId: string, threadId: string): void {
-  setRegisterThreadIdStmt.run({ userId, threadId });
+export function setRegisterThreadId(userId: string, threadId: string, submittedAt: string): void {
+  setRegisterThreadIdStmt.run({ userId, threadId, submittedAt });
 }
 
 export function clearRegisterThreadId(userId: string): void {

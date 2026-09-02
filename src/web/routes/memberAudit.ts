@@ -24,7 +24,7 @@ interface MemberAuditEntry {
  * on. The default-avatar index formula is the current (post-discriminator)
  * one: `(user_id >> 22) % 6`.
  */
-function buildAvatarUrl(userId: string, avatarHash: string | null, size = 64): string {
+export function buildAvatarUrl(userId: string, avatarHash: string | null, size = 64): string {
   if (avatarHash) {
     const ext = avatarHash.startsWith("a_") ? "gif" : "png";
     return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${ext}?size=${size}`;

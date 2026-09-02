@@ -11,6 +11,7 @@ import type {
   MappingInput,
   Me,
   MemberAuditResponse,
+  PendingRegistration,
   UpcomingBirthday,
   Panel,
   PanelInput,
@@ -62,6 +63,9 @@ export const api = {
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
   memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
+  pendingRegistrations: () => request<PendingRegistration[]>("/members/pending-registrations"),
+  removePendingRegistration: (userId: string) =>
+    request<void>(`/members/pending-registrations/${userId}`, { method: "DELETE" }),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),

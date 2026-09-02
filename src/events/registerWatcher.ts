@@ -126,7 +126,7 @@ export default function registerRegisterWatcher(client: BotClient): void {
         reason: `Registrierungsformular von ${member.user.tag}`,
       });
       await thread.members.add(member.id);
-      setRegisterThreadId(member.id, thread.id);
+      setRegisterThreadId(member.id, thread.id, new Date().toISOString());
 
       // Deliberately doesn't reference or link back to the register channel
       // or the original message — the thread stands on its own.

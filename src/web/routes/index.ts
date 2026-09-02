@@ -3,6 +3,7 @@ import { requireAdmin } from "../session.js";
 import { registerStatusRoutes } from "./status.js";
 import { registerDiscordDataRoutes } from "./discordData.js";
 import { registerMemberAuditRoutes } from "./memberAudit.js";
+import { registerPendingRegistrationRoutes } from "./pendingRegistrations.js";
 import { registerReactionRolePanelRoutes } from "./reactionRolePanels.js";
 import { registerBirthdaySettingsRoutes } from "./birthdaySettings.js";
 import { registerBirthdaysRoutes } from "./birthdays.js";
@@ -22,6 +23,7 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       registerStatusRoutes(api, client, config);
       registerDiscordDataRoutes(api, client, config);
       registerMemberAuditRoutes(api);
+      registerPendingRegistrationRoutes(api, client, config);
       registerReactionRolePanelRoutes(api, client);
       registerBirthdaySettingsRoutes(api, client);
       registerBirthdaysRoutes(api, client);

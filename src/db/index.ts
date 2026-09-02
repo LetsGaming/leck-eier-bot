@@ -476,6 +476,13 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   (d) => {
     d.exec(`ALTER TABLE settings ADD COLUMN register_nickname_use_font INTEGER NOT NULL DEFAULT 1;`);
   },
+  // v24: when register_thread_id was created — powers the dashboard's
+  // "pending registrations" list (web/routes/pendingRegistrations.ts) so
+  // staff can see how long someone's been waiting. Nulled alongside
+  // register_thread_id whenever a registration is cleared, same lifecycle.
+  (d) => {
+    d.exec(`ALTER TABLE member_records ADD COLUMN register_submitted_at TEXT;`);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;
