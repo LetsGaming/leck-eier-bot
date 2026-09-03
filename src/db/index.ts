@@ -628,6 +628,23 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE apollo_event_signups ADD COLUMN early_minutes INTEGER;
     `);
   },
+  // v30: supports a bare `starts_at` range scan (`listEventsInRange()` in
+  // eventAttendanceRepository.ts, e.g. "events in September 2026"). The
+  // existing idx_apollo_events_status_starts (:586) leads with `status`, so
+  // it can't serve a range query that doesn't also filter on status — SQLite
+  // can only use a composite index's leading column(s), and this query has
+  // none to give it. No accompanying title index: `LOWER(title) LIKE
+  // '%x%'` is a leading-wildcard scan, which no B-tree index (even one on
+  // LOWER(title)) can serve — it would still require a full table/index
+  // scan, so an index would add write cost for no read benefit. Also no
+  // event_id index on apollo_event_signups: UNIQUE (event_id,
+  // normalized_name), already declared on that table, already gives event_id
+  // a leading index; a second one would be redundant.
+  (d) => {
+    d.exec(`
+      CREATE INDEX IF NOT EXISTS idx_apollo_events_starts_at ON apollo_events(starts_at);
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

@@ -291,10 +291,55 @@ export interface EventAttendance {
   signups: EventSignup[];
 }
 
-/** One page of `EventAttendance` history — see `GET /api/events/attendance`. */
-export interface EventAttendancePage {
-  events: EventAttendance[];
+/** Per-event signup/attendance tallies — see `EventSignupCounts` on the backend (`src/db/eventAttendanceRepository.ts`). */
+export interface EventSignupCounts {
   total: number;
-  page: number;
-  pageSize: number;
+  accepted: number;
+  tentative: number;
+  declined: number;
+  /** Same predicate as the backend's `listEventsWithUnresolvedSignups`/`countUnmatchedSignups`. */
+  unresolved: number;
+  onTime: number;
+  late: number;
+  noShow: number;
+  leftEarly: number;
+  notTracked: number;
+  /** `attendanceStatus = 'on_time'` but `lateMinutes > 0` — a subset of `onTime`, not an alternative to it. */
+  lateWithinGrace: number;
+  /** `earlyMinutes > 0` and NOT flagged `left_early`. Independent of `leftEarly`/`onTime`/etc. */
+  earlyWithinGrace: number;
+  /** Sum of `lateMinutes` across all signups (nulls treated as 0). */
+  lateMinutesTotal: number;
+}
+
+/** One row in the event-attendance list view — see `GET /api/events/attendance`. Same event-level fields as `EventAttendance`, but with aggregate `counts` instead of the full `signups` array. */
+export interface EventAttendanceSummary {
+  id: number;
+  apolloEventId: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status: ApolloEventStatus;
+  trackingIncomplete: boolean;
+  messageUrl: string;
+  voiceChannelId: string | null;
+  counts: EventSignupCounts;
+}
+
+/** Response shape of `GET /api/events/attendance`. */
+export interface EventAttendanceListResponse {
+  mode: "month" | "all" | "problems";
+  /** Echoed "YYYY-MM" for mode "month"; null for "all"/"problems". */
+  month: string | null;
+  timezone: string;
+  events: EventAttendanceSummary[];
+  total: number;
+  truncated: boolean;
+}
+
+/** Response shape of `GET /api/events/attendance/months`. */
+export interface EventMonths {
+  months: string[];
+  current: string;
+  timezone: string;
 }

@@ -7,7 +7,8 @@ import type {
   CreatePanelInput,
   EmojiOption,
   EventAttendance,
-  EventAttendancePage,
+  EventAttendanceListResponse,
+  EventMonths,
   GeneralSettings,
   Mapping,
   MappingInput,
@@ -66,13 +67,22 @@ export const api = {
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
   memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
-  registrations: () => request<Registration[]>("/members/registrations"),
+  registrations: (query = "") => request<Registration[]>(`/members/registrations?q=${encodeURIComponent(query)}`),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
   approveRegistration: (userId: string) =>
     request<void>(`/members/registrations/${userId}/approve`, { method: "POST" }),
 
-  eventAttendance: (page: number, query: string) =>
-    request<EventAttendancePage>(`/events/attendance?page=${page}&q=${encodeURIComponent(query)}`),
+  eventAttendanceList: (params: { month?: string; q?: string; scope?: "month" | "all"; problems?: "0" | "1" } = {}) => {
+    const search = new URLSearchParams();
+    if (params.month) search.set("month", params.month);
+    if (params.q) search.set("q", params.q);
+    if (params.scope) search.set("scope", params.scope);
+    if (params.problems) search.set("problems", params.problems);
+    const qs = search.toString();
+    return request<EventAttendanceListResponse>(`/events/attendance${qs ? `?${qs}` : ""}`);
+  },
+  eventAttendanceMonths: () => request<EventMonths>("/events/attendance/months"),
+  eventAttendance: (id: number) => request<EventAttendance>(`/events/attendance/${id}`),
   linkEventSignup: (signupId: number, userId: string | null) =>
     request<EventAttendance>(`/events/attendance/signups/${signupId}`, { method: "PATCH", ...json({ userId }) }),
   deleteEventAttendance: (id: number) => request<void>(`/events/attendance/${id}`, { method: "DELETE" }),

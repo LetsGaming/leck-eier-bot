@@ -35,31 +35,97 @@ function normalizeForSearch(str: string | null | undefined): string {
     .trim();
 }
 
+/** Relevance tiers for `scoreCandidate()`, highest first. Multiplied by `TIER_MULTIPLIER` and combined with a length penalty so ties within a tier favor the shorter (tighter) match. */
+const SCORE_EXACT = 4;
+const SCORE_PREFIX = 3;
+const SCORE_WORD_BOUNDARY = 2;
+const SCORE_SUBSTRING = 1;
+const TIER_MULTIPLIER = 10_000;
+
+/** Score returned by `scoreMatch()` for an empty query, so "no filter" still lists everyone with a positive, constant score instead of ranking them. */
+const EMPTY_QUERY_SCORE = 1;
+
 /**
- * Whether any of `names` matches `query`, normalizing fancy Unicode
+ * Scores one already-normalized candidate against an already-normalized
+ * query. `0` means no match. Tiers (highest first): exact equality, prefix
+ * match, match at the start of a word (space-separated, so "lu" matches
+ * "Max Luna" but not "Almuth"), then any substring match. Within a tier,
+ * shorter candidates score higher so tight matches outrank incidental ones
+ * (e.g. a 4-char name that equals the query outranks a 20-char name that
+ * merely contains it).
+ */
+function scoreCandidate(normalizedQuery: string, normalizedCandidate: string): number {
+  if (!normalizedCandidate) return 0;
+
+  let tier: number;
+  if (normalizedCandidate === normalizedQuery) {
+    tier = SCORE_EXACT;
+  } else if (normalizedCandidate.startsWith(normalizedQuery)) {
+    tier = SCORE_PREFIX;
+  } else if (normalizedCandidate.split(" ").some((word) => word.startsWith(normalizedQuery))) {
+    tier = SCORE_WORD_BOUNDARY;
+  } else if (normalizedCandidate.includes(normalizedQuery)) {
+    tier = SCORE_SUBSTRING;
+  } else {
+    return 0;
+  }
+
+  return tier * TIER_MULTIPLIER - normalizedCandidate.length;
+}
+
+/**
+ * Scores how well any of `names` matches `query`, normalizing fancy Unicode
  * lookalike characters and transliterating both sides first so stylized
- * names still match. An empty query always matches (a "list everyone, no
- * filter yet" state) — shared by `/finduser`, `searchCachedMembers()` below,
- * and the dashboard's Member Audit page (`web/routes/memberAudit.ts`), which
- * also needs to filter former members it has no live GuildMember for.
+ * names still match — see `scoreCandidate()` for the tiering. Returns the
+ * best score across `names` (member has multiple name fields: username,
+ * global name, nickname, display name), or `0` if none match. An empty
+ * query always returns `EMPTY_QUERY_SCORE` (a "list everyone, no filter yet"
+ * state) — shared by `/finduser`, `searchCachedMembers()` below, and the
+ * dashboard's Member Audit page (`web/routes/memberAudit.ts`), which also
+ * needs to filter former members it has no live GuildMember for.
+ */
+export function scoreMatch(query: string, names: Array<string | null | undefined>): number {
+  const normalizedQuery = normalizeForSearch(query);
+  if (!normalizedQuery) return EMPTY_QUERY_SCORE;
+
+  let best = 0;
+  for (const name of names) {
+    const score = scoreCandidate(normalizedQuery, normalizeForSearch(name));
+    if (score > best) best = score;
+  }
+  return best;
+}
+
+/**
+ * Whether any of `names` matches `query` — a thin boolean wrapper around
+ * `scoreMatch()`. Semantics are unchanged for existing callers: an empty
+ * query always matches, and any tier (exact/prefix/word-boundary/substring)
+ * counts as a match.
  */
 export function matchesSearch(query: string, names: Array<string | null | undefined>): boolean {
-  const normalizedSearch = normalizeForSearch(query);
-  if (!normalizedSearch) return true;
-  return names.some((n) => normalizeForSearch(n).includes(normalizedSearch));
+  return scoreMatch(query, names) > 0;
 }
 
 /**
  * Searches the in-memory member cache by username/global name/nickname/
- * display name — see `matchesSearch()`. Used by `/finduser`; the dashboard's
- * Member Audit page calls `matchesSearch()` directly instead, since it needs
- * to filter former members alongside cached ones.
+ * display name, ranked by relevance (best match first) via `scoreMatch()` —
+ * see there for tiering. Used by `/finduser`; the dashboard's Member Audit
+ * page calls `matchesSearch()`/`scoreMatch()` directly instead, since it
+ * needs to filter former members alongside cached ones.
  */
 export function searchCachedMembers(query: string, limit: number = FIND_USER_RESULT_LIMIT): GuildMember[] {
-  const matched = getCachedMembers().filter((member) =>
-    matchesSearch(query, [member.user.username, member.user.globalName, member.nickname, member.displayName]),
-  );
-  return [...matched.values()].slice(0, limit);
+  const scored: Array<{ member: GuildMember; score: number }> = [];
+  for (const member of getCachedMembers().values()) {
+    const score = scoreMatch(query, [
+      member.user.username,
+      member.user.globalName,
+      member.nickname,
+      member.displayName,
+    ]);
+    if (score > 0) scored.push({ member, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((entry) => entry.member);
 }
 
 export type NameResolution =

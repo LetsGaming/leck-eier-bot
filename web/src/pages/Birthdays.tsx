@@ -155,120 +155,6 @@ export default function Birthdays() {
     <div>
       <h2>Geburtstage</h2>
 
-      <div className="card-grid">
-        <div className="card">
-          <h2>Nachrichtenvorlage</h2>
-          <div className="field">
-            <label htmlFor="template">Vorlage</label>
-            <textarea id="template" value={template} onChange={(e) => setTemplate(e.target.value)} />
-            <div className="hint">
-              Platzhalter: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>, <code>{"{everyoneMention}"}</code>
-            </div>
-          </div>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={announcementUseFont}
-              onChange={(e) => setAnnouncementUseFont(e.target.checked)}
-            />
-            Schrift verwenden
-          </label>
-          <div className="hint">
-            Formatiert die Ankündigung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten Schrift,
-            sofern konfiguriert.
-          </div>
-          <button onClick={handlePreview}>Vorschau</button>
-          {preview && (
-            <div className="preview-box" style={{ marginTop: 12 }}>
-              {preview}
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <h2>Ankernachricht &amp; tägliche Ankündigung</h2>
-          <p className="muted small">
-            Der Bot postet und pflegt die Geburtstagsliste selbst im unten angegebenen Kanal (aufgeteilt auf mehrere
-            Nachrichten, falls die vollständige Liste Discords 2000-Zeichen-Limit überschreitet) und postet dort auch
-            die tägliche Ankündigung.
-          </p>
-          <div className="field">
-            <label htmlFor="channel">Kanal</label>
-            <SearchableSelect
-              id="channel"
-              value={channelId}
-              onChange={setChannelId}
-              placeholder="Kanäle durchsuchen…"
-              emptyLabel="— keiner —"
-              options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cron">Zeitplan der täglichen Aufgabe (Cron)</label>
-            <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
-            <div className="hint">
-              Standard: <code>0 0 * * *</code> (Mitternacht, Serverzeit)
-            </div>
-          </div>
-          <button className="primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Wird gespeichert…" : "Speichern"}
-          </button>
-        </div>
-
-        <div className="card">
-          <h2>Selbstregistrierung</h2>
-          <p className="muted small">
-            Mitglieder können ihren eigenen Geburtstag mit <code>/setmybirthday</code> eintragen oder einfach ein
-            Datum (z. B. <code>15.03</code>) im obigen Geburtstagskanal posten — der Bot erkennt es, speichert es und
-            löscht die Nachricht.
-          </p>
-          <div className="field">
-            <label htmlFor="modChannel">Kanal für Registrierungsbenachrichtigungen</label>
-            <SearchableSelect
-              id="modChannel"
-              value={modChannelId}
-              onChange={setModChannelId}
-              placeholder="Kanäle durchsuchen…"
-              emptyLabel="— keiner —"
-              options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
-            />
-            <div className="hint">Wo der Bot einen Hinweis postet, wenn sich jemand registriert. Optional.</div>
-          </div>
-          <div className="field">
-            <label htmlFor="anchorIntro">Einleitungstext</label>
-            <textarea
-              id="anchorIntro"
-              value={anchorIntro}
-              onChange={(e) => setAnchorIntro(e.target.value)}
-              placeholder="z. B. Nutze /setmybirthday oder poste dein Datum hier, um dich zu registrieren!"
-            />
-            <div className="hint">
-              Wird einmal über allen Monaten angezeigt — anders als die Vorlage unten nie wiederholt und nie mit
-              Schrift formatiert. Leer lassen, um nichts anzuzeigen.
-            </div>
-          </div>
-          <div className="field">
-            <label htmlFor="anchorTemplate">Vorlage für Monatsüberschriften</label>
-            <textarea id="anchorTemplate" value={anchorTemplate} onChange={(e) => setAnchorTemplate(e.target.value)} />
-            <div className="hint">
-              Platzhalter: <code>{"{month}"}</code> (mit der Schrift unten formatiert, falls gesetzt), <code>{"{entries}"}</code>{" "}
-              (die Daten/Erwähnungen für diesen Monat — immer unformatiert, damit sie auf Discord korrekt angezeigt werden).
-            </div>
-          </div>
-          <label className="switch">
-            <input type="checkbox" checked={anchorUseFont} onChange={(e) => setAnchorUseFont(e.target.checked)} />
-            Schrift für Monatsüberschriften verwenden
-          </label>
-          <div className="hint">
-            Formatiert <code>{"{month}"}</code> mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten
-            Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert dargestellt.
-          </div>
-          <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
-            {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
-          </button>
-        </div>
-      </div>
-
       {!upcoming ? (
         <div className="loading">Wird geladen…</div>
       ) : (
@@ -338,10 +224,17 @@ export default function Birthdays() {
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                 />
               </div>
-              <button className="primary" onClick={handleSaveEntry} disabled={savingEntry}>
-                {draft.id === null ? "Hinzufügen" : "Änderung speichern"}
-              </button>
-              {draft.id !== null && <button onClick={() => setDraft(EMPTY_DRAFT)}>Abbrechen</button>}
+              <div className="field" style={{ flex: "0 0 auto" }}>
+                <label>&nbsp;</label>
+                <button className="primary" onClick={handleSaveEntry} disabled={savingEntry}>
+                  {draft.id === null ? "Hinzufügen" : "Änderung speichern"}
+                </button>
+                {draft.id !== null && (
+                  <button onClick={() => setDraft(EMPTY_DRAFT)} style={{ marginLeft: 8 }}>
+                    Abbrechen
+                  </button>
+                )}
+              </div>
             </div>
 
             {upcoming.length === 0 ? (
@@ -372,7 +265,9 @@ export default function Birthdays() {
                           <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
                           <td className="stack-plain">
                             <button onClick={() => startEdit(entry, b.dateKey)}>Bearbeiten</button>{" "}
-                            <button onClick={() => handleDeleteEntry(entry.id)}>Löschen</button>
+                            <button className="danger" onClick={() => handleDeleteEntry(entry.id)}>
+                              Löschen
+                            </button>
                           </td>
                         </tr>
                       )),
@@ -381,6 +276,127 @@ export default function Birthdays() {
                 </table>
               </div>
             )}
+          </div>
+
+          <div className="card-grid">
+            <div className="card">
+              <h2>Nachrichtenvorlage</h2>
+              <div className="field">
+                <label htmlFor="template">Vorlage</label>
+                <textarea id="template" value={template} onChange={(e) => setTemplate(e.target.value)} />
+                <div className="hint">
+                  Platzhalter: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>,{" "}
+                  <code>{"{everyoneMention}"}</code>
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={announcementUseFont}
+                  onChange={(e) => setAnnouncementUseFont(e.target.checked)}
+                />
+                Schrift verwenden
+              </label>
+              <div className="hint">
+                Formatiert die Ankündigung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten
+                Schrift, sofern konfiguriert.
+              </div>
+              <button onClick={handlePreview}>Vorschau</button>
+              {preview && (
+                <div className="preview-box" style={{ marginTop: 12 }}>
+                  {preview}
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <h2>Ankernachricht &amp; tägliche Ankündigung</h2>
+              <p className="muted small">
+                Der Bot postet und pflegt die Geburtstagsliste selbst im unten angegebenen Kanal (aufgeteilt auf
+                mehrere Nachrichten, falls die vollständige Liste Discords 2000-Zeichen-Limit überschreitet) und
+                postet dort auch die tägliche Ankündigung.
+              </p>
+              <div className="field">
+                <label htmlFor="channel">Kanal</label>
+                <SearchableSelect
+                  id="channel"
+                  value={channelId}
+                  onChange={setChannelId}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="cron">Zeitplan der täglichen Aufgabe (Cron)</label>
+                <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
+                <div className="hint">
+                  Standard: <code>0 0 * * *</code> (Mitternacht, Serverzeit)
+                </div>
+              </div>
+              <button className="primary" onClick={handleSave} disabled={saving}>
+                {saving ? "Wird gespeichert…" : "Speichern"}
+              </button>
+            </div>
+
+            <div className="card">
+              <h2>Selbstregistrierung</h2>
+              <p className="muted small">
+                Mitglieder können ihren eigenen Geburtstag mit <code>/setmybirthday</code> eintragen oder einfach ein
+                Datum (z. B. <code>15.03</code>) im obigen Geburtstagskanal posten — der Bot erkennt es, speichert es
+                und löscht die Nachricht.
+              </p>
+              <div className="field">
+                <label htmlFor="modChannel">Kanal für Registrierungsbenachrichtigungen</label>
+                <SearchableSelect
+                  id="modChannel"
+                  value={modChannelId}
+                  onChange={setModChannelId}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                />
+                <div className="hint">Wo der Bot einen Hinweis postet, wenn sich jemand registriert. Optional.</div>
+              </div>
+              <div className="field">
+                <label htmlFor="anchorIntro">Einleitungstext</label>
+                <textarea
+                  id="anchorIntro"
+                  value={anchorIntro}
+                  onChange={(e) => setAnchorIntro(e.target.value)}
+                  placeholder="z. B. Nutze /setmybirthday oder poste dein Datum hier, um dich zu registrieren!"
+                />
+                <div className="hint">
+                  Wird einmal über allen Monaten angezeigt — anders als die Vorlage unten nie wiederholt und nie mit
+                  Schrift formatiert. Leer lassen, um nichts anzuzeigen.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="anchorTemplate">Vorlage für Monatsüberschriften</label>
+                <textarea
+                  id="anchorTemplate"
+                  value={anchorTemplate}
+                  onChange={(e) => setAnchorTemplate(e.target.value)}
+                />
+                <div className="hint">
+                  Platzhalter: <code>{"{month}"}</code> (mit der Schrift unten formatiert, falls gesetzt),{" "}
+                  <code>{"{entries}"}</code> (die Daten/Erwähnungen für diesen Monat — immer unformatiert, damit sie
+                  auf Discord korrekt angezeigt werden).
+                </div>
+              </div>
+              <label className="switch">
+                <input type="checkbox" checked={anchorUseFont} onChange={(e) => setAnchorUseFont(e.target.checked)} />
+                Schrift für Monatsüberschriften verwenden
+              </label>
+              <div className="hint">
+                Formatiert <code>{"{month}"}</code> mit der auf der <a href="/settings">Einstellungsseite</a>{" "}
+                festgelegten Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert
+                dargestellt.
+              </div>
+              <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
+                {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
+              </button>
+            </div>
           </div>
         </>
       )}

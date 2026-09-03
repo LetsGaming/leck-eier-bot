@@ -103,19 +103,40 @@ const SIGNUP_COLUMNS = `id, event_id, raw_name, normalized_name, choice, user_id
   attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes`;
 const VOICE_LOG_COLUMNS = "id, event_id, user_id, action, at";
 
-const selectEventsPageStmt = db.prepare<{ query: string; pageSize: number; offset: number }, EventRow>(
+/**
+ * A signup is "unresolved" when it still needs a manual member link and
+ * hasn't been withdrawn. Shared verbatim between `countUnmatchedSignupsStmt`
+ * (the Overview badge), `listEventsWithUnresolvedSignups` (the "problems"
+ * list), and `summarizeSignupsForEvents`'s `unresolved` aggregate, so the
+ * three can never drift out of sync with each other again.
+ */
+const UNRESOLVED_SIGNUP_PREDICATE = `match_source IN ('unmatched', 'ambiguous') AND withdrawn_at IS NULL`;
+
+const countUnmatchedSignupsStmt = db.prepare<[], { total: number }>(
+  `SELECT COUNT(*) AS total FROM apollo_event_signups WHERE ${UNRESOLVED_SIGNUP_PREDICATE}`,
+);
+const selectEventsInRangeStmt = db.prepare<{ from: string; to: string; query: string }, EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM apollo_events
+   WHERE starts_at >= @from AND starts_at < @to AND LOWER(title) LIKE @query
+   ORDER BY starts_at DESC, title ASC`,
+);
+const selectEventsAllMonthsStmt = db.prepare<{ query: string; limit: number }, EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM apollo_events
    WHERE LOWER(title) LIKE @query
    ORDER BY starts_at DESC, title ASC
-   LIMIT @pageSize OFFSET @offset`,
+   LIMIT @limit`,
 );
-const countEventsStmt = db.prepare<{ query: string }, { total: number }>(
-  `SELECT COUNT(*) AS total FROM apollo_events WHERE LOWER(title) LIKE @query`,
+const selectEventsWithUnresolvedSignupsStmt = db.prepare<{ query: string; limit: number }, EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM apollo_events e
+   WHERE LOWER(e.title) LIKE @query
+     AND EXISTS (
+       SELECT 1 FROM apollo_event_signups s
+       WHERE s.event_id = e.id AND ${UNRESOLVED_SIGNUP_PREDICATE}
+     )
+   ORDER BY starts_at DESC, title ASC
+   LIMIT @limit`,
 );
-const countUnmatchedSignupsStmt = db.prepare<[], { total: number }>(
-  `SELECT COUNT(*) AS total FROM apollo_event_signups
-   WHERE match_source IN ('unmatched', 'ambiguous') AND withdrawn_at IS NULL`,
-);
+const selectEventStartTimesStmt = db.prepare<[], { starts_at: string }>(`SELECT starts_at FROM apollo_events`);
 const selectEventByIdStmt = db.prepare<[number], EventRow>(`SELECT ${EVENT_COLUMNS} FROM apollo_events WHERE id = ?`);
 const selectEventByApolloIdStmt = db.prepare<[string], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM apollo_events WHERE apollo_event_id = ?`,
@@ -292,43 +313,167 @@ export function upsertApolloEvent(input: UpsertApolloEventInput): ApolloEvent {
   return getEventById(Number(info.lastInsertRowid))!;
 }
 
-function withSignups(event: ApolloEvent): ApolloEvent & { signups: ApolloEventSignup[] } {
-  return { ...event, signups: listSignups(event.id) };
+/** Signups across every event still needing a manual member link — surfaced on Overview as an attention count (see docs/EVENT_ATTENDANCE.md). */
+export function countUnmatchedSignups(): number {
+  return countUnmatchedSignupsStmt.get()!.total;
 }
 
-export interface EventsPageQuery {
-  /** 1-based. */
-  page: number;
-  pageSize: number;
+export interface EventsInRangeQuery {
+  /** ISO UTC, inclusive. */
+  fromIso: string;
+  /** ISO UTC, exclusive. */
+  toIso: string;
   /** Case-insensitive substring match against the event title. Empty/omitted matches everything. */
   query?: string;
 }
 
-export interface EventsPage {
-  events: Array<ApolloEvent & { signups: ApolloEventSignup[] }>;
-  total: number;
-  page: number;
-  pageSize: number;
+/**
+ * Events whose `starts_at` falls in `[fromIso, toIso)`, newest-first —
+ * intended for a month-scoped dashboard view. Served by
+ * `idx_apollo_events_starts_at` (migration below). Returns bare events, not
+ * hydrated with signups: list views use `summarizeSignupsForEvents`
+ * aggregates instead of loading every signup row per event (N+1).
+ */
+export function listEventsInRange({ fromIso, toIso, query }: EventsInRangeQuery): ApolloEvent[] {
+  const likeQuery = `%${(query ?? "").trim().toLowerCase()}%`;
+  return selectEventsInRangeStmt.all({ from: fromIso, to: toIso, query: likeQuery }).map(rowToEvent);
+}
+
+export interface EventsAllMonthsQuery {
+  /** Case-insensitive substring match against the event title. Empty/omitted matches everything. */
+  query?: string;
+  limit: number;
 }
 
 /**
- * A page of events, newest-first, optionally title-filtered — the only way
- * the dashboard's event list is ever read. Deliberately not "date search"
- * too: `starts_at` is stored as ISO UTC, not text a typed date like "12.09"
- * would substring-match against, and newest-first pagination already covers
- * "find a recent event" well enough for a first pass.
+ * Events across every month, newest-first, capped at `limit` — used when a
+ * caller wants "everything matching this search" rather than one month at a
+ * time (e.g. populating the month picker's fallback / a global search).
+ * Bare events, not hydrated with signups — see `listEventsInRange`.
  */
-export function listEventsPage({ page, pageSize, query }: EventsPageQuery): EventsPage {
+export function listEventsAllMonths({ query, limit }: EventsAllMonthsQuery): ApolloEvent[] {
   const likeQuery = `%${(query ?? "").trim().toLowerCase()}%`;
-  const offset = Math.max(0, page - 1) * pageSize;
-  const events = selectEventsPageStmt.all({ query: likeQuery, pageSize, offset }).map(rowToEvent).map(withSignups);
-  const total = countEventsStmt.get({ query: likeQuery })!.total;
-  return { events, total, page, pageSize };
+  return selectEventsAllMonthsStmt.all({ query: likeQuery, limit }).map(rowToEvent);
 }
 
-/** Signups across every event still needing a manual member link — surfaced on Overview as an attention count (see docs/EVENT_ATTENDANCE.md). */
-export function countUnmatchedSignups(): number {
-  return countUnmatchedSignupsStmt.get()!.total;
+/**
+ * Events that have at least one unresolved signup (see
+ * `UNRESOLVED_SIGNUP_PREDICATE`), newest-first, capped at `limit` — backs a
+ * "problems" list scoped to the same predicate as `countUnmatchedSignups`'s
+ * badge count, so the two can never disagree. Bare events, not hydrated
+ * with signups — see `listEventsInRange`.
+ */
+export function listEventsWithUnresolvedSignups({ query, limit }: EventsAllMonthsQuery): ApolloEvent[] {
+  const likeQuery = `%${(query ?? "").trim().toLowerCase()}%`;
+  return selectEventsWithUnresolvedSignupsStmt.all({ query: likeQuery, limit }).map(rowToEvent);
+}
+
+/** Every event's `starts_at`, unfiltered — raw data for building a month picker (e.g. "which months have events"). Not paginated; caller derives distinct months in JS. */
+export function listEventStartTimes(): string[] {
+  return selectEventStartTimesStmt.all().map((row) => row.starts_at);
+}
+
+export interface EventSignupCounts {
+  total: number;
+  accepted: number;
+  tentative: number;
+  declined: number;
+  /** Same predicate as `countUnmatchedSignups`/`listEventsWithUnresolvedSignups` — see `UNRESOLVED_SIGNUP_PREDICATE`. */
+  unresolved: number;
+  onTime: number;
+  late: number;
+  noShow: number;
+  leftEarly: number;
+  notTracked: number;
+  /** `attendance_status = 'on_time'` but `late_minutes > 0` — arrived within the on-time grace window but not exactly on the dot. A subset of `onTime`, not an alternative to it. */
+  lateWithinGrace: number;
+  /** `early_minutes > 0` and NOT flagged `left_early` — final departure was within the early-leave grace window of the end but not exactly at it. Independent of `leftEarly`/`onTime`/etc; a signup can be both `onTime` and `earlyWithinGrace`. */
+  earlyWithinGrace: number;
+  /** Sum of `late_minutes` across all signups (NULLs treated as 0) — total person-minutes of lateness for the event. */
+  lateMinutesTotal: number;
+}
+
+interface SignupSummaryRow {
+  eventId: number;
+  total: number;
+  accepted: number;
+  tentative: number;
+  declined: number;
+  unresolved: number;
+  onTime: number;
+  late: number;
+  noShow: number;
+  leftEarly: number;
+  notTracked: number;
+  lateWithinGrace: number;
+  earlyWithinGrace: number;
+  lateMinutesTotal: number;
+}
+
+/**
+ * Aggregate signup counts (RSVP breakdown + attendance breakdown) per event,
+ * for the given event ids. One `SUM(CASE ...) ... GROUP BY event_id` query —
+ * far cheaper than loading every signup row per event just to tally them in
+ * JS one event at a time (the N+1 pattern the now-removed `listEventsPage`
+ * used).
+ *
+ * Reads persisted attendance_status/late_minutes/early_minutes columns
+ * directly — these are NOT settled for an event with status 'active' (see
+ * deriveAttendance()/serializeSignup() in routes/eventAttendance.ts).
+ * Callers MUST NOT use this aggregate for an active event; recompute counts
+ * in JS from listSignups()+serializeSignup() instead. At most one event is
+ * ever active at a time, so that fallback is cheap.
+ *
+ * better-sqlite3 cannot bind a JS array to a single `?` placeholder, so
+ * unlike every other statement in this file (which is prepared once at
+ * module load), this statement is prepared fresh on every call with one `?`
+ * generated per id — the placeholder count varies per call, so it can't be
+ * a fixed module-level statement.
+ */
+export function summarizeSignupsForEvents(eventIds: number[]): Map<number, EventSignupCounts> {
+  const result = new Map<number, EventSignupCounts>();
+  if (eventIds.length === 0) return result;
+
+  const placeholders = eventIds.map(() => "?").join(",");
+  const stmt = db.prepare<number[], SignupSummaryRow>(
+    `SELECT
+       event_id AS eventId,
+       COUNT(*) AS total,
+       SUM(CASE WHEN choice = 'accepted' THEN 1 ELSE 0 END) AS accepted,
+       SUM(CASE WHEN choice = 'tentative' THEN 1 ELSE 0 END) AS tentative,
+       SUM(CASE WHEN choice = 'declined' THEN 1 ELSE 0 END) AS declined,
+       SUM(CASE WHEN ${UNRESOLVED_SIGNUP_PREDICATE} THEN 1 ELSE 0 END) AS unresolved,
+       SUM(CASE WHEN attendance_status = 'on_time' THEN 1 ELSE 0 END) AS onTime,
+       SUM(CASE WHEN attendance_status = 'late' THEN 1 ELSE 0 END) AS late,
+       SUM(CASE WHEN attendance_status = 'no_show' THEN 1 ELSE 0 END) AS noShow,
+       SUM(CASE WHEN attendance_status = 'left_early' THEN 1 ELSE 0 END) AS leftEarly,
+       SUM(CASE WHEN attendance_status = 'not_tracked' THEN 1 ELSE 0 END) AS notTracked,
+       SUM(CASE WHEN attendance_status = 'on_time' AND late_minutes > 0 THEN 1 ELSE 0 END) AS lateWithinGrace,
+       SUM(CASE WHEN early_minutes > 0 AND attendance_status IS NOT 'left_early' THEN 1 ELSE 0 END) AS earlyWithinGrace,
+       SUM(COALESCE(late_minutes, 0)) AS lateMinutesTotal
+     FROM apollo_event_signups
+     WHERE event_id IN (${placeholders})
+     GROUP BY event_id`,
+  );
+
+  for (const row of stmt.all(...eventIds)) {
+    result.set(row.eventId, {
+      total: row.total,
+      accepted: row.accepted,
+      tentative: row.tentative,
+      declined: row.declined,
+      unresolved: row.unresolved,
+      onTime: row.onTime,
+      late: row.late,
+      noShow: row.noShow,
+      leftEarly: row.leftEarly,
+      notTracked: row.notTracked,
+      lateWithinGrace: row.lateWithinGrace,
+      earlyWithinGrace: row.earlyWithinGrace,
+      lateMinutesTotal: row.lateMinutesTotal,
+    });
+  }
+  return result;
 }
 
 /** 'scheduled' events whose start time has passed — sweepApolloEvents() activates these. */

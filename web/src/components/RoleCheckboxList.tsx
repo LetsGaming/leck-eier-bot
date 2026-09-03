@@ -12,6 +12,7 @@ interface RoleCheckboxListProps {
   value: string[];
   onChange: (ids: string[]) => void;
   placeholder: string;
+  className?: string;
 }
 
 /**
@@ -22,7 +23,7 @@ interface RoleCheckboxListProps {
  * Already-checked options stay visible even when they don't match the
  * current search text, so typing never hides your existing selection.
  */
-export default function RoleCheckboxList({ options, value, onChange, placeholder }: RoleCheckboxListProps) {
+export default function RoleCheckboxList({ options, value, onChange, placeholder, className }: RoleCheckboxListProps) {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -36,7 +37,7 @@ export default function RoleCheckboxList({ options, value, onChange, placeholder
   }
 
   return (
-    <div>
+    <div className={className}>
       {options.length > 8 && (
         <input
           type="text"
@@ -57,6 +58,7 @@ export default function RoleCheckboxList({ options, value, onChange, placeholder
           padding: 8,
           maxHeight: 140,
           overflowY: "auto",
+          minWidth: 0,
         }}
       >
         {options.length === 0 && <span className="muted">Keine Rollen gefunden.</span>}
