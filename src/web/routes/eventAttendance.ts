@@ -50,6 +50,8 @@ const ZERO_SIGNUP_COUNTS: EventSignupCounts = {
 
 interface EventAttendanceMonthsResponse {
   months: string[];
+  /** Event count per month key ("YYYY-MM"), for highlighting/badging months that hold data in the month picker. */
+  counts: Record<string, number>;
   current: string;
   timezone: string;
 }
@@ -292,12 +294,14 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
   });
 
   app.get("/events/attendance/months", async () => {
-    const months = new Set<string>();
+    const counts: Record<string, number> = {};
     for (const startsAt of listEventStartTimes()) {
-      months.add(monthKeyInTimezone(startsAt, config.timezone));
+      const key = monthKeyInTimezone(startsAt, config.timezone);
+      counts[key] = (counts[key] ?? 0) + 1;
     }
     const response: EventAttendanceMonthsResponse = {
-      months: [...months].sort().reverse(),
+      months: Object.keys(counts).sort().reverse(),
+      counts,
       current: currentMonthKey(config.timezone),
       timezone: config.timezone,
     };

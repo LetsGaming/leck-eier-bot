@@ -1044,6 +1044,99 @@ th {
   margin-bottom: 20px;
 }
 
+.month-nav .pill {
+  border-radius: 999px;
+}
+
+.month-nav-picker {
+  position: relative;
+}
+
+.month-nav-label {
+  background: transparent;
+  padding: 8px 4px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.month-nav-label:hover {
+  background: var(--bg-inset);
+}
+
+.month-calendar-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  width: 280px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.month-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.month-calendar-header button {
+  padding: 4px 10px;
+}
+
+.month-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.month-calendar-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
+  background: var(--bg-inset);
+  text-align: center;
+}
+
+.month-calendar-cell.has-data {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-inset));
+  font-weight: 600;
+}
+
+.month-calendar-cell.current {
+  border: 1px solid var(--accent);
+}
+
+.month-calendar-cell.selected {
+  background: var(--accent);
+  color: white;
+}
+
+.month-calendar-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.month-calendar-cell.selected .month-calendar-badge {
+  background: white;
+  color: var(--accent);
+}
+
 .event-card {
   display: block;
   color: inherit;

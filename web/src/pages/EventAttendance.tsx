@@ -136,7 +136,7 @@ export default function EventAttendancePage() {
             resolvedMonth && (
               <MonthPicker
                 month={resolvedMonth}
-                availableMonths={months.months}
+                monthCounts={months.counts}
                 currentMonth={months.current}
                 onChange={handleMonthChange}
               />

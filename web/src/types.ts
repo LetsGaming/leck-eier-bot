@@ -340,6 +340,8 @@ export interface EventAttendanceListResponse {
 /** Response shape of `GET /api/events/attendance/months`. */
 export interface EventMonths {
   months: string[];
+  /** Event count per month key ("YYYY-MM") — drives the month picker's data highlighting/badges. */
+  counts: Record<string, number>;
   current: string;
   timezone: string;
 }
