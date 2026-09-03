@@ -21,7 +21,7 @@ const STATUS_BADGE_CLASS: Record<RegistrationStatus, string> = {
   left: "error",
 };
 
-function RegistrationsCard() {
+function RegistrationsCard({ query }: { query: string }) {
   const [entries, setEntries] = useState<Registration[] | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
@@ -29,10 +29,10 @@ function RegistrationsCard() {
 
   const load = useCallback(() => {
     api
-      .registrations()
+      .registrations(query)
       .then(setEntries)
       .catch((err) => showError(errorMessage(err)));
-  }, [showError]);
+  }, [query, showError]);
 
   useEffect(() => {
     load();
@@ -86,7 +86,11 @@ function RegistrationsCard() {
     <div className="card">
       <h2>Registrierungen ({entries.length})</h2>
       {entries.length === 0 ? (
-        <p className="muted">Noch niemand hat das Registrierungsformular eingereicht.</p>
+        <p className="muted">
+          {query
+            ? "Keine Registrierung entspricht der Suche."
+            : "Noch niemand hat das Registrierungsformular eingereicht."}
+        </p>
       ) : (
         <div className="table-scroll">
           <table className="stack-on-mobile">
@@ -226,31 +230,38 @@ function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showL
 
 export default function MemberAudit() {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<MemberAuditResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const { showError } = useToast();
 
   const trimmed = query.trim();
 
+  // Single debounce point for the whole page — both the member-audit fetch
+  // below and RegistrationsCard (which receives debouncedQuery as a prop)
+  // key off this one timer instead of each running their own.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(trimmed), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [trimmed]);
+
   useEffect(() => {
     setLoading(true);
-    const timer = setTimeout(() => {
-      api
-        .memberAudit(trimmed)
-        .then(setResults)
-        .catch((err) => showError(errorMessage(err)))
-        .finally(() => setLoading(false));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [trimmed, showError]);
+    api
+      .memberAudit(debouncedQuery)
+      .then(setResults)
+      .catch((err) => showError(errorMessage(err)))
+      .finally(() => setLoading(false));
+  }, [debouncedQuery, showError]);
 
   return (
     <div>
       <h2>Mitgliederprüfung</h2>
       <p className="muted">
-        Jedes Mitglied, das jemals auf dem Server gesehen wurde, aktuell und ehemalig. "Regeln akzeptiert" und
-        "Verlassen" sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht
-        erfasst, nicht dass es nie passiert ist. Daten werden in der konfigurierten Zeitzone angezeigt.
+        Jedes Mitglied, das jemals auf dem Server gesehen wurde, aktuell und ehemalig. Die Suche durchsucht alle drei
+        Listen unten — auf dem Server, den Server verlassen und Registrierungen. "Regeln akzeptiert" und "Verlassen"
+        sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht erfasst, nicht
+        dass es nie passiert ist. Daten werden in der konfigurierten Zeitzone angezeigt.
       </p>
 
       <div className="card">
@@ -285,7 +296,7 @@ export default function MemberAudit() {
         )
       )}
 
-      <RegistrationsCard />
+      <RegistrationsCard query={debouncedQuery} />
     </div>
   );
 }

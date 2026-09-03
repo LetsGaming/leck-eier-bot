@@ -4,6 +4,7 @@ import { getCachedMembers } from "../../services/memberCache.js";
 import { removeRegistration } from "../../events/registerWatcher.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { getSettings } from "../../db/settingsRepository.js";
+import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Config, RegistrationStatus } from "../../types.js";
 
@@ -28,10 +29,11 @@ interface RegistrationEntry {
 
 /** Dashboard visibility/control over self-service registration-form submissions — see `registerWatcher.ts`. Shows full history (pending/registered/removed/left), not just what's currently pending. */
 export function registerRegistrationRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
-  app.get("/members/registrations", async () => {
+  app.get("/members/registrations", async (request) => {
+    const query = (request.query as { q?: string }).q?.trim() ?? "";
     const cache = getCachedMembers();
 
-    return listRegistrations().map((record): RegistrationEntry => {
+    const entries = listRegistrations().map((record): RegistrationEntry => {
       const cached = cache.get(record.userId);
       // registerStatus is guaranteed non-null here — listRegistrations() only
       // returns rows where it's set.
@@ -52,6 +54,29 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
         submittedSsoName: record.registerSubmittedSsoName,
         submittedAge: record.registerSubmittedAge,
       };
+    });
+
+    // Include the raw form-submitted names alongside the resolved Discord
+    // identity — an admin searching for a registrant most likely knows the
+    // name they typed into the form, not their Discord username.
+    const names = (entry: RegistrationEntry) => [
+      entry.username,
+      entry.displayName,
+      entry.nickname,
+      entry.submittedName,
+      entry.submittedSsoName,
+    ];
+
+    const filtered = entries.filter((entry) => matchesSearch(query, names(entry)));
+
+    if (!query) {
+      return filtered;
+    }
+
+    return filtered.sort((a, b) => {
+      const scoreDiff = scoreMatch(query, names(b)) - scoreMatch(query, names(a));
+      if (scoreDiff !== 0) return scoreDiff;
+      return (b.submittedAt ?? "").localeCompare(a.submittedAt ?? "");
     });
   });
 

@@ -646,6 +646,7 @@ export default function ReactionRoles() {
                           />
                           {effectiveSelectionType === "reactions" ? (
                             <RoleCheckboxList
+                              className="grow"
                               placeholder="Rollen durchsuchen…"
                               value={editDraft.roleIds}
                               onChange={(ids) => setEditDraft((d) => ({ ...d, roleIds: ids }))}
@@ -739,6 +740,7 @@ export default function ReactionRoles() {
                       />
                       {effectiveSelectionType === "reactions" ? (
                         <RoleCheckboxList
+                          className="grow"
                           placeholder="Rollen durchsuchen…"
                           value={mappingDraft.roleIds}
                           onChange={(ids) => setMappingDraft((d) => ({ ...d, roleIds: ids }))}

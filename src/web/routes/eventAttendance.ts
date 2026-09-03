@@ -1,17 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
-  listEventsPage,
   listSignups,
   getSignup,
   linkSignupToUser,
   deleteEvent,
   listVoiceLogForUser,
   getEventById,
+  listEventsInRange,
+  listEventsAllMonths,
+  listEventsWithUnresolvedSignups,
+  listEventStartTimes,
+  summarizeSignupsForEvents,
+  type EventSignupCounts,
 } from "../../db/eventAttendanceRepository.js";
 import { getCachedMembers } from "../../services/memberCache.js";
 import { deriveAttendance, recomputeAttendanceForEvent } from "../../services/eventAttendance.js";
 import { buildAvatarUrl } from "./memberAudit.js";
+import { monthRangeUtc, currentMonthKey, monthKeyInTimezone } from "../../utils/timezone.js";
 import type {
   ApolloEvent,
   ApolloEventSignup,
@@ -22,7 +28,37 @@ import type {
   SignupMatchSource,
 } from "../../types.js";
 
-const EVENTS_PAGE_SIZE = 10;
+/** Cap on results for the unbounded "all months" / "problems" list modes — see `ListQuerySchema`'s mode precedence. */
+const PROBLEMS_MODE_LIMIT = 200;
+
+/** `summarizeSignupsForEvents()` omits events with zero signups (its GROUP BY produces no row) — this backfills those. */
+const ZERO_SIGNUP_COUNTS: EventSignupCounts = {
+  total: 0,
+  accepted: 0,
+  tentative: 0,
+  declined: 0,
+  unresolved: 0,
+  onTime: 0,
+  late: 0,
+  noShow: 0,
+  leftEarly: 0,
+  notTracked: 0,
+  lateWithinGrace: 0,
+  earlyWithinGrace: 0,
+  lateMinutesTotal: 0,
+};
+
+interface EventAttendanceMonthsResponse {
+  months: string[];
+  current: string;
+  timezone: string;
+}
+
+/** Shared `:id` param validation for the event-attendance detail/delete routes — 400 on a non-numeric id, `null` on success so the caller can proceed. */
+function parseEventIdParam(id: string): number | null {
+  const numericId = Number(id);
+  return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+}
 
 interface EventSignupEntry {
   id: number;
@@ -58,17 +94,38 @@ interface EventAttendanceEntry {
   signups: EventSignupEntry[];
 }
 
-interface EventAttendancePageResponse {
-  events: EventAttendanceEntry[];
+interface EventAttendanceSummary {
+  id: number;
+  apolloEventId: string | null;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status: ApolloEventStatus;
+  trackingIncomplete: boolean;
+  messageUrl: string;
+  voiceChannelId: string | null;
+  counts: EventSignupCounts;
+}
+
+interface EventAttendanceListResponse {
+  mode: "month" | "all" | "problems";
+  /** Echoed "YYYY-MM" for mode "month"; null for "all"/"problems". */
+  month: string | null;
+  timezone: string;
+  events: EventAttendanceSummary[];
   total: number;
-  page: number;
-  pageSize: number;
+  truncated: boolean;
 }
 
 const LinkSignupBodySchema = z.object({ userId: z.string().nullable() });
 const ListQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).optional().default(1),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
   q: z.string().optional().default(""),
+  scope: z.enum(["month", "all"]).optional().default("month"),
+  problems: z.enum(["0", "1"]).optional().default("0"),
 });
 
 /** Dashboard visibility/control over Apollo event attendance tracking — see `apolloEventWatcher.ts`/`services/eventAttendance.ts`. */
@@ -127,17 +184,135 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
     };
   }
 
+  function serializeEventSummary(event: ApolloEvent, counts: EventSignupCounts): EventAttendanceSummary {
+    return {
+      id: event.id,
+      apolloEventId: event.apolloEventId,
+      title: event.title,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      status: event.status,
+      trackingIncomplete: event.trackingIncomplete,
+      messageUrl: `https://discord.com/channels/${config.guildId}/${event.channelId}/${event.messageId}`,
+      voiceChannelId: event.voiceChannelId,
+      counts,
+    };
+  }
+
+  /**
+   * `summarizeSignupsForEvents()` reads persisted DB columns directly, which
+   * are NOT settled for an event with status 'active' — that event's
+   * attendance is still being computed live via
+   * deriveAttendance()/serializeSignup(). At most one event is ever active at
+   * a time, so for that single event (if present in `events`) we tally
+   * counts in JS from `serializeSignup()`'s live-derived per-signup values
+   * instead of trusting the SQL aggregate.
+   */
+  function summarizeEvents(events: ApolloEvent[]): Map<number, EventSignupCounts> {
+    const activeEvent = events.find((event) => event.status === "active");
+    const staticIds = events.filter((event) => event.id !== activeEvent?.id).map((event) => event.id);
+    const result = summarizeSignupsForEvents(staticIds);
+
+    if (activeEvent) {
+      const signups = listSignups(activeEvent.id).map((signup) => serializeSignup(activeEvent, signup));
+      const counts: EventSignupCounts = { ...ZERO_SIGNUP_COUNTS, total: signups.length };
+      for (const signup of signups) {
+        if (signup.choice === "accepted") counts.accepted++;
+        else if (signup.choice === "tentative") counts.tentative++;
+        else if (signup.choice === "declined") counts.declined++;
+
+        if ((signup.matchSource === "unmatched" || signup.matchSource === "ambiguous") && !signup.withdrawnAt) {
+          counts.unresolved++;
+        }
+
+        switch (signup.attendanceStatus) {
+          case "on_time":
+            counts.onTime++;
+            if ((signup.lateMinutes ?? 0) > 0) counts.lateWithinGrace++;
+            break;
+          case "late":
+            counts.late++;
+            break;
+          case "no_show":
+            counts.noShow++;
+            break;
+          case "left_early":
+            counts.leftEarly++;
+            break;
+          case "not_tracked":
+            counts.notTracked++;
+            break;
+        }
+        if ((signup.earlyMinutes ?? 0) > 0 && signup.attendanceStatus !== "left_early") counts.earlyWithinGrace++;
+        counts.lateMinutesTotal += signup.lateMinutes ?? 0;
+      }
+      result.set(activeEvent.id, counts);
+    }
+
+    return result;
+  }
+
   app.get("/events/attendance", async (request, reply) => {
     const parsed = ListQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: z.prettifyError(parsed.error) });
+    const { q, scope, problems, month } = parsed.data;
 
-    const { events, total, page, pageSize } = listEventsPage({
-      page: parsed.data.page,
-      pageSize: EVENTS_PAGE_SIZE,
-      query: parsed.data.q,
-    });
-    const response: EventAttendancePageResponse = { events: events.map(serializeEvent), total, page, pageSize };
+    let mode: "month" | "all" | "problems";
+    let events: ApolloEvent[];
+    let resolvedMonth: string | null;
+
+    if (problems === "1") {
+      mode = "problems";
+      events = listEventsWithUnresolvedSignups({ query: q, limit: PROBLEMS_MODE_LIMIT });
+      resolvedMonth = null;
+    } else if (scope === "all") {
+      mode = "all";
+      events = listEventsAllMonths({ query: q, limit: PROBLEMS_MODE_LIMIT });
+      resolvedMonth = null;
+    } else {
+      mode = "month";
+      resolvedMonth = month ?? currentMonthKey(config.timezone);
+      const { fromIso, toIso } = monthRangeUtc(resolvedMonth, config.timezone);
+      events = listEventsInRange({ fromIso, toIso, query: q });
+    }
+
+    const counts = summarizeEvents(events);
+    const truncated = mode !== "month" && events.length === PROBLEMS_MODE_LIMIT;
+    const summaries = events.map((event) => serializeEventSummary(event, counts.get(event.id) ?? ZERO_SIGNUP_COUNTS));
+
+    const response: EventAttendanceListResponse = {
+      mode,
+      month: resolvedMonth,
+      timezone: config.timezone,
+      events: summaries,
+      total: summaries.length,
+      truncated,
+    };
     return response;
+  });
+
+  app.get("/events/attendance/months", async () => {
+    const months = new Set<string>();
+    for (const startsAt of listEventStartTimes()) {
+      months.add(monthKeyInTimezone(startsAt, config.timezone));
+    }
+    const response: EventAttendanceMonthsResponse = {
+      months: [...months].sort().reverse(),
+      current: currentMonthKey(config.timezone),
+      timezone: config.timezone,
+    };
+    return response;
+  });
+
+  app.get("/events/attendance/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const eventId = parseEventIdParam(id);
+    if (eventId === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
+
+    const event = getEventById(eventId);
+    if (!event) return reply.code(404).send({ error: "Event nicht gefunden." });
+
+    return serializeEvent({ ...event, signups: listSignups(eventId) });
   });
 
   app.patch("/events/attendance/signups/:signupId", async (request, reply) => {
@@ -175,7 +350,10 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
   /** Mainly a test-cleanup/mistake-recovery affordance — destroys the event's full attendance history, cascading via the FK. */
   app.delete("/events/attendance/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    deleteEvent(Number(id));
+    const eventId = parseEventIdParam(id);
+    if (eventId === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
+
+    deleteEvent(eventId);
     return reply.code(204).send();
   });
 }

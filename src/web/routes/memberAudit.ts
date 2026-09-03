@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { isCacheReady, getCachedMembers } from "../../services/memberCache.js";
 import { listAllMemberRecords } from "../../db/memberRecordsRepository.js";
-import { matchesSearch } from "../../services/memberSearch.js";
+import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT } from "../../constants.js";
 import type { MemberRecord } from "../../types.js";
 
@@ -42,9 +42,18 @@ export function registerMemberAuditRoutes(app: FastifyInstance): void {
 
     const records = new Map<string, MemberRecord>(listAllMemberRecords().map((r) => [r.userId, r]));
 
+    const inGuildNames = (member: { user: { username: string; globalName: string | null }; nickname: string | null; displayName: string }) => [
+      member.user.username,
+      member.user.globalName,
+      member.nickname,
+      member.displayName,
+    ];
+
     const inGuild: MemberAuditEntry[] = [...getCachedMembers().values()]
-      .filter((member) => matchesSearch(query, [member.user.username, member.user.globalName, member.nickname, member.displayName]))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .filter((member) => matchesSearch(query, inGuildNames(member)))
+      .sort((a, b) =>
+        query ? scoreMatch(query, inGuildNames(b)) - scoreMatch(query, inGuildNames(a)) : a.displayName.localeCompare(b.displayName),
+      )
       .slice(0, FIND_USER_LIST_LIMIT)
       .map((member) => {
         const record = records.get(member.id);
@@ -68,7 +77,11 @@ export function registerMemberAuditRoutes(app: FastifyInstance): void {
     const left: MemberAuditEntry[] = [...records.values()]
       .filter((r) => !r.inGuild)
       .filter((r) => matchesSearch(query, [r.username, r.displayName]))
-      .sort((a, b) => (b.leftAt ?? "").localeCompare(a.leftAt ?? ""))
+      .sort((a, b) =>
+        query
+          ? scoreMatch(query, [b.username, b.displayName]) - scoreMatch(query, [a.username, a.displayName])
+          : (b.leftAt ?? "").localeCompare(a.leftAt ?? ""),
+      )
       .slice(0, MEMBER_AUDIT_LEFT_LIMIT)
       .map((r) => ({
         userId: r.userId,

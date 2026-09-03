@@ -59,7 +59,7 @@ Computed per member from their voice-channel join/leave history for that event (
 
 ## Dashboard
 
-**Event-Anwesenheit** in the nav lists every detected event, newest first, each as its own card: title, time range, status, a link back to the original Apollo message, sign-up counts, and (once tracking has started) attendance counts. Below that, one row per signed-up member: their sign-up choice, their attendance outcome, join/leave timestamps, and — for an unmatched or ambiguous name — a picker to link it to the right member by hand. A search box and a "nur Probleme" filter narrow the view down to what needs attention.
+**Event-Anwesenheit** in the nav opens a list view: detected events as cards (title, time range, status, sign-up counts, and once tracking has started, attendance counts), grouped by calendar month. Prev/next arrows, a "Heute" button, and a direct month `<select>` move between months; a title search box scopes to the current month by default, with an "in allen Monaten suchen" escape hatch when nothing turns up there. Clicking a card opens that event's detail view — the full signup table (one row per signed-up member: sign-up choice, attendance outcome, join/leave timestamps, and — for an unmatched or ambiguous name — a picker to link it to the right member by hand), a name search and an outcome filter both scoped to just that event's already-loaded signups, a summary tally (including a "davon N leicht verspätet"/"leicht früher gegangen" breakdown for grace-period near-misses), and the event's delete action. The Overview page's "N Anmeldungen brauchen Zuordnung" link bypasses the month grouping entirely, landing on a global, server-side "nur Probleme" view of the list page that spans all months.
 
 ## Verifying against a real embed
 
