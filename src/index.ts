@@ -157,10 +157,13 @@ settingsBus.on(SettingsEvent.Settings, () => scheduleBirthdayCron(getSettings().
 // Keeps in-process command state (and, only if the definition set actually
 // changed, the Discord REST registration) in sync with `command_settings`
 // regardless of what wrote it — mirrors the birthday-cron listener above.
-// reloadCommands() is safe to call redundantly: pushCommandDefinitions()
-// (which it calls internally) is hash-gated and no-ops when the definition
-// set hasn't changed, so this firing alongside commands.ts's own direct
-// reloadCommands() call for the same save is harmless.
+// This is the ONLY caller of reloadCommands() for a dashboard command-toggle
+// save (src/web/routes/commands.ts deliberately does not also call it):
+// settingsBus.emit() invokes listeners synchronously but doesn't await them,
+// so if the route also called the full reloadCommands() itself, both calls
+// would run concurrently and could both reach pushCommandDefinitions()'s
+// hash check before either had written the new hash — a double Discord REST
+// push. Keeping this listener as the sole path avoids that race entirely.
 settingsBus.on(SettingsEvent.Commands, () => {
   reloadCommands(client, config).catch((err) =>
     logger.error(`Befehle konnten nach einer Einstellungsänderung nicht neu geladen werden: ${errorMessage(err)}`),
