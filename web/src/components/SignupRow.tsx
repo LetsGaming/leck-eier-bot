@@ -1,19 +1,19 @@
 import { useState } from "react";
 import SearchableSelect from "./SearchableSelect";
 import { formatAbsolute } from "../dateFormat";
-import type { EventAttendance, EventSignup, MemberAuditEntry } from "../types";
+import type { EventAttendance, EventSignup } from "../types";
 import { CHOICE_BADGE_CLASS, CHOICE_LABELS } from "../eventAttendanceLabels";
 import { LatenessCell, ResultCell } from "./AttendanceBadges";
 
 export default function SignupRow({
   signup,
   event,
-  members,
+  memberOptions,
   onLink,
 }: {
   signup: EventSignup;
   event: EventAttendance;
-  members: MemberAuditEntry[];
+  memberOptions: Array<{ value: string; label: string; hint: string }>;
   onLink: (userId: string | null) => Promise<void>;
 }) {
   const [linking, setLinking] = useState(false);
@@ -73,7 +73,7 @@ export default function SignupRow({
             onChange={handlePick}
             disabled={linking}
             placeholder="Mitglied zuordnen…"
-            options={members.map((m) => ({ value: m.userId, label: m.displayName, hint: `@${m.username}` }))}
+            options={memberOptions}
           />
         ) : signup.matchSource === "manual" ? (
           <button className="danger" disabled={linking} onClick={() => handlePick("")}>

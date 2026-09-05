@@ -71,6 +71,11 @@ export default function EventAttendanceDetailPage() {
     }
   }
 
+  const memberOptions = useMemo(
+    () => members.map((m) => ({ value: m.userId, label: m.displayName, hint: `@${m.username}` })),
+    [members],
+  );
+
   const tallies = useMemo(() => {
     if (!event) return null;
     const signups = event.signups;
@@ -216,7 +221,7 @@ export default function EventAttendanceDetailPage() {
                   key={signup.id}
                   signup={signup}
                   event={event}
-                  members={members}
+                  memberOptions={memberOptions}
                   onLink={(userId) => handleLink(signup.id, userId)}
                 />
               ))}
