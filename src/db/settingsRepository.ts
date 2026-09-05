@@ -191,3 +191,19 @@ export function setCommandOverride(name: string, override: CommandOverride): voi
   });
   settingsBus.emit(SettingsEvent.Commands);
 }
+
+const selectCommandDefinitionsHashStmt = db.prepare<[], { definitions_hash: string | null }>(
+  "SELECT definitions_hash FROM command_registration_state WHERE id = 1",
+);
+const updateCommandDefinitionsHashStmt = db.prepare<[string]>(
+  "UPDATE command_registration_state SET definitions_hash = ? WHERE id = 1",
+);
+
+/** Null means no successful Discord command-registration push has happened yet (fresh install, or upgraded from before this column existed). */
+export function getCommandDefinitionsHash(): string | null {
+  return selectCommandDefinitionsHashStmt.get()?.definitions_hash ?? null;
+}
+
+export function setCommandDefinitionsHash(hash: string): void {
+  updateCommandDefinitionsHashStmt.run(hash);
+}

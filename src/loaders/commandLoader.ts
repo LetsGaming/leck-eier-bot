@@ -1,9 +1,15 @@
 import path from "path";
+import { createHash } from "crypto";
 import { readdirSync, statSync } from "fs";
 import { fileURLToPath, pathToFileURL } from "url"; // Added pathToFileURL for safer imports
 import { REST, Routes } from "discord.js";
 import logger from "../utils/logger.js";
-import { getCommandOverride, type CommandOverride } from "../db/settingsRepository.js";
+import {
+  getCommandDefinitionsHash,
+  getCommandOverride,
+  setCommandDefinitionsHash,
+  type CommandOverride,
+} from "../db/settingsRepository.js";
 import { DISCORD_API_VERSION } from "../constants.js";
 import type { BotClient, Command, Config } from "../types.js";
 import type { CommandPermission } from "../constants.js";
@@ -82,18 +88,56 @@ export async function loadCommands(client: BotClient): Promise<void> {
 }
 
 /**
- * Re-walks the commands directory and re-registers with Discord. Used by the
- * dashboard's Commands page so toggling `enabled`/`guildOnly` takes effect
- * without a restart. Slash command *definitions* (name/description/options)
- * are only picked up from disk, so this does not support hot-reloading a
- * command's code — only its enabled/guildOnly override.
+ * Deterministic hash of the command definition set that would be sent to
+ * Discord, so repeated pushes of an unchanged set can be detected and
+ * skipped. Sorted by name first: `client.commands` iteration order follows
+ * `discoverCommands()`'s filesystem walk, which isn't guaranteed stable
+ * across platforms/filesystems, and an order-only difference must still hash
+ * identically or every boot would look like a "changed" definition set.
+ */
+function hashCommandDefinitions(definitions: unknown[]): string {
+  const sorted = [...definitions].sort((a, b) => {
+    const nameA = (a as { name?: string }).name ?? "";
+    const nameB = (b as { name?: string }).name ?? "";
+    return nameA.localeCompare(nameB);
+  });
+  return createHash("sha256").update(JSON.stringify(sorted)).digest("hex");
+}
+
+/**
+ * Pushes the current in-process `client.commands` definition set to Discord
+ * via the rate-limited `rest.put(Routes.applicationCommands(...))` endpoint
+ * — but only when that set has actually changed since the last successful
+ * push (tracked via `command_registration_state.definitions_hash`). Callers
+ * must call `loadCommands()` first; this only pushes what's already in
+ * `client.commands`, it doesn't (re)populate it.
+ */
+export async function pushCommandDefinitions(client: BotClient, config: Config): Promise<void> {
+  const definitions = [...client.commands.map((c) => c.data.toJSON())];
+  const hash = hashCommandDefinitions(definitions);
+
+  if (hash === getCommandDefinitionsHash()) {
+    logger.info("Command definitions unchanged since last push; skipping Discord registration.");
+    return;
+  }
+
+  const rest = new REST({ version: DISCORD_API_VERSION }).setToken(config.token);
+  await rest.put(Routes.applicationCommands(config.clientId), { body: definitions });
+  setCommandDefinitionsHash(hash);
+}
+
+/**
+ * Re-walks the commands directory, re-populates `client.commands`, and
+ * (only if the resulting definition set changed) re-registers with Discord.
+ * Used by the dashboard's Commands page so toggling `enabled`/`guildOnly`
+ * takes effect without a restart. Slash command *definitions*
+ * (name/description/options) are only picked up from disk, so this does not
+ * support hot-reloading a command's code — only its enabled/guildOnly
+ * override.
  */
 export async function reloadCommands(client: BotClient, config: Config): Promise<void> {
   await loadCommands(client);
-  const rest = new REST({ version: DISCORD_API_VERSION }).setToken(config.token);
-  await rest.put(Routes.applicationCommands(config.clientId), {
-    body: [...client.commands.map((c) => c.data.toJSON())],
-  });
+  await pushCommandDefinitions(client, config);
 }
 
 export interface CommandDefinition extends CommandOverride {

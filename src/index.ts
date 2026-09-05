@@ -3,8 +3,6 @@ import {
   Collection,
   GatewayIntentBits,
   Partials,
-  REST,
-  Routes,
   MessageFlags,
   type ChatInputCommandInteraction,
 } from "discord.js";
@@ -13,10 +11,10 @@ import logger, { errorMessage } from "./utils/logger.js";
 import { loadConfig } from "./config/index.js";
 import { isAdmin, isConfigGuild, isOwner } from "./utils/utils.js";
 import { createNoAdminEmbed } from "./utils/embedUtils.js";
-import { CommandPermission, DISCORD_API_VERSION } from "./constants.js";
+import { CommandPermission } from "./constants.js";
 
 // Loaders & Handlers
-import { loadCommands } from "./loaders/commandLoader.js";
+import { loadCommands, pushCommandDefinitions } from "./loaders/commandLoader.js";
 import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
@@ -197,11 +195,9 @@ client.on("interactionCreate", async (interaction) => {
   try {
     await loadCommands(client);
 
-    // Slash Registration
-    const rest = new REST({ version: DISCORD_API_VERSION }).setToken(config.token);
-    await rest.put(Routes.applicationCommands(config.clientId), {
-      body: [...client.commands.map((c) => c.data.toJSON())],
-    });
+    // Slash Registration — only actually pushed to Discord's rate-limited
+    // REST endpoint when the definition set changed since the last push.
+    await pushCommandDefinitions(client, config);
 
     // Event Modules
     registerMemberEvents(client);

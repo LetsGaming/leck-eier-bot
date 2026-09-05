@@ -663,6 +663,28 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX IF NOT EXISTS idx_apollo_events_starts_at ON apollo_events(starts_at);
     `);
   },
+  // v31: gates the rate-limited `rest.put(Routes.applicationCommands(...))`
+  // push (see loaders/commandLoader.ts's pushCommandDefinitions()) so it only
+  // runs when the serialized command definition set actually changed since
+  // the last successful push, instead of unconditionally on every boot and
+  // every dashboard Commands-page save. A dedicated singleton table (same
+  // `id INTEGER PRIMARY KEY CHECK (id = 1)` shape as `settings`) rather than
+  // a new column on `settings` — this is internal bookkeeping the dashboard
+  // never reads or edits, not a user-facing setting, so it doesn't belong in
+  // the `Settings` type/row that backs the dashboard's Settings page.
+  // `definitions_hash` starts NULL (no row ever pushed yet), so the very
+  // first push after upgrading always goes through.
+  (d) => {
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS command_registration_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        definitions_hash TEXT
+      );
+    `);
+    d.prepare(
+      "INSERT OR IGNORE INTO command_registration_state (id, definitions_hash) VALUES (1, NULL)",
+    ).run();
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;
