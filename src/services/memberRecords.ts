@@ -1,23 +1,26 @@
-import type { Collection, GuildMember } from "discord.js";
+import type { Collection, GuildMember, PartialGuildMember } from "discord.js";
+import { db } from "../db/index.js";
 import { recordLeave, recordRulesAccepted, updateProfile, upsertJoin } from "../db/memberRecordsRepository.js";
 import { getSettings } from "../db/settingsRepository.js";
 
-function displayNameOf(member: GuildMember): string {
+function displayNameOf(member: GuildMember | PartialGuildMember): string {
   return member.displayName || member.user.globalName || member.user.username;
 }
 
 /** Backfills `joined_at` for everyone currently in the guild — called once at every startup, right after the member cache is populated. Discord still exposes a current member's join date regardless of when the bot started tracking, so this is safe to re-run on every boot. */
-export function seedMemberRecordsFromCache(members: Collection<string, GuildMember>): void {
-  for (const member of members.values()) {
-    upsertJoin({
-      userId: member.id,
-      username: member.user.username,
-      displayName: displayNameOf(member),
-      avatar: member.user.avatar,
-      joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
-    });
-  }
-}
+export const seedMemberRecordsFromCache = db.transaction(
+  (members: Collection<string, GuildMember>): void => {
+    for (const member of members.values()) {
+      upsertJoin({
+        userId: member.id,
+        username: member.user.username,
+        displayName: displayNameOf(member),
+        avatar: member.user.avatar,
+        joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
+      });
+    }
+  },
+);
 
 export function recordMemberJoin(member: GuildMember): void {
   upsertJoin({
@@ -29,12 +32,24 @@ export function recordMemberJoin(member: GuildMember): void {
   });
 }
 
-export function recordMemberProfileUpdate(member: GuildMember): void {
+export function recordMemberProfileUpdate(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember | PartialGuildMember): void {
+  // If we don't have full old member data, can't reliably compare.
+  // Fall back to unconditional write to ensure we have the latest data.
+  const shouldWrite =
+    oldMember.partial ||
+    oldMember.user.username !== newMember.user.username ||
+    displayNameOf(oldMember) !== displayNameOf(newMember) ||
+    oldMember.user.avatar !== newMember.user.avatar;
+
+  if (!shouldWrite) {
+    return;
+  }
+
   updateProfile({
-    userId: member.id,
-    username: member.user.username,
-    displayName: displayNameOf(member),
-    avatar: member.user.avatar,
+    userId: newMember.id,
+    username: newMember.user.username,
+    displayName: displayNameOf(newMember),
+    avatar: newMember.user.avatar,
   });
 }
 

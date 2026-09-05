@@ -4,7 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { renderBirthdayTemplate, syncAnchorMessage } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
-import type { BotClient } from "../../types.js";
+import type { BotClient, Settings } from "../../types.js";
+import { pickDefined } from "../utils.js";
 
 const PatchBodySchema = z.object({
   template: z.string().min(1).max(2000).optional(),
@@ -54,16 +55,18 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
     // updateSettings emits SettingsEvent.Settings, which src/index.ts listens
     // on to reschedule the cron job if birthdayCron changed — nothing else
     // to do here for this to take effect live.
-    const settings = updateSettings({
-      ...(template !== undefined && { birthdayTemplate: template }),
-      ...(channelId !== undefined && { birthdayListChannelId: channelId }),
-      ...(cronExpression !== undefined && { birthdayCron: cronExpression }),
-      ...(modChannelId !== undefined && { birthdayModChannelId: modChannelId }),
-      ...(anchorTemplate !== undefined && { birthdayAnchorTemplate: anchorTemplate }),
-      ...(anchorIntro !== undefined && { birthdayAnchorIntro: anchorIntro || null }),
-      ...(anchorUseFont !== undefined && { birthdayAnchorUseFont: anchorUseFont }),
-      ...(announcementUseFont !== undefined && { birthdayAnnouncementUseFont: announcementUseFont }),
-    });
+    const settings = updateSettings(
+      pickDefined<Settings>({
+        birthdayTemplate: template,
+        birthdayListChannelId: channelId,
+        birthdayCron: cronExpression,
+        birthdayModChannelId: modChannelId,
+        birthdayAnchorTemplate: anchorTemplate,
+        birthdayAnchorIntro: anchorIntro !== undefined ? anchorIntro || null : undefined,
+        birthdayAnchorUseFont: anchorUseFont,
+        birthdayAnnouncementUseFont: announcementUseFont,
+      }),
+    );
 
     // Bring the anchor message up to date immediately (e.g. the channel,
     // template, or font just changed) rather than waiting for the next

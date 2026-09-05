@@ -29,7 +29,7 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       registerReactionRolePanelRoutes(api, client);
       registerBirthdaySettingsRoutes(api, client);
       registerBirthdaysRoutes(api, client);
-      registerCommandRoutes(api, client, config);
+      registerCommandRoutes(api);
       registerGeneralSettingsRoutes(api);
     },
     { prefix: "/api" },

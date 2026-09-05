@@ -3,6 +3,15 @@ import { z } from "zod";
 import logger from "../utils/logger.js";
 import { EnvSchema, type Config } from "./schema.js";
 
+// Safe to import logger here: logger.ts reads its own LOG_DIR/LOG_LEVEL
+// directly from process.env (with the same default expressions EnvSchema
+// documents) instead of calling loadConfig(), specifically so it has no
+// dependency on this module and can't form an import cycle with it. That
+// also means the fail-fast errors/warnings below reach the real winston
+// logger — persisted to the rotated error-*.log/combined-*.log files, not
+// just stdout — even though they're emitted from inside config validation
+// itself. See the comment in logger.ts for the full reasoning.
+
 let cachedConfig: Config | null = null;
 
 /**
