@@ -8,8 +8,8 @@ function displayNameOf(member: GuildMember): string {
 }
 
 /** Backfills `joined_at` for everyone currently in the guild — called once at every startup, right after the member cache is populated. Discord still exposes a current member's join date regardless of when the bot started tracking, so this is safe to re-run on every boot. */
-export function seedMemberRecordsFromCache(members: Collection<string, GuildMember>): void {
-  db.transaction(() => {
+export const seedMemberRecordsFromCache = db.transaction(
+  (members: Collection<string, GuildMember>): void => {
     for (const member of members.values()) {
       upsertJoin({
         userId: member.id,
@@ -19,8 +19,8 @@ export function seedMemberRecordsFromCache(members: Collection<string, GuildMemb
         joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
       });
     }
-  })();
-}
+  },
+);
 
 export function recordMemberJoin(member: GuildMember): void {
   upsertJoin({
