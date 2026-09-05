@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { listRegistrations } from "../../db/memberRecordsRepository.js";
 import { getCachedMembers } from "../../services/memberCache.js";
-import { removeRegistration } from "../../events/registerWatcher.js";
+import { removeRegistration, completeRegistration } from "../../events/registerWatcher.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { getSettings } from "../../db/settingsRepository.js";
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
@@ -88,10 +88,16 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
 
   // Grants the configured tier role directly from the dashboard — the same
   // action staff previously had to perform by hand in Discord. Granting the
-  // role fires the bot's own `guildMemberUpdate` handling
-  // (stripRegisterGateRoleIfJustRegistered in memberEvents.ts), which
-  // completes the registration (deletes the thread, flips DB status) as a
-  // side effect — this route only needs to add the role, never touch the DB.
+  // role also fires the bot's own `guildMemberUpdate` handling
+  // (stripRegisterGateRoleIfJustRegistered in memberEvents.ts), but that
+  // gateway event is async and can be delayed/missed — so this route calls
+  // completeRegistration() itself right after the role grant succeeds,
+  // rather than relying solely on the gateway event to flip the DB status
+  // and clean up the thread. completeRegistration() is idempotent (its DB
+  // update is a no-op once status is no longer 'pending', and it only
+  // attempts to delete the thread while status is still 'pending'), so it's
+  // safe if the gateway handler's own call also fires for this same
+  // registration afterward.
   app.post("/members/registrations/:userId/approve", async (request, reply) => {
     const { userId } = request.params as { userId: string };
     const { registrationTierRoleId } = getSettings();
@@ -112,6 +118,15 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
     } catch (err) {
       logger.warn(`Registrierung für ${userId} konnte nicht über das Dashboard genehmigt werden: ${errorMessage(err)}`);
       return reply.code(502).send({ error: "Die Rolle konnte nicht vergeben werden. Ist der Bot berechtigt?" });
+    }
+
+    try {
+      await completeRegistration(client, userId);
+    } catch (err) {
+      // The role was already granted — don't fail the request over this.
+      // The guildMemberUpdate gateway handler in memberEvents.ts still runs
+      // as a fallback and will complete the registration if this failed.
+      logger.warn(`Registrierung für ${userId} konnte nach Rollenvergabe nicht sofort abgeschlossen werden: ${errorMessage(err)}`);
     }
 
     return reply.code(204).send();
