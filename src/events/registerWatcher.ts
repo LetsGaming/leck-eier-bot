@@ -10,6 +10,7 @@ import {
   listExpiredRegisterThreads,
   clearExpiredRegisterThread,
 } from "../db/memberRecordsRepository.js";
+import { sweepExpiredSessions } from "../db/sessionsRepository.js";
 import {
   REGISTER_FORM_NAME_REGEX,
   REGISTER_FORM_SSO_NAME_REGEX,
@@ -201,6 +202,12 @@ export default function registerRegisterWatcher(client: BotClient): void {
     sweepExpiredRegisterThreads(client).catch((err) =>
       logger.error(`Bereinigung abgelaufener Registrierungs-Threads fehlgeschlagen: ${errorMessage(err)}`),
     );
+    // Piggybacked on this interval rather than given its own timer: a
+    // long-lived process only otherwise sweeps expired dashboard sessions
+    // once, at web server startup (see web/server.ts), so an abandoned
+    // session (cookie never returns) would sit in web_sessions until the
+    // next restart. Cheap synchronous delete — fine to run every tick here.
+    sweepExpiredSessions();
   }, REGISTER_THREAD_SWEEP_INTERVAL_MS);
 }
 

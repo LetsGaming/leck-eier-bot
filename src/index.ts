@@ -14,7 +14,7 @@ import { createNoAdminEmbed } from "./utils/embedUtils.js";
 import { CommandPermission } from "./constants.js";
 
 // Loaders & Handlers
-import { loadCommands, pushCommandDefinitions } from "./loaders/commandLoader.js";
+import { loadCommands, pushCommandDefinitions, reloadCommands } from "./loaders/commandLoader.js";
 import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
@@ -153,6 +153,19 @@ function scheduleBirthdayCron(cronExpression: string): void {
 
 scheduleBirthdayCron(getSettings().birthdayCron);
 settingsBus.on(SettingsEvent.Settings, () => scheduleBirthdayCron(getSettings().birthdayCron));
+
+// Keeps in-process command state (and, only if the definition set actually
+// changed, the Discord REST registration) in sync with `command_settings`
+// regardless of what wrote it — mirrors the birthday-cron listener above.
+// reloadCommands() is safe to call redundantly: pushCommandDefinitions()
+// (which it calls internally) is hash-gated and no-ops when the definition
+// set hasn't changed, so this firing alongside commands.ts's own direct
+// reloadCommands() call for the same save is harmless.
+settingsBus.on(SettingsEvent.Commands, () => {
+  reloadCommands(client, config).catch((err) =>
+    logger.error(`Befehle konnten nach einer Einstellungsänderung nicht neu geladen werden: ${errorMessage(err)}`),
+  );
+});
 
 // 2. Interaction Handler
 client.on("interactionCreate", async (interaction) => {
