@@ -115,9 +115,32 @@ const updateStmt = db.prepare<{
    WHERE id = 1`,
 );
 
+// --- Settings cache ----------------------------------------------------
+// getSettings() is called unconditionally on every Discord message by
+// multiple event handlers (birthdayWatcher, registerWatcher, ...) before
+// those handlers even check relevance, so it's worth avoiding a SQLite
+// read on every call. Populated lazily and invalidated on
+// SettingsEvent.Settings, which updateSettings() below emits on every
+// write to the `settings` row — the only source getSettings() reads from.
+//
+// INVARIANT: this is the one safe way to cache settings in this codebase.
+// getSettings()'s result must always be either read fresh from the DB, or
+// served from a cache that is invalidated via settingsBus on every write
+// path that can change what it returns. Do NOT add or extend caching
+// (here or anywhere else that wraps getSettings()) without wiring up an
+// equivalent settingsBus invalidation — an uninvalidated cache would
+// silently serve stale settings, which is exactly the failure mode this
+// cache is designed to avoid.
+let settingsCache: Settings | null = null;
+
+settingsBus.on(SettingsEvent.Settings, () => {
+  settingsCache = null;
+});
+
 /** The settings row is seeded on startup (see src/db/index.ts), so this is always present. */
 export function getSettings(): Settings {
-  return rowToSettings(selectStmt.get()!);
+  settingsCache ??= rowToSettings(selectStmt.get()!);
+  return settingsCache;
 }
 
 export function updateSettings(patch: Partial<Settings>): Settings {
