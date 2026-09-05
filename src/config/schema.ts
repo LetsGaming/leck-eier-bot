@@ -91,8 +91,10 @@ export interface Config {
   web?: WebConfig;
   /** See {@link EnvSchema}'s DEV_MOCK_DISCORD. Always `false` outside of deliberate local dev use. */
   devMockDiscord: boolean;
-  /** Absolute/relative directory for rotated log files — see {@link EnvSchema}'s LOG_DIR. */
-  logDir: string;
-  /** winston log level — see {@link EnvSchema}'s LOG_LEVEL. */
-  logLevel: string;
+  // Deliberately no logDir/logLevel here: EnvSchema validates and
+  // `.env.example` documents LOG_DIR/LOG_LEVEL, but nothing reads them via
+  // Config — src/utils/logger.ts reads process.env directly (its own
+  // dotenv-aware read, done that way specifically to avoid an import cycle
+  // with this module; see the comments in both files), so surfacing them
+  // here too would just be a second, unused, out-of-sync copy.
 }

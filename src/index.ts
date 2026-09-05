@@ -115,14 +115,20 @@ const client = new Client({
   // before this process started) still fire messageReactionAdd/Remove
   // instead of being silently dropped — see docs/REACTION_ROLES.md.
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
-  // By default discord.js caches every message it ever sees per channel,
-  // forever. This bot's own message-history consumers (birthdayWatcher.ts,
+  // discord.js v14 already bounds MessageManager to 200 per channel by
+  // default (Options.DefaultMakeCacheSettings === { MessageManager: 200 }).
+  // This bot's own message-history consumers (birthdayWatcher.ts,
   // registerWatcher.ts) only ever act on the live messageCreate/messageUpdate
   // event they're handed, and messageCleanup.ts's /clear and /cleardm always
   // page through channel.messages.fetch() directly rather than reading from
-  // the cache — so nothing here needs unbounded history. 200 per channel is
-  // far more than any of that needs, while still bounding memory growth.
-  makeCache: Options.cacheWithLimits({ MessageManager: 200 }),
+  // the cache — so nothing here needs more than that default. This line
+  // exists to make that limit explicit/intentional rather than relying on an
+  // implicit library default. Options.cacheWithLimits() does NOT merge its
+  // argument with the library defaults — passing a bare object opts every
+  // *other* manager out of its own default limit — so we spread
+  // DefaultMakeCacheSettings in first to keep every other manager's real
+  // default bound intact.
+  makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 200 }),
 }) as BotClient;
 
 client.commands = new Collection();
@@ -167,16 +173,25 @@ settingsBus.on(SettingsEvent.Settings, () => scheduleBirthdayCron(getSettings().
 // changed, the Discord REST registration) in sync with `command_settings`
 // regardless of what wrote it — mirrors the birthday-cron listener above.
 // This is the ONLY caller of reloadCommands() for a dashboard command-toggle
-// save (src/web/routes/commands.ts deliberately does not also call it):
-// settingsBus.emit() invokes listeners synchronously but doesn't await them,
-// so if the route also called the full reloadCommands() itself, both calls
-// would run concurrently and could both reach pushCommandDefinitions()'s
-// hash check before either had written the new hash — a double Discord REST
-// push. Keeping this listener as the sole path avoids that race entirely.
+// save (src/web/routes/commands.ts deliberately does not also call it).
+// That alone isn't sufficient, though: settingsBus.emit() invokes listeners
+// synchronously but doesn't await them, so two SettingsEvent.Commands
+// emissions in quick succession (e.g. two rapid toggle saves) would each
+// kick off this listener, and both resulting reloadCommands() calls could
+// run concurrently — interleaving inside loadCommands()'s
+// client.commands.clear() + await discoverCommands() (a transient window
+// where an in-flight interaction could see "command not found"), and both
+// reaching pushCommandDefinitions()'s hash check before either had written
+// the new hash (a double Discord REST push). `pending` below chains every
+// call onto the previous one's settled promise, so at most one
+// reloadCommands() ever runs at a time and a second call made while one is
+// in-flight simply waits for it to finish — closing both windows, not just
+// narrowing them.
+let pending: Promise<void> = Promise.resolve();
 settingsBus.on(SettingsEvent.Commands, () => {
-  reloadCommands(client, config).catch((err) =>
-    logger.error(`Befehle konnten nach einer Einstellungsänderung nicht neu geladen werden: ${errorMessage(err)}`),
-  );
+  pending = pending.then(() => reloadCommands(client, config)).catch((err) => {
+    logger.error(`Befehle konnten nach einer Einstellungsänderung nicht neu geladen werden: ${errorMessage(err)}`);
+  });
 });
 
 // 2. Interaction Handler

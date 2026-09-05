@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { renderBirthdayTemplate, syncAnchorMessage } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
-import type { BotClient } from "../../types.js";
+import type { BotClient, Settings } from "../../types.js";
 import { pickDefined } from "../utils.js";
 
 const PatchBodySchema = z.object({
@@ -56,7 +56,7 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
     // on to reschedule the cron job if birthdayCron changed — nothing else
     // to do here for this to take effect live.
     const settings = updateSettings(
-      pickDefined({
+      pickDefined<Settings>({
         birthdayTemplate: template,
         birthdayListChannelId: channelId,
         birthdayCron: cronExpression,

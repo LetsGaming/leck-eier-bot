@@ -65,7 +65,7 @@ If you add or rename an env var, update `src/config/schema.ts` first (including 
 
 ## Logging variables
 
-These are optional and only affect logging (see [ARCHITECTURE.md](ARCHITECTURE.md#logging) for details) — they're read directly from `process.env`, not part of the validated schema above, so they work the same whether set via `.env` or the real environment:
+These are optional and only affect logging (see [ARCHITECTURE.md](ARCHITECTURE.md#logging) for details). They ARE part of `EnvSchema` (validated and included in `.env.example`), but `src/utils/logger.ts` reads them directly from `process.env` rather than through `loadConfig()`'s `Config` result — this is deliberate, to avoid an import cycle between the logger and `config/index.ts` (see the comment at the top of `logger.ts`). `logger.ts` imports `dotenv/config` itself for this reason, so `.env` and the real environment are merged the same way loadConfig() does it (a real env var always wins over `.env`) — these work identically whether set via `.env` or the real environment:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

@@ -1,4 +1,3 @@
-import path from "path";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 import logger from "../utils/logger.js";
@@ -115,8 +114,6 @@ export function loadConfig(): Config {
     timezone,
     web,
     devMockDiscord,
-    logDir: env.LOG_DIR || path.join(process.cwd(), "..", "logs"),
-    logLevel: env.LOG_LEVEL || "info",
   };
   return cachedConfig;
 }

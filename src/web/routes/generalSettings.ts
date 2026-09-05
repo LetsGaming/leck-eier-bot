@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { isValidFontMap } from "../../utils/font.js";
 import { pickDefined } from "../utils.js";
+import type { Settings } from "../../types.js";
 
 const PatchBodySchema = z.object({
   leaveNotificationsEnabled: z.boolean().optional(),
@@ -67,7 +68,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
     }
 
     const settings = updateSettings(
-      pickDefined({
+      pickDefined<Settings>({
         leaveNotificationsEnabled,
         fontMap: fontMap !== undefined ? fontMap || null : undefined,
         registerGateRoleId: registerGateRoleId !== undefined ? registerGateRoleId || null : undefined,

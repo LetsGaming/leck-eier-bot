@@ -1,3 +1,4 @@
+import "dotenv/config";
 import path from "path";
 import fs from "fs";
 import { createLogger, format, transports } from "winston";
@@ -6,7 +7,7 @@ import { LOG_MAX_FILE_SIZE, LOG_RETENTION_DAYS } from "../constants.js";
 
 const { combine, printf, timestamp, colorize, errors, splat } = format;
 
-// 1. LOG_DIR/LOG_LEVEL are also declared on EnvSchema/Config (see
+// 1. LOG_DIR/LOG_LEVEL are also declared on EnvSchema (see
 // src/config/schema.ts) so they're documented/typed/`.env.example`d like
 // every other config value, but this module deliberately does NOT call
 // loadConfig() to get them: loadConfig() also runs the fail-fast checks for
@@ -21,7 +22,15 @@ const { combine, printf, timestamp, colorize, errors, splat } = format;
 // reach the persisted, rotated error/combined log files at all, only
 // whatever raw console fallback replaced it. So: read these two values
 // directly with the same default expressions the schema documents, kept in
-// sync manually (two primitives, not worth a shared helper).
+// sync manually (two primitives, not worth a shared helper). The
+// `import "dotenv/config"` above merges `.env` into `process.env` right here
+// (dotenv never overwrites a variable that's already set, so a real env var
+// injected by Docker/systemd still wins) — without it, this module reads
+// process.env before config/index.ts's own `loadDotenv()` call ever runs,
+// since src/index.ts imports this file first, so a LOG_DIR/LOG_LEVEL set
+// only in `.env` would be silently ignored. This does NOT import
+// config/index.ts (or anything that does), so no import cycle is
+// introduced — see config/index.ts's comment for the other half of this.
 const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "..", "logs");
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
