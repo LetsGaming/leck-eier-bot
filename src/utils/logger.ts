@@ -3,12 +3,18 @@ import fs from "fs";
 import { createLogger, format, transports } from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 import { LOG_MAX_FILE_SIZE, LOG_RETENTION_DAYS } from "../constants.js";
+import { loadConfig } from "../config/index.js";
 
 const { combine, printf, timestamp, colorize, errors, splat } = format;
 
-// 1. Use environment variables for flexibility
-const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "..", "logs");
-const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+// 1. Sourced from the validated config (see src/config/schema.ts's LOG_DIR/
+// LOG_LEVEL) rather than reading process.env directly, matching every other
+// module's config access. Safe to call at this module's top level even
+// though most call sites import `logger` before ever importing
+// `../config/index.js` directly: config/index.ts doesn't import this file
+// (see the comment there), so there's no import cycle, and loadConfig()
+// caches its result so this doesn't re-run env validation later.
+const { logDir: LOG_DIR, logLevel: LOG_LEVEL } = loadConfig();
 
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });

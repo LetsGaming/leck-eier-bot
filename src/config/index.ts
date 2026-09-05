@@ -1,7 +1,16 @@
+import path from "path";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
-import logger from "../utils/logger.js";
 import { EnvSchema, type Config } from "./schema.js";
+
+// Deliberately not importing ../utils/logger.js here: the logger itself
+// gets its LOG_DIR/LOG_LEVEL from loadConfig() (see logger.ts), so importing
+// logger from this module would form an import cycle where logger.ts's
+// module-init call into loadConfig() re-enters logger.ts before its default
+// export is assigned. These are also bootstrap-time failures (env is
+// invalid, or required Discord credentials are missing) that by definition
+// happen before a real logger can be constructed from this same config, so
+// console output is the right fallback anyway.
 
 let cachedConfig: Config | null = null;
 
@@ -23,7 +32,7 @@ export function loadConfig(): Config {
   if (!parsed.success) {
     const issues = z.prettifyError(parsed.error);
     const message = `❌ Environment configuration is invalid:\n${issues}\n\nCopy .env.example to .env and fill in real values (see docs/CONFIGURATION.md).`;
-    logger.error(message);
+    console.error(message);
     throw new Error(message);
   }
   const env = parsed.data;
@@ -42,11 +51,11 @@ export function loadConfig(): Config {
       .map(([name]) => name);
     if (missing.length > 0) {
       const message = `❌ Missing required environment variable(s): ${missing.join(", ")}.\n\nCopy .env.example to .env and fill in real values (see docs/CONFIGURATION.md), or set DEV_MOCK_DISCORD=true for a no-credentials local dashboard build.`;
-      logger.error(message);
+      console.error(message);
       throw new Error(message);
     }
   } else {
-    logger.warn(
+    console.warn(
       "DEV_MOCK_DISCORD=true — running with a synthetic Discord guild/session, no real bot login or OAuth. Never use this in production.",
     );
   }
@@ -59,7 +68,7 @@ export function loadConfig(): Config {
     Intl.DateTimeFormat(undefined, { timeZone: timezone });
   } catch {
     const message = `❌ TIMEZONE "${timezone}" is not a recognized IANA timezone name (e.g. "Europe/Berlin").`;
-    logger.error(message);
+    console.error(message);
     throw new Error(message);
   }
 
@@ -91,7 +100,7 @@ export function loadConfig(): Config {
       clientSecret: env.DISCORD_CLIENT_SECRET ?? "dev-mock-client-secret",
     };
   } else if (webRequested) {
-    logger.warn(
+    console.warn(
       "Dashboard not starting: WEB_PUBLIC_URLS, WEB_SESSION_SECRET, and DISCORD_CLIENT_SECRET must all be set. " +
         "Set WEB_ENABLED=false to silence this warning if you don't want the dashboard.",
     );
@@ -105,6 +114,8 @@ export function loadConfig(): Config {
     timezone,
     web,
     devMockDiscord,
+    logDir: env.LOG_DIR || path.join(process.cwd(), "..", "logs"),
+    logLevel: env.LOG_LEVEL || "info",
   };
   return cachedConfig;
 }

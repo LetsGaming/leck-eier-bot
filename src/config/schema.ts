@@ -56,6 +56,18 @@ export const EnvSchema = z.object({
   WEB_SESSION_SECRET: z.string().min(32).describe("RANDOM_STRING_AT_LEAST_32_CHARS_LONG").optional(),
   /** Discord application's OAuth2 client secret — used for the dashboard login's code exchange. */
   DISCORD_CLIENT_SECRET: z.string().min(1).describe("YOUR_APPLICATION_SECRET").optional(),
+
+  /**
+   * Directory winston writes rotated log files to (error/combined/exceptions/
+   * rejections logs — see src/utils/logger.ts). Defaults to `../logs`
+   * relative to the process cwd if unset; created on startup if missing.
+   */
+  LOG_DIR: z.string().min(1).describe("../logs").optional(),
+  /**
+   * winston log level (e.g. "error", "warn", "info", "debug") controlling
+   * both console and file output verbosity. Defaults to "info" if unset.
+   */
+  LOG_LEVEL: z.string().min(1).describe("info").optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -79,4 +91,8 @@ export interface Config {
   web?: WebConfig;
   /** See {@link EnvSchema}'s DEV_MOCK_DISCORD. Always `false` outside of deliberate local dev use. */
   devMockDiscord: boolean;
+  /** Absolute/relative directory for rotated log files — see {@link EnvSchema}'s LOG_DIR. */
+  logDir: string;
+  /** winston log level — see {@link EnvSchema}'s LOG_LEVEL. */
+  logLevel: string;
 }

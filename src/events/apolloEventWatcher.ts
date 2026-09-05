@@ -18,10 +18,11 @@ import type { BotClient } from "../types.js";
 
 // Opt-in raw-embed logging for validating/fixing the parser against a real
 // Apollo message — see docs/EVENT_ATTENDANCE.md#verifying-against-a-real-embed.
-// A plain env var (like LOG_DIR/LOG_LEVEL — see CONFIGURATION.md), not part
-// of the validated bootstrap schema, since it's a debug toggle rather than a
-// value the app needs to start: `LOG_APOLLO_EMBEDS=true` in `.env`, restart,
-// no code edit required.
+// Deliberately left as a plain env var rather than folded into the validated
+// EnvSchema/Config (see src/config/schema.ts): it's a niche debug-only
+// toggle, not a value the app needs to start, so it doesn't need fail-fast
+// validation or to show up in `.env.example` — `LOG_APOLLO_EMBEDS=true` in
+// `.env`, restart, no code edit required.
 const LOG_APOLLO_EMBEDS = process.env.LOG_APOLLO_EMBEDS === "true";
 
 async function tryHandleApolloMessage(client: BotClient, message: Message | PartialMessage): Promise<void> {
