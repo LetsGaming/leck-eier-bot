@@ -157,46 +157,51 @@ export const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 export const LOG_RETENTION_DAYS = "14d";
 export const LOG_MAX_FILE_SIZE = "20m";
 
-export enum EmbedColor {
-  Default = 0x00bfff,
-  Success = 0x55ff55,
-  Error = 0xff5555,
-  Info = 0x3498db,
-}
+export const EmbedColor = {
+  Default: 0x00bfff,
+  Success: 0x55ff55,
+  Error: 0xff5555,
+  Info: 0x3498db,
+} as const;
+export type EmbedColor = (typeof EmbedColor)[keyof typeof EmbedColor];
 
-export enum CommandPermission {
+export const CommandPermission = {
   /** Anyone can use the command. */
-  None = "none",
+  None: "none",
   /** Bot owner or a member with Administrator permission. */
-  Admin = "admin",
+  Admin: "admin",
   /** Bot owner only. */
-  Owner = "owner",
-}
+  Owner: "owner",
+} as const;
+export type CommandPermission = (typeof CommandPermission)[keyof typeof CommandPermission];
 
-export enum CommandName {
-  CheckBirthday = "checkbirthday",
-  ClearBirthdayChannel = "clearbirthdaychannel",
-  SetBirthdayMessage = "setbirthdaymessage",
-  TestBirthdayMessage = "testbirthdaymessage",
-  SetMyBirthday = "setmybirthday",
-  ClearDm = "cleardm",
-  Clear = "clear",
-  FindUser = "finduser",
-  ReactionRoles = "reactionroles",
-}
+export const CommandName = {
+  CheckBirthday: "checkbirthday",
+  ClearBirthdayChannel: "clearbirthdaychannel",
+  SetBirthdayMessage: "setbirthdaymessage",
+  TestBirthdayMessage: "testbirthdaymessage",
+  SetMyBirthday: "setmybirthday",
+  ClearDm: "cleardm",
+  Clear: "clear",
+  FindUser: "finduser",
+  ReactionRoles: "reactionroles",
+} as const;
+export type CommandName = (typeof CommandName)[keyof typeof CommandName];
 
 /** How members interact with a panel to pick roles. See docs/REACTION_ROLES.md. Immutable after a panel is created. */
-export enum SelectionType {
-  Reactions = "reactions",
-  Buttons = "buttons",
-  Dropdown = "dropdown",
-}
+export const SelectionType = {
+  Reactions: "reactions",
+  Buttons: "buttons",
+  Dropdown: "dropdown",
+} as const;
+export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
 
 /** Only meaningful for a `managed` panel — an unmanaged (attached-to-existing-message) panel never touches message content. */
-export enum PanelMessageType {
-  Text = "text",
-  Embed = "embed",
-}
+export const PanelMessageType = {
+  Text: "text",
+  Embed: "embed",
+} as const;
+export type PanelMessageType = (typeof PanelMessageType)[keyof typeof PanelMessageType];
 
 /** Discord hard caps: 5 buttons per action row, 5 rows per message. */
 export const MAX_BUTTONS_PER_PANEL = 25;
