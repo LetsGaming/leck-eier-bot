@@ -6,7 +6,8 @@ import {
   type Message,
 } from "discord.js";
 import logger, { errorMessage } from "../../utils/logger.js";
-import { CommandName, CommandPermission, DISCORD_FETCH_PAGE_SIZE, DM_DELETE_DELAY_MS } from "../../constants.js";
+import { CommandName, CommandPermission, DM_DELETE_DELAY_MS } from "../../constants.js";
+import { bulkDeleteWithPagination } from "../../services/messageCleanup.js";
 
 export const permission = CommandPermission.Owner;
 
@@ -37,54 +38,34 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const dmChannel = await interaction.user.createDM();
 
   try {
-    let allBotMessages: Message[] = [];
-    let lastId: string | undefined = undefined;
-    let fetching = true;
+    // Collects bot-authored messages (up to `amount`, or all of them) before
+    // deleting anything, so the optional backup below is built from the
+    // untouched messages and a fetch failure aborts before any deletion.
+    const matchedMessages: Message[] = [];
 
-    // 1. Fetching Logic
-    while (fetching) {
-      const options: { limit: number; before?: string } = { limit: DISCORD_FETCH_PAGE_SIZE };
-      if (lastId) options.before = lastId;
+    const { deletedCount } = await bulkDeleteWithPagination(dmChannel, {
+      amount: amount ?? Infinity,
+      amountMode: "matched",
+      delayMs: DM_DELETE_DELAY_MS,
+      delayOnFailure: false,
+      filter: (m) => m.author.id === interaction.client.user.id,
+      onCandidate: (msg) => matchedMessages.push(msg),
+    });
 
-      const fetched = await dmChannel.messages.fetch(options);
-      if (fetched.size === 0) {
-        fetching = false;
-        break;
-      }
-
-      // Filter only bot messages
-      const batch = fetched.filter(
-        (m) => m.author.id === interaction.client.user.id,
-      );
-
-      allBotMessages.push(...batch.values());
-      lastId = fetched.last()!.id;
-
-      // Stop if we hit the end of history or if we already have enough messages (if amount set)
-      if (fetched.size < DISCORD_FETCH_PAGE_SIZE || (amount && allBotMessages.length >= amount)) {
-        fetching = false;
-      }
-    }
-
-    // 2. Apply limit if specified
-    if (amount && allBotMessages.length > amount) {
-      allBotMessages = allBotMessages.slice(0, amount);
-    }
-
-    if (allBotMessages.length === 0) {
+    if (matchedMessages.length === 0) {
       return interaction.editReply({
         content: "ℹ️ Keine Bot-Nachrichten zum Löschen gefunden.",
       });
     }
 
-    // 3. Optional Backup
+    // Optional Backup
     let logContent = `DM CLEAR LOG\n`;
     logContent += `Exported: ${new Date().toLocaleString("de-DE")}\n`;
     logContent += `By: ${interaction.user.username} (${interaction.user.id})\n`;
     logContent += `----------------------------------\n\n`;
 
     if (shouldSave) {
-      [...allBotMessages].reverse().forEach((msg) => {
+      [...matchedMessages].reverse().forEach((msg) => {
         logContent += `[${msg.createdAt.toLocaleString("de-DE")}] BOT:\n${msg.cleanContent || "[Medien/Embed]"}\n`;
         msg.attachments.forEach(
           (att) => (logContent += ` > Link: ${att.url}\n`),
@@ -93,20 +74,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       });
     }
 
-    // 4. Deletion Logic
-    let deletedCount = 0;
-    for (const msg of allBotMessages) {
-      try {
-        await msg.delete();
-        deletedCount++;
-        // Delay to prevent rate limits
-        await new Promise((r) => setTimeout(r, DM_DELETE_DELAY_MS));
-      } catch {
-        continue;
-      }
-    }
-
-    // 5. Response
+    // Response
     const finalMsg = `✅ **${deletedCount}** Bot-Nachrichten erfolgreich gelöscht.`;
 
     if (shouldSave) {
