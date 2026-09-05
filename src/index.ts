@@ -2,6 +2,7 @@ import {
   Client,
   Collection,
   GatewayIntentBits,
+  Options,
   Partials,
   MessageFlags,
   type ChatInputCommandInteraction,
@@ -114,6 +115,14 @@ const client = new Client({
   // before this process started) still fire messageReactionAdd/Remove
   // instead of being silently dropped — see docs/REACTION_ROLES.md.
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
+  // By default discord.js caches every message it ever sees per channel,
+  // forever. This bot's own message-history consumers (birthdayWatcher.ts,
+  // registerWatcher.ts) only ever act on the live messageCreate/messageUpdate
+  // event they're handed, and messageCleanup.ts's /clear and /cleardm always
+  // page through channel.messages.fetch() directly rather than reading from
+  // the cache — so nothing here needs unbounded history. 200 per channel is
+  // far more than any of that needs, while still bounding memory growth.
+  makeCache: Options.cacheWithLimits({ MessageManager: 200 }),
 }) as BotClient;
 
 client.commands = new Collection();
