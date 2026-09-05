@@ -3,18 +3,27 @@ import fs from "fs";
 import { createLogger, format, transports } from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 import { LOG_MAX_FILE_SIZE, LOG_RETENTION_DAYS } from "../constants.js";
-import { loadConfig } from "../config/index.js";
 
 const { combine, printf, timestamp, colorize, errors, splat } = format;
 
-// 1. Sourced from the validated config (see src/config/schema.ts's LOG_DIR/
-// LOG_LEVEL) rather than reading process.env directly, matching every other
-// module's config access. Safe to call at this module's top level even
-// though most call sites import `logger` before ever importing
-// `../config/index.js` directly: config/index.ts doesn't import this file
-// (see the comment there), so there's no import cycle, and loadConfig()
-// caches its result so this doesn't re-run env validation later.
-const { logDir: LOG_DIR, logLevel: LOG_LEVEL } = loadConfig();
+// 1. LOG_DIR/LOG_LEVEL are also declared on EnvSchema/Config (see
+// src/config/schema.ts) so they're documented/typed/`.env.example`d like
+// every other config value, but this module deliberately does NOT call
+// loadConfig() to get them: loadConfig() also runs the fail-fast checks for
+// required Discord credentials/TIMEZONE, and config/index.ts's bootstrap
+// error/warn messages for those checks are logged through this file's
+// `logger` export. If logger.ts depended on loadConfig() at module init,
+// that would form an import cycle (loadConfig() failing would try to log
+// through a `logger` that can't finish initializing until loadConfig()
+// returns) and — worse — would mean logger.ts (and everything that imports
+// it, which is most of the app) couldn't even be *loaded* until config
+// validation succeeds, so a bad TIMEZONE/missing Discord token would never
+// reach the persisted, rotated error/combined log files at all, only
+// whatever raw console fallback replaced it. So: read these two values
+// directly with the same default expressions the schema documents, kept in
+// sync manually (two primitives, not worth a shared helper).
+const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), "..", "logs");
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
