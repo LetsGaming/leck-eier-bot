@@ -73,7 +73,7 @@ export default function registerMemberEvents(client: BotClient): void {
   // Update member in cache on nickname/role change
   client.on("guildMemberUpdate", (oldMember, newMember) => {
     updateCacheMember(newMember);
-    recordMemberProfileUpdate(newMember);
+    recordMemberProfileUpdate(oldMember, newMember);
     // A partial oldMember (missing most fields, `pending` included) means
     // Discord didn't send enough to diff against — nothing to compare.
     if (!oldMember.partial) {

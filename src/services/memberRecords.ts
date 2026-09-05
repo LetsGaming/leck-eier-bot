@@ -1,9 +1,9 @@
-import type { Collection, GuildMember } from "discord.js";
+import type { Collection, GuildMember, PartialGuildMember } from "discord.js";
 import { db } from "../db/index.js";
 import { recordLeave, recordRulesAccepted, updateProfile, upsertJoin } from "../db/memberRecordsRepository.js";
 import { getSettings } from "../db/settingsRepository.js";
 
-function displayNameOf(member: GuildMember): string {
+function displayNameOf(member: GuildMember | PartialGuildMember): string {
   return member.displayName || member.user.globalName || member.user.username;
 }
 
@@ -32,12 +32,24 @@ export function recordMemberJoin(member: GuildMember): void {
   });
 }
 
-export function recordMemberProfileUpdate(member: GuildMember): void {
+export function recordMemberProfileUpdate(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember | PartialGuildMember): void {
+  // If we don't have full old member data, can't reliably compare.
+  // Fall back to unconditional write to ensure we have the latest data.
+  const shouldWrite =
+    oldMember.partial ||
+    oldMember.user.username !== newMember.user.username ||
+    displayNameOf(oldMember) !== displayNameOf(newMember) ||
+    oldMember.user.avatar !== newMember.user.avatar;
+
+  if (!shouldWrite) {
+    return;
+  }
+
   updateProfile({
-    userId: member.id,
-    username: member.user.username,
-    displayName: displayNameOf(member),
-    avatar: member.user.avatar,
+    userId: newMember.id,
+    username: newMember.user.username,
+    displayName: displayNameOf(newMember),
+    avatar: newMember.user.avatar,
   });
 }
 
