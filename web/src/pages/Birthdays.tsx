@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
 import { useToast } from "../components/ToastContext";
+import { toChannelOptions } from "../utils/selectOptions";
 import type { BirthdayEntry, Channel, UpcomingBirthday } from "../types";
 
 function relativeDay(days: number): string {
@@ -324,7 +325,7 @@ export default function Birthdays() {
                   onChange={setChannelId}
                   placeholder="Kanäle durchsuchen…"
                   emptyLabel="— keiner —"
-                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                  options={toChannelOptions(channels)}
                 />
               </div>
               <div className="field">
@@ -354,7 +355,7 @@ export default function Birthdays() {
                   onChange={setModChannelId}
                   placeholder="Kanäle durchsuchen…"
                   emptyLabel="— keiner —"
-                  options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                  options={toChannelOptions(channels)}
                 />
                 <div className="hint">Wo der Bot einen Hinweis postet, wenn sich jemand registriert. Optional.</div>
               </div>

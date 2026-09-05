@@ -5,6 +5,7 @@ import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
 import Tabs from "../components/Tabs";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
+import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -139,7 +140,7 @@ function RegistrierungSection({
                 onChange={(v) => update({ registerGateRoleId: v || null })}
                 placeholder="Rollen durchsuchen…"
                 emptyLabel="— keine —"
-                options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                options={toRoleOptions(roles)}
               />
               <div className="hint">Die Rolle, die einem noch nicht registrierten Mitglied #register anzeigt.</div>
             </div>
@@ -151,7 +152,7 @@ function RegistrierungSection({
                 onChange={(v) => update({ registrationTierRoleId: v || null })}
                 placeholder="Rollen durchsuchen…"
                 emptyLabel="— keine —"
-                options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                options={toRoleOptions(roles)}
               />
               <div className="hint">
                 Die niedrigste Mitgliedschaftsstufe, die einmalig bei der manuellen Registrierung vergeben wird —
@@ -203,7 +204,7 @@ function RegistrierungSection({
                 onChange={(v) => update({ registerChannelId: v || null })}
                 placeholder="Kanäle durchsuchen…"
                 emptyLabel="— keiner —"
-                options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                options={toChannelOptions(channels)}
               />
               <div className="hint">Der Kanal, in dem der Bot auf Formular-Einreichungen achtet.</div>
             </div>
@@ -215,7 +216,7 @@ function RegistrierungSection({
                 onChange={(v) => update({ roleSelectionChannelId: v || null })}
                 placeholder="Kanäle durchsuchen…"
                 emptyLabel="— keiner —"
-                options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+                options={toChannelOptions(channels)}
               />
               <div className="hint">
                 Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
@@ -318,7 +319,7 @@ function EventsSection({ settings, update, channels, voiceChannels }: EventsSect
               onChange={(v) => update({ apolloEventChannelId: v || null })}
               placeholder="Kanäle durchsuchen…"
               emptyLabel="— keiner —"
-              options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+              options={toChannelOptions(channels)}
             />
             <div className="hint">Der Kanal, in dem Apollo seine Event-Nachrichten postet.</div>
           </div>
@@ -330,7 +331,7 @@ function EventsSection({ settings, update, channels, voiceChannels }: EventsSect
               onChange={(v) => update({ eventVoiceChannelId: v || null })}
               placeholder="Sprachkanäle durchsuchen…"
               emptyLabel="— keiner —"
-              options={voiceChannels.map((c) => ({ value: c.id, label: `🔊 ${c.name}` }))}
+              options={toChannelOptions(voiceChannels, "🔊 ")}
             />
             <div className="hint">Der eine Sprachkanal, in dem alle Events stattfinden. Der Bot muss ihn sehen können.</div>
           </div>
