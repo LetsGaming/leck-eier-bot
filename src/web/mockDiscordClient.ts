@@ -110,5 +110,7 @@ export function createMockClient(config: Config): BotClient {
       cache: new Collection(),
       fetch: async () => mockTextChannel,
     },
+    // Double-cast through unknown is necessary here: a full mock implementing
+    // every BotClient member isn't practical for dev-only test infrastructure.
   } as unknown as BotClient;
 }

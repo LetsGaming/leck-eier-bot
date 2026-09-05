@@ -25,6 +25,12 @@ const DB_PATH = path.join(DATA_DIR, "bot.sqlite");
 export const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+// Defense-in-depth: this app runs as a single Node.js process with one
+// better-sqlite3 connection shared by the bot and the dashboard's Fastify
+// server — there is no live cross-process contention today. This pragma
+// protects against a future second writer (maintenance script, external sqlite3
+// CLI inspection during uptime, or a split deployment), not an active problem.
+db.pragma("busy_timeout = 5000");
 
 /**
  * Schema migrations, applied in order and tracked via SQLite's built-in
@@ -60,6 +66,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // per-command overrides a DB home so the dashboard can edit them live —
   // these were never meant to be bootstrap-only env var material.
   (d) => {
+    // Template-string interpolation is safe here: DAILY_MIDNIGHT_CRON is a
+    // hardcoded constant. If this pattern is copied for config/env/user values,
+    // they must be bound as parameters instead, never interpolated into SQL.
     d.exec(`
       ALTER TABLE settings ADD COLUMN birthday_list_channel_id TEXT;
       ALTER TABLE settings ADD COLUMN birthday_list_message_id TEXT;
@@ -230,6 +239,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // with a working default; its font comes from the global font_map added
   // in v10 below.
   (d) => {
+    // Template-string interpolation is safe here: DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE
+    // is a hardcoded constant. If this pattern is copied for config/env/user values,
+    // they must be bound as parameters instead, never interpolated into SQL.
     d.exec(`
       ALTER TABLE settings ADD COLUMN birthday_self_registration_enabled INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE settings ADD COLUMN birthday_bot_manages_anchor INTEGER NOT NULL DEFAULT 0;
@@ -463,6 +475,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // manually grant registrationTierRoleId (memberEvents.ts) — nullable and
   // cleared once deleted, same lifecycle as a plain "pending" flag.
   (d) => {
+    // Template-string interpolation is safe here: DEFAULT_REGISTER_CONFIRMATION_TEMPLATE
+    // is a hardcoded constant. If this pattern is copied for config/env/user values,
+    // they must be bound as parameters instead, never interpolated into SQL.
     d.exec(`
       ALTER TABLE settings ADD COLUMN register_channel_id TEXT;
       ALTER TABLE settings ADD COLUMN role_selection_channel_id TEXT;
@@ -520,6 +535,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // sweepExpiredRegisterThreads() in registerWatcher.ts checks to delete it
   // later; a manually-completed/removed/left registration never sets this.
   (d) => {
+    // Template-string interpolation is safe here: DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE
+    // is a hardcoded constant. If this pattern is copied for config/env/user values,
+    // they must be bound as parameters instead, never interpolated into SQL.
     d.exec(`
       ALTER TABLE settings ADD COLUMN register_auto_complete INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE settings ADD COLUMN auto_register_confirmation_template TEXT NOT NULL DEFAULT '${DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE}';

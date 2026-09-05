@@ -144,7 +144,7 @@ export default function registerMemberEvents(client: BotClient): void {
           .send(
             `👋 Benutzer **${knownAs}** (${user.displayName}) hat den Server **verlassen**`,
           )
-          .catch((err) => logger.error(`Failed to DM owner: ${err.message}`));
+          .catch((err) => logger.error(`Failed to DM owner: ${errorMessage(err)}`));
       }
 
       logger.info(

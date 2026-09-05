@@ -97,8 +97,14 @@ function startRealBot(): void {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    // Privileged intent. Required to observe member join/leave/update events and
+    // to keep the guild's member cache populated for audit tracking — see
+    // events/memberEvents.ts and services/memberRecords.ts.
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    // Privileged intent. Required for the bot to read message content for
+    // birthday/registration/event parsing — see events/birthdayWatcher.ts,
+    // events/registerWatcher.ts, and events/apolloEventWatcher.ts.
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
     // Non-privileged — no Developer Portal toggle needed. Required for

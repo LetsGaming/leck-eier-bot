@@ -32,7 +32,7 @@ const insertStmt = db.prepare<{
   `INSERT INTO web_sessions (id, user_id, username, avatar, role, expires_at)
    VALUES (@id, @userId, @username, @avatar, @role, @expiresAt)`,
 );
-const selectStmt = db.prepare<[string], SessionRow>("SELECT * FROM web_sessions WHERE id = ?");
+const selectStmt = db.prepare<[string], SessionRow>("SELECT id, user_id, username, avatar, role, expires_at FROM web_sessions WHERE id = ?");
 const deleteStmt = db.prepare<[string]>("DELETE FROM web_sessions WHERE id = ?");
 const deleteExpiredStmt = db.prepare<[number]>("DELETE FROM web_sessions WHERE expires_at < ?");
 
