@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { isValidFontMap } from "../../utils/font.js";
+import { pickDefined } from "../utils.js";
 
 const PatchBodySchema = z.object({
   leaveNotificationsEnabled: z.boolean().optional(),
@@ -65,21 +66,23 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
         .send({ error: "Die Schrift muss genau 52 Zeichen lang sein und AaBbCc...XxYyZz eins zu eins entsprechen." });
     }
 
-    const settings = updateSettings({
-      ...(leaveNotificationsEnabled !== undefined && { leaveNotificationsEnabled }),
-      ...(fontMap !== undefined && { fontMap: fontMap || null }),
-      ...(registerGateRoleId !== undefined && { registerGateRoleId: registerGateRoleId || null }),
-      ...(registrationTierRoleId !== undefined && { registrationTierRoleId: registrationTierRoleId || null }),
-      ...(rulesAcceptedUseDiscordScreening !== undefined && { rulesAcceptedUseDiscordScreening }),
-      ...(registerChannelId !== undefined && { registerChannelId: registerChannelId || null }),
-      ...(roleSelectionChannelId !== undefined && { roleSelectionChannelId: roleSelectionChannelId || null }),
-      ...(registerConfirmationTemplate !== undefined && { registerConfirmationTemplate }),
-      ...(registerNicknameUseFont !== undefined && { registerNicknameUseFont }),
-      ...(registerAutoComplete !== undefined && { registerAutoComplete }),
-      ...(autoRegisterConfirmationTemplate !== undefined && { autoRegisterConfirmationTemplate }),
-      ...(apolloEventChannelId !== undefined && { apolloEventChannelId: apolloEventChannelId || null }),
-      ...(eventVoiceChannelId !== undefined && { eventVoiceChannelId: eventVoiceChannelId || null }),
-    });
+    const settings = updateSettings(
+      pickDefined({
+        leaveNotificationsEnabled,
+        fontMap: fontMap !== undefined ? fontMap || null : undefined,
+        registerGateRoleId: registerGateRoleId !== undefined ? registerGateRoleId || null : undefined,
+        registrationTierRoleId: registrationTierRoleId !== undefined ? registrationTierRoleId || null : undefined,
+        rulesAcceptedUseDiscordScreening,
+        registerChannelId: registerChannelId !== undefined ? registerChannelId || null : undefined,
+        roleSelectionChannelId: roleSelectionChannelId !== undefined ? roleSelectionChannelId || null : undefined,
+        registerConfirmationTemplate,
+        registerNicknameUseFont,
+        registerAutoComplete,
+        autoRegisterConfirmationTemplate,
+        apolloEventChannelId: apolloEventChannelId !== undefined ? apolloEventChannelId || null : undefined,
+        eventVoiceChannelId: eventVoiceChannelId !== undefined ? eventVoiceChannelId || null : undefined,
+      }),
+    );
     return serialize(settings);
   });
 }
