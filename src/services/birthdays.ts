@@ -8,6 +8,7 @@ import {
   type AnchorMessageChunk,
 } from "../db/birthdayAnchorMessagesRepository.js";
 import { applyFont } from "../utils/font.js";
+import { renderTemplate } from "../shared/messageTemplate.js";
 import type { BirthdayEntry } from "../types.js";
 import {
   BIRTHDAY_LIST_MARKER,
@@ -80,6 +81,16 @@ export function getNextBirthday(): UpcomingBirthday | null {
   return getUpcomingBirthdays()[0] ?? null;
 }
 
+/**
+ * `{userMention}`/`{everyoneMention}`/`{userNick}` are substituted via
+ * `renderTemplate()`'s `raw` bucket (unstyled) — but, deliberately, this
+ * function itself never applies `applyFont`. That's `buildBirthdayMessage`'s
+ * job, applied to the *entire* rendered string afterward (see there for why
+ * that's not the same as routing font-mapping through `renderTemplate`'s
+ * `styled` bucket) — preserved exactly as before so this stays a pure,
+ * font-agnostic substitution step, callable on its own (e.g. by
+ * `/testbirthdaymessage`) without implying anything about font styling.
+ */
 export function renderBirthdayTemplate(
   template: string,
   b: Pick<BirthdayEntry, "mention" | "userId" | "name">,
@@ -88,12 +99,26 @@ export function renderBirthdayTemplate(
   const userMention = b.mention || (b.userId ? `<@${b.userId}>` : "");
   const userNick = b.name || (b.userId ? `<@${b.userId}>` : "Friend");
   const everyoneMention = pingEveryone ? "@everyone" : "";
-  return template
-    .replace(/{userMention}/g, userMention)
-    .replace(/{everyoneMention}/g, everyoneMention)
-    .replace(/{userNick}/g, userNick);
+  return renderTemplate(
+    template,
+    { raw: { userMention, everyoneMention, userNick } },
+    {},
+    { useFont: false, fontMap: null },
+  );
 }
 
+/**
+ * Deliberately applies `applyFont` to the *entire* already-substituted
+ * string, matching `buildBirthdayMessage`'s pre-migration behavior exactly
+ * (including its existing quirk of also font-mapping any plain Latin
+ * letters that happen to land in a substituted value, e.g. "everyone" in
+ * `@everyone` or the "Friend" fallback nick, when
+ * `birthdayAnnouncementUseFont` is on). This intentionally does NOT route
+ * font-mapping through `renderTemplate()`'s `styled` bucket — doing so would
+ * protect those raw values from font-mapping and produce different output
+ * than before. Only `buildAnchorParts()` below uses the styled/raw
+ * two-pass model, since that already matches its pre-migration behavior.
+ */
 export function buildBirthdayMessage(
   b: Pick<BirthdayEntry, "mention" | "userId" | "name">,
   pingEveryone = true,
@@ -329,13 +354,23 @@ export function buildAnchorParts(
     const entryLines = days
       .map((d) => `${BIRTHDAY_LIST_MARKER} ${d.dateKey}: ${d.list.map((e) => e.mention).join(", ")}`)
       .join("\n");
-    const monthHeading = applyFont(MONTH_NAMES[month - 1]!, fontMap);
+    const monthName = MONTH_NAMES[month - 1]!;
+
+    // `{entries}` is only substituted through renderTemplate() when the
+    // template actually contains it — matching the old code's fallback of
+    // appending entryLines on a new line when the template omits the
+    // placeholder entirely, rather than silently dropping the entries list.
+    const hasEntriesToken = template.includes("{entries}");
+    const rendered = renderTemplate(
+      template,
+      { styled: { month: monthName }, raw: hasEntriesToken ? { entries: entryLines } : {} },
+      {},
+      { useFont: true, fontMap },
+    );
 
     monthParts.push({
       key: String(month),
-      text: template.includes("{entries}")
-        ? template.replace(/{month}/g, monthHeading).replace("{entries}", entryLines)
-        : `${template.replace(/{month}/g, monthHeading)}\n${entryLines}`,
+      text: hasEntriesToken ? rendered : `${rendered}\n${entryLines}`,
     });
   }
 

@@ -21,6 +21,7 @@ import {
   REGISTER_THREAD_SWEEP_INTERVAL_MS,
 } from "../constants.js";
 import { applyFont } from "../utils/font.js";
+import { renderTemplate } from "../shared/messageTemplate.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
 
@@ -74,9 +75,26 @@ export function buildRegisterNickname(fields: RegisterFormFields, fontMap: strin
   return truncateToCodePoints(nameOnly, DISCORD_NICKNAME_MAX_LENGTH);
 }
 
+/**
+ * `{name}` is substituted via `renderTemplate()`'s `raw` bucket (unstyled —
+ * `renderConfirmation` never applied `applyFont`, before or after this
+ * migration). `{roleChannel}` is rewritten to the core `{channel:<id>}`
+ * token before rendering when `roleSelectionChannelId` is configured, so it
+ * resolves through the core `channel` resolver to `<#id>` — matching the
+ * old pre-formatted `<#id>` string exactly. When no channel is configured,
+ * `{roleChannel}` is left as-is and resolved via the `raw` bucket instead,
+ * to the same "dem Rollen-Kanal" fallback text as before.
+ */
 function renderConfirmation(template: string, name: string, roleSelectionChannelId: string | null): string {
-  const roleChannel = roleSelectionChannelId ? `<#${roleSelectionChannelId}>` : "dem Rollen-Kanal";
-  return template.replace(/{name}/g, name).replace(/{roleChannel}/g, roleChannel);
+  const effectiveTemplate = roleSelectionChannelId
+    ? template.replace(/{roleChannel}/g, `{channel:${roleSelectionChannelId}}`)
+    : template;
+  return renderTemplate(
+    effectiveTemplate,
+    { raw: { name, roleChannel: "dem Rollen-Kanal" } },
+    { channel: (id) => `<#${id}>` },
+    { useFont: false, fontMap: null },
+  );
 }
 
 /**

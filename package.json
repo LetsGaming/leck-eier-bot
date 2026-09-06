@@ -9,6 +9,7 @@
         "dev": "tsx watch src/index.ts",
         "dev:web": "npm --prefix web run dev",
         "typecheck": "tsc --noEmit",
+        "test": "tsx --test src/**/*.test.ts",
         "env:example": "tsx scripts/generateEnvExample.ts"
     },
     "dependencies": {

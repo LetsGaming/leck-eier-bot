@@ -22,7 +22,7 @@ import { getPanel, listPanels, setPanelMessageId } from "../db/reactionRolesRepo
 import { getSettings } from "../db/settingsRepository.js";
 import { settingsBus, SettingsEvent } from "./settingsBus.js";
 import { createEmbed } from "../utils/embedUtils.js";
-import { applyFont } from "../utils/font.js";
+import { renderTemplate } from "../shared/messageTemplate.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import {
   EmbedColor,
@@ -534,11 +534,15 @@ function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
 /**
  * Applies the global font (`settings.fontMap`) if this panel opted into it —
  * safe to call on a fully-composed string (role mentions, emoji, and all),
- * since `applyFont` only ever substitutes plain Latin letters. See
- * utils/font.ts.
+ * since `applyFont` only ever substitutes plain Latin letters. Routed
+ * through `renderTemplate()` for consistency with the other migrated
+ * features; panel text/title carry no `{token}` placeholders today (see
+ * `buildPanelText`/`buildPanelEmbed` below), so with an empty context this
+ * reduces to exactly `applyFont(text, fontMap)` when the panel's font toggle
+ * is on. See utils/font.ts.
  */
 function styled(panel: ReactionRolePanelWithMappings, text: string): string {
-  return panel.useFont ? applyFont(text, getSettings().fontMap) : text;
+  return renderTemplate(text, {}, {}, { useFont: panel.useFont, fontMap: getSettings().fontMap });
 }
 
 function buildPanelEmbed(panel: ReactionRolePanelWithMappings): EmbedBuilder {
