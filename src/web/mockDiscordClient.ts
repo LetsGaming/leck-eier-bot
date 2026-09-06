@@ -97,6 +97,7 @@ export function createMockClient(config: Config): BotClient {
     id: "mock-channel-fetched",
     name: "mock-channel",
     isTextBased: () => true,
+    isDMBased: () => false,
     send: async () => ({ id: "mock-message-id" }),
     messages: { fetch: async () => null },
   };
