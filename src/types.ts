@@ -279,7 +279,7 @@ export interface ApolloEventVoiceLogRow {
  * web/session.ts) — the tiers exist so a route can be narrowed to e.g.
  * 'bot-owner'-only later without a schema change.
  *
- * Canonical definition lives at `contracts/webRole.ts` (re-exported above)
+ * Canonical definition lives at `contracts/webRole.d.ts` (re-exported above)
  * so both this backend and the dashboard frontend (`web/src/types.ts`) share
  * one source instead of two hand-kept copies.
  */
