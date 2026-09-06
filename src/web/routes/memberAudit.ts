@@ -1,9 +1,10 @@
-import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { isCacheReady, getCachedMembers } from "../../services/memberCache.js";
 import { listAllMemberRecords } from "../../db/memberRecordsRepository.js";
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT } from "../../constants.js";
 import type { MemberRecord } from "../../types.js";
+import type { ZodFastifyInstance } from "../utils.js";
 
 interface MemberAuditEntry {
   userId: string;
@@ -33,9 +34,11 @@ export function buildAvatarUrl(userId: string, avatarHash: string | null, size =
   return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-export function registerMemberAuditRoutes(app: FastifyInstance): void {
-  app.get("/members/audit", async (request, reply) => {
-    const query = (request.query as { q?: string }).q?.trim() ?? "";
+const AuditQuerySchema = z.object({ q: z.string().optional() });
+
+export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
+  app.get("/members/audit", { schema: { querystring: AuditQuerySchema } }, async (request, reply) => {
+    const query = request.query.q?.trim() ?? "";
     if (!isCacheReady()) {
       return reply.code(503).send({ error: "Der Mitglieder-Cache wird noch aufgebaut — versuche es gleich noch einmal." });
     }

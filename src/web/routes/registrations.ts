@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { listRegistrations } from "../../db/memberRecordsRepository.js";
 import { getCachedMembers } from "../../services/memberCache.js";
 import { removeRegistration, completeRegistration } from "../../events/registerWatcher.js";
@@ -7,6 +7,7 @@ import { getSettings } from "../../db/settingsRepository.js";
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Config, RegistrationStatus } from "../../types.js";
+import type { ZodFastifyInstance } from "../utils.js";
 
 interface RegistrationEntry {
   userId: string;
@@ -27,10 +28,13 @@ interface RegistrationEntry {
   submittedAge: string | null;
 }
 
+const RegistrationsQuerySchema = z.object({ q: z.string().optional() });
+const UserIdParamsSchema = z.object({ userId: z.string() });
+
 /** Dashboard visibility/control over self-service registration-form submissions — see `registerWatcher.ts`. Shows full history (pending/registered/removed/left), not just what's currently pending. */
-export function registerRegistrationRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
-  app.get("/members/registrations", async (request) => {
-    const query = (request.query as { q?: string }).q?.trim() ?? "";
+export function registerRegistrationRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {
+  app.get("/members/registrations", { schema: { querystring: RegistrationsQuerySchema } }, async (request) => {
+    const query = request.query.q?.trim() ?? "";
     const cache = getCachedMembers();
 
     const entries = listRegistrations().map((record): RegistrationEntry => {
@@ -80,8 +84,8 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
     });
   });
 
-  app.delete("/members/registrations/:userId", async (request, reply) => {
-    const { userId } = request.params as { userId: string };
+  app.delete("/members/registrations/:userId", { schema: { params: UserIdParamsSchema } }, async (request, reply) => {
+    const { userId } = request.params;
     await removeRegistration(client, userId);
     return reply.code(204).send();
   });
@@ -98,37 +102,41 @@ export function registerRegistrationRoutes(app: FastifyInstance, client: BotClie
   // attempts to delete the thread while status is still 'pending'), so it's
   // safe if the gateway handler's own call also fires for this same
   // registration afterward.
-  app.post("/members/registrations/:userId/approve", async (request, reply) => {
-    const { userId } = request.params as { userId: string };
-    const { registrationTierRoleId } = getSettings();
-    if (!registrationTierRoleId) {
-      return reply
-        .code(400)
-        .send({ error: "Registrierungsrolle ist nicht konfiguriert — siehe Einstellungen." });
-    }
+  app.post(
+    "/members/registrations/:userId/approve",
+    { schema: { params: UserIdParamsSchema } },
+    async (request, reply) => {
+      const { userId } = request.params;
+      const { registrationTierRoleId } = getSettings();
+      if (!registrationTierRoleId) {
+        return reply
+          .code(400)
+          .send({ error: "Registrierungsrolle ist nicht konfiguriert — siehe Einstellungen." });
+      }
 
-    const guild = client.guilds.cache.get(config.guildId);
-    if (!guild) {
-      return reply.code(503).send({ error: "Server noch nicht im Cache — versuche es gleich noch einmal." });
-    }
+      const guild = client.guilds.cache.get(config.guildId);
+      if (!guild) {
+        return reply.code(503).send({ error: "Server noch nicht im Cache — versuche es gleich noch einmal." });
+      }
 
-    try {
-      const member = await guild.members.fetch(userId);
-      await member.roles.add(registrationTierRoleId, "Manuell über Dashboard genehmigt");
-    } catch (err) {
-      logger.warn(`Registrierung für ${userId} konnte nicht über das Dashboard genehmigt werden: ${errorMessage(err)}`);
-      return reply.code(502).send({ error: "Die Rolle konnte nicht vergeben werden. Ist der Bot berechtigt?" });
-    }
+      try {
+        const member = await guild.members.fetch(userId);
+        await member.roles.add(registrationTierRoleId, "Manuell über Dashboard genehmigt");
+      } catch (err) {
+        logger.warn(`Registrierung für ${userId} konnte nicht über das Dashboard genehmigt werden: ${errorMessage(err)}`);
+        return reply.code(502).send({ error: "Die Rolle konnte nicht vergeben werden. Ist der Bot berechtigt?" });
+      }
 
-    try {
-      await completeRegistration(client, userId);
-    } catch (err) {
-      // The role was already granted — don't fail the request over this.
-      // The guildMemberUpdate gateway handler in memberEvents.ts still runs
-      // as a fallback and will complete the registration if this failed.
-      logger.warn(`Registrierung für ${userId} konnte nach Rollenvergabe nicht sofort abgeschlossen werden: ${errorMessage(err)}`);
-    }
+      try {
+        await completeRegistration(client, userId);
+      } catch (err) {
+        // The role was already granted — don't fail the request over this.
+        // The guildMemberUpdate gateway handler in memberEvents.ts still runs
+        // as a fallback and will complete the registration if this failed.
+        logger.warn(`Registrierung für ${userId} konnte nach Rollenvergabe nicht sofort abgeschlossen werden: ${errorMessage(err)}`);
+      }
 
-    return reply.code(204).send();
-  });
+      return reply.code(204).send();
+    },
+  );
 }

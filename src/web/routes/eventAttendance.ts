@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { ZodFastifyInstance } from "../utils.js";
 import {
   listSignups,
   getSignup,
@@ -130,8 +130,11 @@ const ListQuerySchema = z.object({
   problems: z.enum(["0", "1"]).optional().default("0"),
 });
 
+const EventIdParamsSchema = z.object({ id: z.string() });
+const SignupIdParamsSchema = z.object({ signupId: z.string() });
+
 /** Dashboard visibility/control over Apollo event attendance tracking — see `apolloEventWatcher.ts`/`services/eventAttendance.ts`. */
-export function registerEventAttendanceRoutes(app: FastifyInstance, config: Config): void {
+export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: Config): void {
   function serializeSignup(event: ApolloEvent, signup: ApolloEventSignup): EventSignupEntry {
     const cache = getCachedMembers();
     const cached = signup.userId ? cache.get(signup.userId) : undefined;
@@ -254,10 +257,8 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
     return result;
   }
 
-  app.get("/events/attendance", async (request, reply) => {
-    const parsed = ListQuerySchema.safeParse(request.query);
-    if (!parsed.success) return reply.code(400).send({ error: z.prettifyError(parsed.error) });
-    const { q, scope, problems, month } = parsed.data;
+  app.get("/events/attendance", { schema: { querystring: ListQuerySchema } }, async (request) => {
+    const { q, scope, problems, month } = request.query;
 
     let mode: "month" | "all" | "problems";
     let events: ApolloEvent[];
@@ -308,8 +309,8 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
     return response;
   });
 
-  app.get("/events/attendance/:id", async (request, reply) => {
-    const { id } = request.params as { id: string };
+  app.get("/events/attendance/:id", { schema: { params: EventIdParamsSchema } }, async (request, reply) => {
+    const { id } = request.params;
     const eventId = parseEventIdParam(id);
     if (eventId === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
 
@@ -319,41 +320,43 @@ export function registerEventAttendanceRoutes(app: FastifyInstance, config: Conf
     return serializeEvent({ ...event, signups: listSignups(eventId) });
   });
 
-  app.patch("/events/attendance/signups/:signupId", async (request, reply) => {
-    const { signupId } = request.params as { signupId: string };
-    const id = Number(signupId);
-    const body = LinkSignupBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+  app.patch(
+    "/events/attendance/signups/:signupId",
+    { schema: { params: SignupIdParamsSchema, body: LinkSignupBodySchema } },
+    async (request, reply) => {
+      const { signupId } = request.params;
+      const id = Number(signupId);
 
-    const signup = getSignup(id);
-    if (!signup) return reply.code(404).send({ error: "Anmeldung nicht gefunden." });
+      const signup = getSignup(id);
+      if (!signup) return reply.code(404).send({ error: "Anmeldung nicht gefunden." });
 
-    const { userId } = body.data;
-    if (userId !== null) {
-      if (!getCachedMembers().has(userId)) {
-        return reply.code(400).send({ error: "Mitglied nicht gefunden." });
+      const { userId } = request.body;
+      if (userId !== null) {
+        if (!getCachedMembers().has(userId)) {
+          return reply.code(400).send({ error: "Mitglied nicht gefunden." });
+        }
+        const otherSignups = listSignups(signup.eventId);
+        if (otherSignups.some((s) => s.id !== id && s.userId === userId)) {
+          return reply.code(409).send({ error: "Dieses Mitglied ist bereits einer anderen Anmeldung dieses Events zugeordnet." });
+        }
       }
-      const otherSignups = listSignups(signup.eventId);
-      if (otherSignups.some((s) => s.id !== id && s.userId === userId)) {
-        return reply.code(409).send({ error: "Dieses Mitglied ist bereits einer anderen Anmeldung dieses Events zugeordnet." });
+
+      linkSignupToUser(id, userId);
+      const event = getEventById(signup.eventId);
+      if (!event) return reply.code(404).send({ error: "Event nicht gefunden." });
+      // A link made before the event has ever activated has nothing to
+      // recompute yet — attendance only starts existing once tracking does.
+      if (event.status !== "scheduled") {
+        recomputeAttendanceForEvent(signup.eventId);
       }
-    }
 
-    linkSignupToUser(id, userId);
-    const event = getEventById(signup.eventId);
-    if (!event) return reply.code(404).send({ error: "Event nicht gefunden." });
-    // A link made before the event has ever activated has nothing to
-    // recompute yet — attendance only starts existing once tracking does.
-    if (event.status !== "scheduled") {
-      recomputeAttendanceForEvent(signup.eventId);
-    }
-
-    return serializeEvent({ ...getEventById(signup.eventId)!, signups: listSignups(signup.eventId) });
-  });
+      return serializeEvent({ ...getEventById(signup.eventId)!, signups: listSignups(signup.eventId) });
+    },
+  );
 
   /** Mainly a test-cleanup/mistake-recovery affordance — destroys the event's full attendance history, cascading via the FK. */
-  app.delete("/events/attendance/:id", async (request, reply) => {
-    const { id } = request.params as { id: string };
+  app.delete("/events/attendance/:id", { schema: { params: EventIdParamsSchema } }, async (request, reply) => {
+    const { id } = request.params;
     const eventId = parseEventIdParam(id);
     if (eventId === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
 

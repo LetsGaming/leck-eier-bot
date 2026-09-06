@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyReply } from "fastify";
+import type { ZodFastifyInstance } from "../utils.js";
 import {
   createPanel,
   deleteMapping,
@@ -61,14 +62,16 @@ const ReorderBodySchema = z.object({
   orderedIds: z.array(z.number().int()),
 });
 
-function parsePanelId(request: { params: unknown }, reply: FastifyReply): number | null {
-  const params = request.params as { id?: string };
-  const id = Number(params.id);
-  if (!Number.isInteger(id)) {
+const IdParamsSchema = z.object({ id: z.string() });
+const MappingIdParamsSchema = z.object({ id: z.string(), mappingId: z.string() });
+
+function parsePanelId(id: string, reply: FastifyReply): number | null {
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId)) {
     reply.code(400).send({ error: "Ungültige Panel-ID" });
     return null;
   }
-  return id;
+  return numericId;
 }
 
 /**
@@ -127,56 +130,54 @@ async function deleteDiscordMessage(client: BotClient, channelId: string, messag
   await message?.delete().catch((err) => logger.warn(`Failed to delete old panel message: ${errorMessage(err)}`));
 }
 
-export function registerReactionRolePanelRoutes(app: FastifyInstance, client: BotClient): void {
+export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client: BotClient): void {
   app.get("/reaction-roles/panels", async () => listPanels());
 
-  app.get("/reaction-roles/panels/:id", async (request, reply) => {
-    const id = parsePanelId(request, reply);
+  app.get("/reaction-roles/panels/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+    const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
     if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
     return panel;
   });
 
-  app.post("/reaction-roles/panels", async (request, reply) => {
-    const body = CreatePanelBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-
-    if (body.data.existingMessageId && body.data.selectionType !== SelectionType.Reactions) {
+  app.post("/reaction-roles/panels", { schema: { body: CreatePanelBodySchema } }, async (request, reply) => {
+    if (request.body.existingMessageId && request.body.selectionType !== SelectionType.Reactions) {
       return reply
         .code(400)
         .send({ error: "Das Anhängen an eine bestehende Nachricht funktioniert nur mit Reaktionen — Buttons und Dropdowns benötigen eine bot-eigene Nachricht." });
     }
 
-    const panel = createPanel(body.data);
+    const panel = createPanel(request.body);
     return reply.code(201).send(getPanel(panel.id));
   });
 
-  app.patch("/reaction-roles/panels/:id", async (request, reply) => {
-    const id = parsePanelId(request, reply);
-    if (id === null) return;
-    const before = getPanel(id);
-    if (!before) return reply.code(404).send({ error: "Panel nicht gefunden" });
+  app.patch(
+    "/reaction-roles/panels/:id",
+    { schema: { params: IdParamsSchema, body: PanelBodySchema } },
+    async (request, reply) => {
+      const id = parsePanelId(request.params.id, reply);
+      if (id === null) return;
+      const before = getPanel(id);
+      if (!before) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
-    const body = PanelBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+      // A managed panel's message lives in a specific channel — Discord
+      // messages can't move between channels, so relocating the panel means
+      // deleting the old one and letting the next sync post a fresh one in
+      // the new channel, rather than leaving the old message orphaned.
+      if (before.managed && before.messageId && request.body.channelId !== before.channelId) {
+        await deleteDiscordMessage(client, before.channelId, before.messageId);
+        setPanelMessageId(id, null);
+      }
 
-    // A managed panel's message lives in a specific channel — Discord
-    // messages can't move between channels, so relocating the panel means
-    // deleting the old one and letting the next sync post a fresh one in
-    // the new channel, rather than leaving the old message orphaned.
-    if (before.managed && before.messageId && body.data.channelId !== before.channelId) {
-      await deleteDiscordMessage(client, before.channelId, before.messageId);
-      setPanelMessageId(id, null);
-    }
+      updatePanel(id, request.body);
+      await trySync(client, reply, id);
+      return getPanel(id);
+    },
+  );
 
-    updatePanel(id, body.data);
-    await trySync(client, reply, id);
-    return getPanel(id);
-  });
-
-  app.delete("/reaction-roles/panels/:id", async (request, reply) => {
-    const id = parsePanelId(request, reply);
+  app.delete("/reaction-roles/panels/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+    const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
     if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
@@ -193,8 +194,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     return reply.code(204).send();
   });
 
-  app.post("/reaction-roles/panels/:id/sync", async (request, reply) => {
-    const id = parsePanelId(request, reply);
+  app.post("/reaction-roles/panels/:id/sync", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+    const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
     if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
@@ -207,8 +208,8 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
   });
 
   /** First activation of a draft panel — posts/attaches it to Discord and marks it sent. Idempotent afterward (re-running just re-syncs). */
-  app.post("/reaction-roles/panels/:id/send", async (request, reply) => {
-    const id = parsePanelId(request, reply);
+  app.post("/reaction-roles/panels/:id/send", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+    const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
     if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
@@ -229,84 +230,96 @@ export function registerReactionRolePanelRoutes(app: FastifyInstance, client: Bo
     return getPanel(id);
   });
 
-  app.post("/reaction-roles/panels/:id/mappings", async (request, reply) => {
-    const id = parsePanelId(request, reply);
-    if (id === null) return;
-    const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
+  app.post(
+    "/reaction-roles/panels/:id/mappings",
+    { schema: { params: IdParamsSchema, body: MappingBodySchema } },
+    async (request, reply) => {
+      const id = parsePanelId(request.params.id, reply);
+      if (id === null) return;
+      const panel = getPanel(id);
+      if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
-    const body = MappingBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    const validationError = validateMappingForPanel(panel.selectionType, body.data);
-    if (validationError) return reply.code(400).send({ error: validationError });
-    if (panel.mappings.some((m) => m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
-      return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
-    }
-    const cap = mappingCap(panel.selectionType);
-    if (cap !== null && panel.mappings.length >= cap) {
-      return reply.code(400).send({ error: `Discord erlaubt maximal ${cap} Optionen für diesen Auswahltyp.` });
-    }
+      const validationError = validateMappingForPanel(panel.selectionType, request.body);
+      if (validationError) return reply.code(400).send({ error: validationError });
+      if (panel.mappings.some((m) => m.roleIds.some((r) => request.body.roleIds.includes(r)))) {
+        return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
+      }
+      const cap = mappingCap(panel.selectionType);
+      if (cap !== null && panel.mappings.length >= cap) {
+        return reply.code(400).send({ error: `Discord erlaubt maximal ${cap} Optionen für diesen Auswahltyp.` });
+      }
 
-    upsertMapping({ panelId: id, position: panel.mappings.length, ...body.data });
-    await trySync(client, reply, id);
-    return reply.code(201).send(getPanel(id));
-  });
+      upsertMapping({ panelId: id, position: panel.mappings.length, ...request.body });
+      await trySync(client, reply, id);
+      return reply.code(201).send(getPanel(id));
+    },
+  );
 
-  app.patch("/reaction-roles/panels/:id/mappings/:mappingId", async (request, reply) => {
-    const id = parsePanelId(request, reply);
-    if (id === null) return;
-    const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
+  app.patch(
+    "/reaction-roles/panels/:id/mappings/:mappingId",
+    { schema: { params: MappingIdParamsSchema, body: MappingBodySchema } },
+    async (request, reply) => {
+      const id = parsePanelId(request.params.id, reply);
+      if (id === null) return;
+      const panel = getPanel(id);
+      if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
-    const mappingId = Number((request.params as { mappingId?: string }).mappingId);
-    const existing = panel.mappings.find((m) => m.id === mappingId);
-    if (!existing) return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
+      const mappingId = Number(request.params.mappingId);
+      const existing = panel.mappings.find((m) => m.id === mappingId);
+      if (!existing) return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
 
-    const body = MappingBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    const validationError = validateMappingForPanel(panel.selectionType, body.data);
-    if (validationError) return reply.code(400).send({ error: validationError });
-    if (panel.mappings.some((m) => m.id !== mappingId && m.roleIds.some((r) => body.data.roleIds.includes(r)))) {
-      return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
-    }
+      const validationError = validateMappingForPanel(panel.selectionType, request.body);
+      if (validationError) return reply.code(400).send({ error: validationError });
+      if (panel.mappings.some((m) => m.id !== mappingId && m.roleIds.some((r) => request.body.roleIds.includes(r)))) {
+        return reply.code(400).send({ error: "Eine dieser Rollen wird bereits von einer anderen Option auf diesem Panel verwendet." });
+      }
 
-    upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...body.data });
-    await trySync(client, reply, id);
-    return getPanel(id);
-  });
+      upsertMapping({ id: mappingId, panelId: id, position: existing.position, ...request.body });
+      await trySync(client, reply, id);
+      return getPanel(id);
+    },
+  );
 
-  app.delete("/reaction-roles/panels/:id/mappings/:mappingId", async (request, reply) => {
-    const id = parsePanelId(request, reply);
-    if (id === null) return;
-    const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
+  app.delete(
+    "/reaction-roles/panels/:id/mappings/:mappingId",
+    { schema: { params: MappingIdParamsSchema } },
+    async (request, reply) => {
+      const id = parsePanelId(request.params.id, reply);
+      if (id === null) return;
+      const panel = getPanel(id);
+      if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
-    const mappingId = Number((request.params as { mappingId?: string }).mappingId);
-    if (!panel.mappings.some((m) => m.id === mappingId)) {
-      return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
-    }
+      const mappingId = Number(request.params.mappingId);
+      if (!panel.mappings.some((m) => m.id === mappingId)) {
+        return reply.code(404).send({ error: "Zuordnung auf diesem Panel nicht gefunden" });
+      }
 
-    deleteMapping(mappingId);
-    await trySync(client, reply, id);
-    return getPanel(id);
-  });
+      deleteMapping(mappingId);
+      await trySync(client, reply, id);
+      return getPanel(id);
+    },
+  );
 
-  app.post("/reaction-roles/panels/:id/mappings/reorder", async (request, reply) => {
-    const id = parsePanelId(request, reply);
-    if (id === null) return;
-    const panel = getPanel(id);
-    if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
+  app.post(
+    "/reaction-roles/panels/:id/mappings/reorder",
+    { schema: { params: IdParamsSchema, body: ReorderBodySchema } },
+    async (request, reply) => {
+      const id = parsePanelId(request.params.id, reply);
+      if (id === null) return;
+      const panel = getPanel(id);
+      if (!panel) return reply.code(404).send({ error: "Panel nicht gefunden" });
 
-    const body = ReorderBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
+      const knownIds = new Set(panel.mappings.map((m) => m.id));
+      if (
+        request.body.orderedIds.length !== panel.mappings.length ||
+        !request.body.orderedIds.every((i) => knownIds.has(i))
+      ) {
+        return reply.code(400).send({ error: "orderedIds müssen genau den Zuordnungs-IDs dieses Panels entsprechen" });
+      }
 
-    const knownIds = new Set(panel.mappings.map((m) => m.id));
-    if (body.data.orderedIds.length !== panel.mappings.length || !body.data.orderedIds.every((i) => knownIds.has(i))) {
-      return reply.code(400).send({ error: "orderedIds müssen genau den Zuordnungs-IDs dieses Panels entsprechen" });
-    }
-
-    reorderMappings(body.data.orderedIds);
-    await trySync(client, reply, id);
-    return getPanel(id);
-  });
+      reorderMappings(request.body.orderedIds);
+      await trySync(client, reply, id);
+      return getPanel(id);
+    },
+  );
 }
