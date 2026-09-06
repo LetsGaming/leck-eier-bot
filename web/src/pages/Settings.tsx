@@ -6,6 +6,10 @@ import SearchableSelect from "../components/SearchableSelect";
 import Tabs from "../components/Tabs";
 import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
+import { useChannels } from "../hooks/useChannels";
+import { useGeneralSettings } from "../hooks/useGeneralSettings";
+import { useRoles } from "../hooks/useRoles";
+import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
@@ -399,12 +403,17 @@ function SitzungSection({ me }: { me: Me }) {
 }
 
 export default function Settings({ me }: { me: Me }) {
-  const [settings, setSettings] = useState<GeneralSettings | null>(null);
+  const settingsRes = useGeneralSettings();
+  const rolesRes = useRoles();
+  const channelsRes = useChannels();
+  const voiceChannelsRes = useVoiceChannels();
+  const settings = settingsRes.data;
+  const roles = rolesRes.data ?? [];
+  const channels = channelsRes.data ?? [];
+  const voiceChannels = voiceChannelsRes.data ?? [];
+
   const [fontMap, setFontMap] = useState("");
   const [savingFont, setSavingFont] = useState(false);
-  const [roles, setRoles] = useState<RoleOption[]>([]);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [voiceChannels, setVoiceChannels] = useState<Channel[]>([]);
   const [confirmationTemplate, setConfirmationTemplate] = useState("");
   const [savingConfirmationTemplate, setSavingConfirmationTemplate] = useState(false);
   const [autoConfirmationTemplate, setAutoConfirmationTemplate] = useState("");
@@ -423,25 +432,21 @@ export default function Settings({ me }: { me: Me }) {
     });
   }
 
+  // Seeds the local editable font-map/confirmation-template fields once
+  // `useGeneralSettings()` resolves — mirrors the pre-migration inline
+  // `.then()` handler, just re-run whenever the underlying resource changes.
   useEffect(() => {
-    api
-      .generalSettings()
-      .then((s) => {
-        setSettings(s);
-        setFontMap(s.fontMap ?? "");
-        setConfirmationTemplate(s.registerConfirmationTemplate);
-        setAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
-      })
-      .catch((err) => showError(errorMessage(err)));
-    api.roles().then(setRoles).catch((err) => showError(errorMessage(err)));
-    api.channels().then(setChannels).catch((err) => showError(errorMessage(err)));
-    api.voiceChannels().then(setVoiceChannels).catch((err) => showError(errorMessage(err)));
-  }, [showError]);
+    const s = settingsRes.data;
+    if (!s) return;
+    setFontMap(s.fontMap ?? "");
+    setConfirmationTemplate(s.registerConfirmationTemplate);
+    setAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
+  }, [settingsRes.data]);
 
   async function update(patch: Partial<GeneralSettings>) {
     try {
       const updated = await api.updateGeneralSettings(patch);
-      setSettings(updated);
+      settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -452,7 +457,7 @@ export default function Settings({ me }: { me: Me }) {
     setSavingFont(true);
     try {
       const updated = await api.updateGeneralSettings({ fontMap: fontMap || null });
-      setSettings(updated);
+      settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -465,7 +470,7 @@ export default function Settings({ me }: { me: Me }) {
     setSavingConfirmationTemplate(true);
     try {
       const updated = await api.updateGeneralSettings({ registerConfirmationTemplate: confirmationTemplate });
-      setSettings(updated);
+      settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -478,7 +483,7 @@ export default function Settings({ me }: { me: Me }) {
     setSavingAutoConfirmationTemplate(true);
     try {
       const updated = await api.updateGeneralSettings({ autoRegisterConfirmationTemplate: autoConfirmationTemplate });
-      setSettings(updated);
+      settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));

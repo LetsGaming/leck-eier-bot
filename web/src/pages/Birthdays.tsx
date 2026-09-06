@@ -4,9 +4,13 @@ import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
 import { useToast } from "../components/ToastContext";
+import { useBirthdaySettings } from "../hooks/useBirthdaySettings";
+import { useChannels } from "../hooks/useChannels";
+import { useGeneralSettings } from "../hooks/useGeneralSettings";
+import { useUpcomingBirthdays } from "../hooks/useUpcomingBirthdays";
 import { applyFont } from "../utils/font";
 import { toChannelOptions } from "../utils/selectOptions";
-import type { BirthdayEntry, Channel, UpcomingBirthday } from "../types";
+import type { BirthdayEntry } from "../types";
 
 /** Sample values shown in the live preview — the real message uses the actual member's mention/nick/everyone-ping at send time. */
 const PREVIEW_CONTEXT = { userMention: "@Beispielperson", everyoneMention: "@everyone", userNick: "Beispielperson" };
@@ -34,8 +38,14 @@ interface EntryDraft {
 const EMPTY_DRAFT: EntryDraft = { id: null, day: "", month: "", userId: "", name: "" };
 
 export default function Birthdays() {
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [upcoming, setUpcoming] = useState<UpcomingBirthday[] | null>(null);
+  const settingsRes = useBirthdaySettings();
+  const channelsRes = useChannels();
+  const upcomingRes = useUpcomingBirthdays();
+  const generalRes = useGeneralSettings();
+  const channels = channelsRes.data ?? [];
+  const upcoming = upcomingRes.data;
+  const fontMap = generalRes.data?.fontMap ?? null;
+
   const [template, setTemplate] = useState("");
   const [channelId, setChannelId] = useState("");
   const [cronExpr, setCronExpr] = useState("");
@@ -44,7 +54,6 @@ export default function Birthdays() {
   const [anchorIntro, setAnchorIntro] = useState("");
   const [anchorUseFont, setAnchorUseFont] = useState(false);
   const [announcementUseFont, setAnnouncementUseFont] = useState(false);
-  const [fontMap, setFontMap] = useState<string | null>(null);
   const [showAnnouncementPreview, setShowAnnouncementPreview] = useState(false);
   const [showAnchorPreview, setShowAnchorPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,25 +62,22 @@ export default function Birthdays() {
   const [savingEntry, setSavingEntry] = useState(false);
   const { showError, showSuccess } = useToast();
 
-  function loadAll() {
-    Promise.all([api.birthdaySettings(), api.channels(), api.upcomingBirthdays(), api.generalSettings()])
-      .then(([s, c, u, general]) => {
-        setTemplate(s.template);
-        setChannelId(s.channelId ?? "");
-        setCronExpr(s.cron);
-        setModChannelId(s.modChannelId ?? "");
-        setAnchorTemplate(s.anchorTemplate);
-        setAnchorIntro(s.anchorIntro ?? "");
-        setAnchorUseFont(s.anchorUseFont);
-        setAnnouncementUseFont(s.announcementUseFont);
-        setChannels(c);
-        setUpcoming(u);
-        setFontMap(general.fontMap);
-      })
-      .catch((err) => showError(errorMessage(err)));
-  }
-
-  useEffect(loadAll, []);
+  // Seeds the local editable form fields once `useBirthdaySettings()`
+  // resolves — mirrors the pre-migration `loadAll()`'s destructuring of `s`,
+  // just re-run whenever the underlying resource changes instead of once
+  // inline in a combined `Promise.all` handler.
+  useEffect(() => {
+    const s = settingsRes.data;
+    if (!s) return;
+    setTemplate(s.template);
+    setChannelId(s.channelId ?? "");
+    setCronExpr(s.cron);
+    setModChannelId(s.modChannelId ?? "");
+    setAnchorTemplate(s.anchorTemplate);
+    setAnchorIntro(s.anchorIntro ?? "");
+    setAnchorUseFont(s.anchorUseFont);
+    setAnnouncementUseFont(s.announcementUseFont);
+  }, [settingsRes.data]);
 
   async function handleSave() {
     setSaving(true);
@@ -98,7 +104,7 @@ export default function Birthdays() {
     setSyncingAnchor(true);
     try {
       await api.syncBirthdayAnchor();
-      setUpcoming(await api.upcomingBirthdays());
+      upcomingRes.reload();
       showSuccess("Ankernachricht neu generiert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -132,7 +138,7 @@ export default function Birthdays() {
         await api.updateBirthday(draft.id, body);
       }
       setDraft(EMPTY_DRAFT);
-      setUpcoming(await api.upcomingBirthdays());
+      upcomingRes.reload();
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -144,7 +150,7 @@ export default function Birthdays() {
   async function handleDeleteEntry(id: number) {
     try {
       await api.deleteBirthday(id);
-      setUpcoming(await api.upcomingBirthdays());
+      upcomingRes.reload();
       showSuccess("Entfernt.");
     } catch (err) {
       showError(errorMessage(err));

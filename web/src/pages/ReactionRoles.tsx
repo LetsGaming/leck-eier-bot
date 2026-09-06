@@ -7,15 +7,17 @@ import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
+import { useChannels } from "../hooks/useChannels";
+import { useEmojis } from "../hooks/useEmojis";
+import { useGeneralSettings } from "../hooks/useGeneralSettings";
+import { usePanels } from "../hooks/usePanels";
+import { useRoles } from "../hooks/useRoles";
 import { buildCoreResolvers, mockifyChannelMentions, renderTemplate } from "../utils/messageTemplate";
 import type {
-  Channel,
   CreatePanelInput,
-  EmojiOption,
   Mapping,
   Panel,
   PanelMessageType,
-  RoleOption,
   SelectionType,
 } from "../types";
 
@@ -139,11 +141,17 @@ function emptyMappingDraft(): MappingDraft {
 }
 
 export default function ReactionRoles() {
-  const [panels, setPanels] = useState<Panel[]>([]);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [roles, setRoles] = useState<RoleOption[]>([]);
-  const [emojis, setEmojis] = useState<EmojiOption[]>([]);
-  const [fontMap, setFontMap] = useState<string | null>(null);
+  const panelsRes = usePanels();
+  const channelsRes = useChannels();
+  const rolesRes = useRoles();
+  const emojisRes = useEmojis();
+  const generalRes = useGeneralSettings();
+  const panels = panelsRes.data ?? [];
+  const channels = channelsRes.data ?? [];
+  const roles = rolesRes.data ?? [];
+  const emojis = emojisRes.data ?? [];
+  const fontMap = generalRes.data?.fontMap ?? null;
+
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const [form, setForm] = useState<PanelFormState>(emptyPanelForm());
   // Only meaningful while creating a new panel — both are fixed for the
@@ -157,20 +165,6 @@ export default function ReactionRoles() {
   const [busy, setBusy] = useState(false);
   const { showError, showSuccess } = useToast();
   const confirmDialog = useConfirm();
-
-  function loadAll() {
-    Promise.all([api.panels(), api.channels(), api.roles(), api.emojis(), api.generalSettings()])
-      .then(([p, c, r, e, s]) => {
-        setPanels(p);
-        setChannels(c);
-        setRoles(r);
-        setEmojis(e);
-        setFontMap(s.fontMap);
-      })
-      .catch((err) => showError(errorMessage(err)));
-  }
-
-  useEffect(loadAll, []);
 
   const selected = typeof selectedId === "number" ? panels.find((p) => p.id === selectedId) ?? null : null;
   const effectiveSelectionType: SelectionType = selectedId === "new" ? selectionType : selected?.selectionType ?? "reactions";
@@ -261,9 +255,10 @@ export default function ReactionRoles() {
       } else {
         return;
       }
-      setPanels((prev) => {
-        const exists = prev.some((p) => p.id === saved.id);
-        return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved];
+      panelsRes.setData((prev) => {
+        const list = prev ?? [];
+        const exists = list.some((p) => p.id === saved.id);
+        return exists ? list.map((p) => (p.id === saved.id ? saved : p)) : [...list, saved];
       });
       setSelectedId(saved.id);
     } catch (err) {
@@ -289,7 +284,7 @@ export default function ReactionRoles() {
     setBusy(true);
     try {
       await api.deletePanel(selectedId);
-      setPanels((prev) => prev.filter((p) => p.id !== selectedId));
+      panelsRes.setData((prev) => prev?.filter((p) => p.id !== selectedId) ?? null);
       setSelectedId(null);
     } catch (err) {
       showError(errorMessage(err));
@@ -303,7 +298,7 @@ export default function ReactionRoles() {
     setBusy(true);
     try {
       const saved = await api.sendPanel(selectedId);
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
       showSuccess("Panel gesendet — es ist jetzt live auf Discord.");
     } catch (err) {
       showError(errorMessage(err));
@@ -317,7 +312,7 @@ export default function ReactionRoles() {
     setBusy(true);
     try {
       const saved = await api.syncPanel(selectedId);
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
       showSuccess("Panel mit Discord synchronisiert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -352,7 +347,7 @@ export default function ReactionRoles() {
         roleIds: mappingDraft.roleIds,
         label: mappingDraft.label.trim() ? mappingDraft.label : null,
       });
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
       setMappingDraft(emptyMappingDraft());
     } catch (err) {
       showError(errorMessage(err));
@@ -366,7 +361,7 @@ export default function ReactionRoles() {
     setBusy(true);
     try {
       const saved = await api.deleteMapping(selectedId, mappingId);
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -406,7 +401,7 @@ export default function ReactionRoles() {
         roleIds: editDraft.roleIds,
         label: editDraft.label.trim() ? editDraft.label : null,
       });
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
       handleCancelEditMapping();
     } catch (err) {
       showError(errorMessage(err));
@@ -425,7 +420,7 @@ export default function ReactionRoles() {
     setBusy(true);
     try {
       const saved = await api.reorderMappings(selected.id, ordered);
-      setPanels((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
     } catch (err) {
       showError(errorMessage(err));
     } finally {
