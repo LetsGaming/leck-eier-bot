@@ -38,6 +38,18 @@ export function loadConfig(): Config {
   const env = parsed.data;
   const devMockDiscord = env.DEV_MOCK_DISCORD === "true";
 
+  // Defense-in-depth beyond the warning log below: DEV_MOCK_DISCORD skips
+  // real Discord OAuth entirely and logs any visitor in as a synthetic
+  // bot-owner (see /auth/dev-login in web/auth.ts) — a mistaken or leaked
+  // DEV_MOCK_DISCORD=true must never be reachable in the deployed image.
+  // The Dockerfile sets NODE_ENV=production, so this fails fast on boot
+  // rather than silently granting unauthenticated admin access.
+  if (devMockDiscord && process.env.NODE_ENV === "production") {
+    const message = "❌ DEV_MOCK_DISCORD=true is not allowed when NODE_ENV=production — this would skip Discord OAuth entirely.";
+    logger.error(message);
+    throw new Error(message);
+  }
+
   if (!devMockDiscord) {
     const missing = (
       [
