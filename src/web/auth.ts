@@ -53,21 +53,38 @@ async function parseJsonResponse<T>(res: Response, label: string): Promise<T> {
 }
 
 /**
- * Which of `web.publicUrls` (if any) the request actually came in on, so
- * `redirect_uri` always matches an origin the app is genuinely reachable
- * at — Discord requires the exact same `redirect_uri` at both the
- * `/authorize` step and the token exchange, and rejects anything not
- * registered on the application, so this can't be spoofed into an open
- * redirect: an unlisted Host is simply refused, never guessed at.
- * `request.protocol`/`request.host` already honor `X-Forwarded-*` (the app
- * is started with `trustProxy: true` — see web/server.ts). Deliberately
- * `request.host`, not `request.hostname` — the latter silently strips the
- * port, which would never match a WEB_PUBLIC_URLS entry on a non-default
- * port (e.g. `http://localhost:3000`).
+ * Case-insensitive match of `origin` against the configured
+ * `web.publicUrls` allow-list, or null if it isn't one of them. Shared by
+ * two call sites with different ideas of "the origin":
+ *  - the OAuth login/callback routes below, which resolve it from the
+ *    *request's own* Host (`${request.protocol}://${request.host}`) so
+ *    `redirect_uri` always matches an origin the app is genuinely
+ *    reachable at — Discord requires the exact same `redirect_uri` at both
+ *    the `/authorize` step and the token exchange, and rejects anything
+ *    not registered on the application, so this can't be spoofed into an
+ *    open redirect: an unlisted Host is simply refused, never guessed at.
+ *  - the same-origin `Origin`/`Referer` check in web/server.ts, which
+ *    resolves it from the request's *`Origin`/`Referer` header* instead, as
+ *    defense-in-depth (backing the `SameSite=Lax` session cookie) against
+ *    cross-site `/api/*` mutations.
+ * Exported so both call sites reuse this one matcher instead of each
+ * re-implementing the allow-list comparison.
  */
-function resolveRequestOrigin(request: FastifyRequest, allowedOrigins: string[]): string | null {
-  const origin = `${request.protocol}://${request.host}`;
+export function resolveRequestOrigin(origin: string | null, allowedOrigins: string[]): string | null {
+  if (!origin) return null;
   return allowedOrigins.find((allowed) => allowed.toLowerCase() === origin.toLowerCase()) ?? null;
+}
+
+/**
+ * `${request.protocol}://${request.host}` — the origin the *request itself*
+ * arrived on. `request.protocol`/`request.host` already honor
+ * `X-Forwarded-*` (the app is started with `trustProxy: true` — see
+ * web/server.ts). Deliberately `request.host`, not `request.hostname` —
+ * the latter silently strips the port, which would never match a
+ * WEB_PUBLIC_URLS entry on a non-default port (e.g. `http://localhost:3000`).
+ */
+function requestHostOrigin(request: FastifyRequest): string {
+  return `${request.protocol}://${request.host}`;
 }
 
 /**
@@ -116,38 +133,53 @@ export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, c
     });
   }
 
-  app.get("/auth/login", async (request, reply) => {
-    const origin = resolveRequestOrigin(request, web.publicUrls);
-    if (!origin) {
-      return reply
-        .code(400)
-        .send(
-          `Dieses Dashboard ist unter ${request.protocol}://${request.host} nicht erreichbar — füge es zu WEB_PUBLIC_URLS hinzu und starte den Bot neu.`,
-        );
-    }
+  app.get(
+    "/auth/login",
+    // Stricter than the app-wide rate limit (registered in server.ts) —
+    // this is the route an unauthenticated brute-force/credential-stuffing
+    // attempt against the OAuth flow would hit.
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const origin = resolveRequestOrigin(requestHostOrigin(request), web.publicUrls);
+      if (!origin) {
+        return reply
+          .code(400)
+          .send(
+            `Dieses Dashboard ist unter ${request.protocol}://${request.host} nicht erreichbar — füge es zu WEB_PUBLIC_URLS hinzu und starte den Bot neu.`,
+          );
+      }
 
-    const state = randomBytes(16).toString("hex");
-    reply.setCookie(WEB_OAUTH_STATE_COOKIE_NAME, state, {
-      signed: true,
-      httpOnly: true,
-      sameSite: "lax",
-      secure: request.protocol === "https",
-      path: "/",
-      maxAge: WEB_OAUTH_STATE_TTL_SECONDS,
-    });
+      const state = randomBytes(16).toString("hex");
+      reply.setCookie(WEB_OAUTH_STATE_COOKIE_NAME, state, {
+        signed: true,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: request.protocol === "https",
+        path: "/",
+        maxAge: WEB_OAUTH_STATE_TTL_SECONDS,
+      });
 
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: `${origin}/auth/callback`,
-      response_type: "code",
-      scope: "identify guilds.members.read",
-      state,
-    });
+      const params = new URLSearchParams({
+        client_id: config.clientId,
+        redirect_uri: `${origin}/auth/callback`,
+        response_type: "code",
+        scope: "identify guilds.members.read",
+        state,
+      });
 
-    return reply.redirect(`${DISCORD_OAUTH_AUTHORIZE_URL}?${params.toString()}`);
-  });
+      return reply.redirect(`${DISCORD_OAUTH_AUTHORIZE_URL}?${params.toString()}`);
+    },
+  );
 
-  app.get("/auth/callback", { schema: { querystring: CallbackQuerystringSchema } }, async (request, reply) => {
+  app.get(
+    "/auth/callback",
+    {
+      schema: { querystring: CallbackQuerystringSchema },
+      // Same stricter limit as /auth/login — this is the other half of the
+      // OAuth round-trip an unauthenticated attacker would hammer.
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
     const query = request.query;
 
     const stateCookieRaw = request.cookies[WEB_OAUTH_STATE_COOKIE_NAME];
@@ -161,7 +193,7 @@ export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, c
     // back to the exact redirect_uri it was given, so the Host here always
     // matches the one the login attempt started from (unless it's been
     // removed from WEB_PUBLIC_URLS since, which invalidates the login).
-    const origin = resolveRequestOrigin(request, web.publicUrls);
+    const origin = resolveRequestOrigin(requestHostOrigin(request), web.publicUrls);
     if (!origin) {
       return reply
         .code(400)
@@ -246,7 +278,8 @@ export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, c
     setSessionCookie(reply, sessionId, request.protocol === "https");
 
     return reply.redirect("/");
-  });
+    },
+  );
 
   app.post("/auth/logout", async (request, reply) => {
     logout(request, reply);
