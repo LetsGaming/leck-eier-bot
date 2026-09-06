@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "fs";
-import { writeFile } from "fs/promises";
+import { open } from "fs/promises";
 import path from "path";
 import { gzipSync } from "zlib";
 import { DATA_DIR } from "../db/index.js";
@@ -17,10 +17,13 @@ const ARCHIVE_DIR = path.join(DATA_DIR, "archives");
  * keep the data live (a second DB table would cost the same space) or
  * delete it outright with no way to look it up again later.
  *
- * The file is written and durably flushed BEFORE any row is deleted, so a
- * crash between the two steps only risks re-exporting the same rows next
- * sweep (harmless — the file gets a fresh timestamped name) rather than
- * ever losing data that was deleted but never archived.
+ * The file is written and fsync'd to disk BEFORE any row is deleted (not
+ * just handed to the OS page cache — writeFile()'s promise resolving isn't
+ * enough of a guarantee on its own), so a crash between the two steps —
+ * including a power loss, not just an application-level crash — only risks
+ * re-exporting the same rows next sweep (harmless — the file gets a fresh
+ * timestamped name) rather than ever losing data that was deleted but never
+ * archived.
  *
  * No-ops (no file written) if nothing is old enough to archive yet — the
  * common case on every sweep at this bot's scale.
@@ -39,7 +42,13 @@ export async function archiveOldMemberRecords(now: Date = new Date()): Promise<v
   const jsonl = records.map((record) => JSON.stringify(record)).join("\n") + "\n";
 
   try {
-    await writeFile(filePath, gzipSync(jsonl));
+    const handle = await open(filePath, "w");
+    try {
+      await handle.writeFile(gzipSync(jsonl));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
   } catch (err) {
     logger.error(`Member-records archive: failed to write ${filePath}, skipping deletion this sweep: ${errorMessage(err)}`);
     return;

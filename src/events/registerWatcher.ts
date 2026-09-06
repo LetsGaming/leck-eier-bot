@@ -136,6 +136,10 @@ export default function registerRegisterWatcher(client: BotClient): void {
   sweepExpiredRegisterThreads(client).catch((err) =>
     logger.error(`Bereinigung abgelaufener Registrierungs-Threads fehlgeschlagen: ${errorMessage(err)}`),
   );
+  // Same "catch up on startup, then keep sweeping" shape as above.
+  archiveOldMemberRecords().catch((err) =>
+    logger.error(`Archivierung alter Mitgliedsdatensätze fehlgeschlagen: ${errorMessage(err)}`),
+  );
   setInterval(() => {
     sweepExpiredRegisterThreads(client).catch((err) =>
       logger.error(`Bereinigung abgelaufener Registrierungs-Threads fehlgeschlagen: ${errorMessage(err)}`),
