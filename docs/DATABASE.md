@@ -171,7 +171,7 @@ Raw SQL lives in `src/db/`:
 - `src/db/settingsRepository.ts` — `getSettings()`/`updateSettings(patch)`, `getCommandOverride(name)`/`getAllCommandOverrides()`/`setCommandOverride(name, override)`.
 - `src/db/reactionRolesRepository.ts` — panel/mapping CRUD (`listPanels`, `getPanel`, `createPanel`, `updatePanel`, `deletePanel`, `setPanelMessageId`, `upsertMapping`, `deleteMapping`, `reorderMappings`).
 - `src/db/sessionsRepository.ts` — `createSession`, `getSession`, `deleteSession`, `sweepExpiredSessions`.
-- `src/db/memberRecordsRepository.ts` — `listAllMemberRecords`, `getMemberRecord`, `upsertJoin`, `updateProfile`, `recordRulesAccepted`, `recordLeave`.
+- `src/db/memberRecordsRepository.ts` — `getMemberRecord`, `getMemberRecordsByIds` (bounded batch lookup), `listFormerMembers`/`listRegistrations` (SQL-side search + pagination via `MemberSearchOptions`), `upsertJoin`, `updateProfile`, `recordRulesAccepted`, `recordLeave`.
 - `src/db/eventAttendanceRepository.ts` — event/signup/voice-log CRUD (`upsertApolloEvent`, `listEventsWithSignups`, `listDueScheduledEvents`/`listDueActiveEvents`/`listActiveEvents`, `setEventActive`/`setEventCompleted`/`setEventCancelled`, `replaceEventSignups` (intent only), `linkSignupToUser`, `setSignupAttendance` (attendance only), `appendVoiceLog`, `listVoiceLog`/`listVoiceLogForUser`).
 
 `src/services/*.ts` (business logic) and `src/web/routes/*.ts` (dashboard API handlers) are the only consumers of these repositories; nothing outside `src/db/` writes SQL directly. Repository writes that other parts of the app need to react to live (settings, command overrides, reaction-role panels/mappings) emit an event on the shared `settingsBus` (`src/services/settingsBus.ts`) after writing.
