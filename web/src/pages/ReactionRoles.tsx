@@ -1,29 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, errorMessage } from "../api";
-import EmojiPicker from "../components/EmojiPicker";
+import MappingForm from "../components/MappingForm";
 import RoleCheckboxList from "../components/RoleCheckboxList";
 import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
-import { useToast } from "../components/ToastContext";
-import { useConfirm } from "../components/ConfirmContext";
 import { useChannels } from "../hooks/useChannels";
 import { useEmojis } from "../hooks/useEmojis";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
-import { usePanels } from "../hooks/usePanels";
+import { usePanelEditor } from "../hooks/usePanelEditor";
+import type { MessageSource } from "../hooks/usePanelEditor";
+import { useMappingEditor } from "../hooks/useMappingEditor";
 import { useRoles } from "../hooks/useRoles";
 import { buildCoreResolvers, mockifyChannelMentions, renderTemplate } from "../utils/messageTemplate";
-import type {
-  CreatePanelInput,
-  Mapping,
-  Panel,
-  PanelMessageType,
-  SelectionType,
-} from "../types";
-
-const MAX_OPTIONS = 25; // Discord's own cap, for buttons and dropdowns alike.
-
-type MessageSource = "simple" | "embed" | "existing";
+import type { Mapping, PanelMessageType, SelectionType } from "../types";
 
 function selectionHint(selectionType: SelectionType): string {
   switch (selectionType) {
@@ -79,354 +67,57 @@ function previewBodyText(
   return [description, lines.join("\n")].filter(Boolean).join("\n\n");
 }
 
-function parseMessageLink(link: string): { channelId: string; messageId: string } | null {
-  const match = link.trim().match(/discord(?:app)?\.com\/channels\/\d+\/(\d+)\/(\d+)/);
-  if (!match) return null;
-  return { channelId: match[1]!, messageId: match[2]! };
-}
-
-/** Local editable buffer — title/description are plain strings ("" instead of null) since that's what a text input needs. Converted back to string | null on save. */
-interface PanelFormState {
-  name: string;
-  channelId: string;
-  messageType: PanelMessageType;
-  removeReaction: boolean;
-  allowMultiple: boolean;
-  removable: boolean;
-  allowedRoleIds: string[];
-  title: string;
-  description: string;
-  useFont: boolean;
-}
-
-function emptyPanelForm(): PanelFormState {
-  return {
-    name: "",
-    channelId: "",
-    messageType: "text",
-    removeReaction: false,
-    allowMultiple: false,
-    removable: true,
-    allowedRoleIds: [],
-    title: "",
-    description: "",
-    useFont: false,
-  };
-}
-
-function panelToForm(panel: Panel): PanelFormState {
-  return {
-    name: panel.name,
-    channelId: panel.channelId,
-    messageType: panel.messageType,
-    removeReaction: panel.removeReaction,
-    allowMultiple: panel.allowMultiple,
-    removable: panel.removable,
-    allowedRoleIds: panel.allowedRoleIds ?? [],
-    title: panel.title ?? "",
-    description: panel.description ?? "",
-    useFont: panel.useFont,
-  };
-}
-
-interface MappingDraft {
-  emojiName: string;
-  emojiId: string | null;
-  roleIds: string[];
-  label: string;
-}
-
-function emptyMappingDraft(): MappingDraft {
-  return { emojiName: "", emojiId: null, roleIds: [], label: "" };
-}
-
 export default function ReactionRoles() {
-  const panelsRes = usePanels();
   const channelsRes = useChannels();
   const rolesRes = useRoles();
   const emojisRes = useEmojis();
   const generalRes = useGeneralSettings();
-  const panels = panelsRes.data ?? [];
   const channels = channelsRes.data ?? [];
   const roles = rolesRes.data ?? [];
   const emojis = emojisRes.data ?? [];
   const fontMap = generalRes.data?.fontMap ?? null;
 
-  const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
-  const [form, setForm] = useState<PanelFormState>(emptyPanelForm());
-  // Only meaningful while creating a new panel — both are fixed for the
-  // panel's lifetime afterward.
-  const [selectionType, setSelectionType] = useState<SelectionType>("reactions");
-  const [attachMode, setAttachMode] = useState<"new" | "existing">("new");
-  const [messageLink, setMessageLink] = useState("");
-  const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
-  const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<MappingDraft>(emptyMappingDraft());
-  const [busy, setBusy] = useState(false);
-  const { showError, showSuccess } = useToast();
-  const confirmDialog = useConfirm();
+  const {
+    panels,
+    panelsRes,
+    selectedId,
+    selectPanel,
+    selected,
+    form,
+    setForm,
+    selectionType,
+    setSelectionType,
+    attachMode,
+    messageLink,
+    setMessageLink,
+    busy,
+    setBusy,
+    effectiveSelectionType,
+    isExistingMessageMode,
+    messageSource,
+    handleMessageSourceChange,
+    handleSavePanel,
+    handleDeletePanel,
+    handleSend,
+    handleSync,
+  } = usePanelEditor();
 
-  const selected = typeof selectedId === "number" ? panels.find((p) => p.id === selectedId) ?? null : null;
-  const effectiveSelectionType: SelectionType = selectedId === "new" ? selectionType : selected?.selectionType ?? "reactions";
-  // True whenever the message we're pointed at isn't one the bot posts/edits
-  // itself — either because we're creating a new panel in "attach" mode, or
-  // because the selected existing panel was created that way (immutable).
-  const isExistingMessageMode = selectedId === "new" ? attachMode === "existing" : !!selected && !selected.managed;
-  const optionCap = effectiveSelectionType === "reactions" ? null : MAX_OPTIONS;
-  const atOptionCap = optionCap !== null && (selected?.mappings.length ?? 0) >= optionCap;
-
-  const messageSource: MessageSource = attachMode === "existing" ? "existing" : form.messageType === "text" ? "simple" : "embed";
-
-  // A role can only grant one outcome per panel — once it's mapped to an
-  // option, picking it again for a second option (even as part of a
-  // different multi-role Reactions option) would just be ambiguous.
-  const usedRoleIds = useMemo(
-    () => new Set(selected?.mappings.flatMap((m) => m.roleIds) ?? []),
-    [selected],
-  );
-
-  useEffect(() => {
-    if (selectedId === "new") {
-      setForm(emptyPanelForm());
-      setSelectionType("reactions");
-      setAttachMode("new");
-      setMessageLink("");
-    } else if (selected) {
-      setForm(panelToForm(selected));
-    }
-    setMappingDraft(emptyMappingDraft());
-    setEditingMappingId(null);
-  }, [selectedId, selected]);
-
-  function selectPanel(id: number | "new") {
-    setSelectedId(id);
-  }
-
-  function handleMessageSourceChange(source: MessageSource) {
-    if (source === "existing") {
-      setAttachMode("existing");
-      setSelectionType("reactions"); // only selection type existing messages support
-    } else {
-      setAttachMode("new");
-      setForm((f) => ({ ...f, messageType: source === "simple" ? "text" : "embed" }));
-    }
-  }
-
-  async function handleSavePanel() {
-    if (!form.name.trim()) {
-      showError("Gib dem Panel einen Namen.");
-      return;
-    }
-    const attachingExisting = selectedId === "new" && attachMode === "existing";
-    let existingLocation: { channelId: string; messageId: string } | null = null;
-    if (attachingExisting) {
-      existingLocation = parseMessageLink(messageLink);
-      if (!existingLocation) {
-        showError("Füge einen gültigen Nachrichtenlink ein (Rechtsklick auf die Nachricht → Nachrichtenlink kopieren).");
-        return;
-      }
-    } else if (!form.channelId) {
-      showError("Wähle zuerst einen Kanal aus.");
-      return;
-    }
-    setBusy(true);
-    try {
-      let saved: Panel;
-      if (selectedId === "new") {
-        const body: CreatePanelInput = {
-          ...form,
-          channelId: attachingExisting ? existingLocation!.channelId : form.channelId,
-          selectionType,
-          title: attachingExisting || !form.title.trim() ? null : form.title,
-          description: attachingExisting || !form.description.trim() ? null : form.description,
-          allowedRoleIds: form.allowedRoleIds.length ? form.allowedRoleIds : null,
-          existingMessageId: attachingExisting ? existingLocation!.messageId : null,
-        };
-        saved = await api.createPanel(body);
-        showSuccess("Panel als Entwurf erstellt — füge unten Rollen hinzu und klicke dann auf Senden, wenn du bereit bist.");
-      } else if (typeof selectedId === "number") {
-        saved = await api.updatePanel(selectedId, {
-          ...form,
-          title: form.title.trim() ? form.title : null,
-          description: form.description.trim() ? form.description : null,
-          allowedRoleIds: form.allowedRoleIds.length ? form.allowedRoleIds : null,
-        });
-        showSuccess(saved.sent ? "Panel gespeichert und mit Discord synchronisiert." : "Entwurf gespeichert.");
-      } else {
-        return;
-      }
-      panelsRes.setData((prev) => {
-        const list = prev ?? [];
-        const exists = list.some((p) => p.id === saved.id);
-        return exists ? list.map((p) => (p.id === saved.id ? saved : p)) : [...list, saved];
-      });
-      setSelectedId(saved.id);
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDeletePanel() {
-    if (typeof selectedId !== "number" || !selected) return;
-    const message =
-      !selected.managed
-        ? "Die angehängte Discord-Nachricht bleibt unangetastet — nur die Reaktionsrollen-Konfiguration wird entfernt."
-        : "Das Panel und die zugehörige Discord-Nachricht werden unwiderruflich gelöscht.";
-    const ok = await confirmDialog({
-      title: "Panel löschen",
-      message,
-      requireText: selected.managed ? selected.name : undefined,
-      confirmLabel: "Löschen",
-    });
-    if (!ok) return;
-    setBusy(true);
-    try {
-      await api.deletePanel(selectedId);
-      panelsRes.setData((prev) => prev?.filter((p) => p.id !== selectedId) ?? null);
-      setSelectedId(null);
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleSend() {
-    if (typeof selectedId !== "number") return;
-    setBusy(true);
-    try {
-      const saved = await api.sendPanel(selectedId);
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-      showSuccess("Panel gesendet — es ist jetzt live auf Discord.");
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleSync() {
-    if (typeof selectedId !== "number") return;
-    setBusy(true);
-    try {
-      const saved = await api.syncPanel(selectedId);
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-      showSuccess("Panel mit Discord synchronisiert.");
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleAddMapping() {
-    if (typeof selectedId !== "number") return;
-    if (mappingDraft.roleIds.length === 0) {
-      showError("Wähle mindestens eine Rolle aus.");
-      return;
-    }
-    if (effectiveSelectionType === "reactions" && !mappingDraft.emojiName) {
-      showError("Wähle ein Emoji aus.");
-      return;
-    }
-    if (effectiveSelectionType !== "reactions" && !mappingDraft.label.trim()) {
-      showError(`Für ${effectiveSelectionType === "buttons" ? "Buttons" : "Dropdown-Optionen"} ist eine Beschriftung erforderlich.`);
-      return;
-    }
-    if (atOptionCap) {
-      showError(`Discord erlaubt maximal ${optionCap} Optionen für diesen Auswahltyp.`);
-      return;
-    }
-    setBusy(true);
-    try {
-      const saved = await api.addMapping(selectedId, {
-        emojiName: mappingDraft.emojiName || null,
-        emojiId: mappingDraft.emojiId,
-        roleIds: mappingDraft.roleIds,
-        label: mappingDraft.label.trim() ? mappingDraft.label : null,
-      });
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-      setMappingDraft(emptyMappingDraft());
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRemoveMapping(mappingId: number) {
-    if (typeof selectedId !== "number") return;
-    setBusy(true);
-    try {
-      const saved = await api.deleteMapping(selectedId, mappingId);
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleStartEditMapping(m: Mapping) {
-    setEditingMappingId(m.id);
-    setEditDraft({ emojiName: m.emojiName ?? "", emojiId: m.emojiId, roleIds: m.roleIds, label: m.label ?? "" });
-  }
-
-  function handleCancelEditMapping() {
-    setEditingMappingId(null);
-    setEditDraft(emptyMappingDraft());
-  }
-
-  async function handleSaveEditMapping() {
-    if (typeof selectedId !== "number" || editingMappingId === null) return;
-    if (editDraft.roleIds.length === 0) {
-      showError("Wähle mindestens eine Rolle aus.");
-      return;
-    }
-    if (effectiveSelectionType === "reactions" && !editDraft.emojiName) {
-      showError("Wähle ein Emoji aus.");
-      return;
-    }
-    if (effectiveSelectionType !== "reactions" && !editDraft.label.trim()) {
-      showError(`Für ${effectiveSelectionType === "buttons" ? "Buttons" : "Dropdown-Optionen"} ist eine Beschriftung erforderlich.`);
-      return;
-    }
-    setBusy(true);
-    try {
-      const saved = await api.updateMapping(selectedId, editingMappingId, {
-        emojiName: editDraft.emojiName || null,
-        emojiId: editDraft.emojiId,
-        roleIds: editDraft.roleIds,
-        label: editDraft.label.trim() ? editDraft.label : null,
-      });
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-      handleCancelEditMapping();
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleMove(mappingId: number, direction: -1 | 1) {
-    if (!selected) return;
-    const ordered = [...selected.mappings].sort((a, b) => a.position - b.position).map((m) => m.id);
-    const index = ordered.indexOf(mappingId);
-    const swapWith = index + direction;
-    if (swapWith < 0 || swapWith >= ordered.length) return;
-    [ordered[index], ordered[swapWith]] = [ordered[swapWith], ordered[index]];
-    setBusy(true);
-    try {
-      const saved = await api.reorderMappings(selected.id, ordered);
-      panelsRes.setData((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const {
+    mappingDraft,
+    setMappingDraft,
+    editingMappingId,
+    editDraft,
+    setEditDraft,
+    optionCap,
+    atOptionCap,
+    usedRoleIds,
+    handleAddMapping,
+    handleRemoveMapping,
+    handleStartEditMapping,
+    handleCancelEditMapping,
+    handleSaveEditMapping,
+    handleMove,
+  } = useMappingEditor(selected, effectiveSelectionType, panelsRes, busy, setBusy);
 
   function roleName(roleId: string): string {
     return roles.find((r) => r.id === roleId)?.name ?? roleId;
@@ -767,65 +458,21 @@ export default function ReactionRoles() {
                     .sort((a, b) => a.position - b.position)
                     .map((m, i, arr) =>
                       editingMappingId === m.id ? (
-                        <div className="mapping-row" key={m.id}>
-                          <EmojiPicker
-                            value={{ emojiId: editDraft.emojiId, emojiName: editDraft.emojiName || null }}
-                            onChange={(v) =>
-                              setEditDraft((d) => ({ ...d, emojiId: v.emojiId, emojiName: v.emojiName ?? "" }))
-                            }
-                            customEmojis={emojis}
-                            allowEmpty={effectiveSelectionType !== "reactions"}
-                          />
-                          {effectiveSelectionType === "reactions" ? (
-                            <RoleCheckboxList
-                              className="grow"
-                              placeholder="Rollen durchsuchen…"
-                              value={editDraft.roleIds}
-                              onChange={(ids) => setEditDraft((d) => ({ ...d, roleIds: ids }))}
-                              options={roles
-                                .filter((r) => !usedRoleIds.has(r.id) || m.roleIds.includes(r.id))
-                                .map((r) => ({
-                                  value: r.id,
-                                  label: r.name,
-                                  disabled: !r.manageable && !editDraft.roleIds.includes(r.id),
-                                  hint: r.manageable ? undefined : "(nicht zuweisbar)",
-                                }))}
-                            />
-                          ) : (
-                            <SearchableSelect
-                              className="grow"
-                              value={editDraft.roleIds[0] ?? ""}
-                              onChange={(v) => setEditDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
-                              placeholder="Rollen durchsuchen…"
-                              emptyLabel="— Rolle wählen —"
-                              options={roles
-                                .filter((r) => !usedRoleIds.has(r.id) || m.roleIds.includes(r.id))
-                                .map((r) => ({
-                                  value: r.id,
-                                  label: r.name,
-                                  disabled: !r.manageable,
-                                  hint: r.manageable ? undefined : "(nicht zuweisbar)",
-                                }))}
-                            />
-                          )}
-                          <input
-                            type="text"
-                            className="grow"
-                            placeholder={
-                              effectiveSelectionType === "reactions"
-                                ? "Beschriftung (optional)"
-                                : `${effectiveSelectionType === "buttons" ? "Button" : "Options"}text (erforderlich)`
-                            }
-                            value={editDraft.label}
-                            onChange={(e) => setEditDraft((d) => ({ ...d, label: e.target.value }))}
-                          />
-                          <button className="primary" disabled={busy} onClick={handleSaveEditMapping}>
-                            Speichern
-                          </button>
-                          <button disabled={busy} onClick={handleCancelEditMapping}>
-                            Abbrechen
-                          </button>
-                        </div>
+                        <MappingForm
+                          key={m.id}
+                          draft={editDraft}
+                          setDraft={setEditDraft}
+                          onSubmit={handleSaveEditMapping}
+                          submitLabel="Speichern"
+                          onCancel={handleCancelEditMapping}
+                          cancelLabel="Abbrechen"
+                          selectionType={effectiveSelectionType}
+                          emojis={emojis}
+                          roles={roles}
+                          usedRoleIds={usedRoleIds}
+                          extraAllowedRoleIds={m.roleIds}
+                          busy={busy}
+                        />
                       ) : (
                         <div className="mapping-row" key={m.id}>
                           {effectiveSelectionType === "reactions" && <span>{emojiDisplay(m)}</span>}
@@ -861,62 +508,17 @@ export default function ReactionRoles() {
                     {atOptionCap ? `Hinzufügen (Limit von ${optionCap} erreicht)` : `${optionWord} hinzufügen`}
                   </h2>
                   {!atOptionCap && (
-                    <div className="mapping-row">
-                      <EmojiPicker
-                        value={{ emojiId: mappingDraft.emojiId, emojiName: mappingDraft.emojiName || null }}
-                        onChange={(v) =>
-                          setMappingDraft((d) => ({ ...d, emojiId: v.emojiId, emojiName: v.emojiName ?? "" }))
-                        }
-                        customEmojis={emojis}
-                        allowEmpty={effectiveSelectionType !== "reactions"}
-                      />
-                      {effectiveSelectionType === "reactions" ? (
-                        <RoleCheckboxList
-                          className="grow"
-                          placeholder="Rollen durchsuchen…"
-                          value={mappingDraft.roleIds}
-                          onChange={(ids) => setMappingDraft((d) => ({ ...d, roleIds: ids }))}
-                          options={roles
-                            .filter((r) => !usedRoleIds.has(r.id))
-                            .map((r) => ({
-                              value: r.id,
-                              label: r.name,
-                              disabled: !r.manageable && !mappingDraft.roleIds.includes(r.id),
-                              hint: r.manageable ? undefined : "(nicht zuweisbar)",
-                            }))}
-                        />
-                      ) : (
-                        <SearchableSelect
-                          className="grow"
-                          value={mappingDraft.roleIds[0] ?? ""}
-                          onChange={(v) => setMappingDraft((d) => ({ ...d, roleIds: v ? [v] : [] }))}
-                          placeholder="Rollen durchsuchen…"
-                          emptyLabel="— Rolle wählen —"
-                          options={roles
-                            .filter((r) => !usedRoleIds.has(r.id))
-                            .map((r) => ({
-                              value: r.id,
-                              label: r.name,
-                              disabled: !r.manageable,
-                              hint: r.manageable ? undefined : "(nicht zuweisbar)",
-                            }))}
-                        />
-                      )}
-                      <input
-                        type="text"
-                        className="grow"
-                        placeholder={
-                          effectiveSelectionType === "reactions"
-                            ? "Beschriftung (optional)"
-                            : `${effectiveSelectionType === "buttons" ? "Button" : "Options"}text (erforderlich)`
-                        }
-                        value={mappingDraft.label}
-                        onChange={(e) => setMappingDraft((d) => ({ ...d, label: e.target.value }))}
-                      />
-                      <button className="primary" disabled={busy} onClick={handleAddMapping}>
-                        Hinzufügen
-                      </button>
-                    </div>
+                    <MappingForm
+                      draft={mappingDraft}
+                      setDraft={setMappingDraft}
+                      onSubmit={handleAddMapping}
+                      submitLabel="Hinzufügen"
+                      selectionType={effectiveSelectionType}
+                      emojis={emojis}
+                      roles={roles}
+                      usedRoleIds={usedRoleIds}
+                      busy={busy}
+                    />
                   )}
                 </div>
               )}
