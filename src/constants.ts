@@ -80,6 +80,8 @@ export const REGISTER_AUTO_THREAD_LIFETIME_MS = 60 * 60 * 1000;
 export const REGISTER_THREAD_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 /** Discord's hard cap on a member's nickname length. */
 export const DISCORD_NICKNAME_MAX_LENGTH = 32;
+/** A former member's `member_records` row is archived (exported to a compressed file, then deleted) once this long has passed since `left_at` — see `archiveOldMemberRecords()` in `services/memberRecordsArchive.ts`. Product decision: 1 year. */
+export const MEMBER_RECORD_ARCHIVE_AFTER_MS = 365 * 24 * 60 * 60 * 1000;
 
 // --- Apollo event attendance ---
 /** Apollo's (apollo.fyi) own Discord bot user id — detection filters on this directly rather than a "some bot posted an embed that looks RSVP-shaped" heuristic, since a verified app's messages don't reliably behave like a normal bot's for `message.author.bot`/webhook checks. Confirmed against this server's real Apollo messages. */

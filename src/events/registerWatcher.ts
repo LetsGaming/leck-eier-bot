@@ -11,6 +11,7 @@ import {
   clearExpiredRegisterThread,
 } from "../db/memberRecordsRepository.js";
 import { sweepExpiredSessions } from "../db/sessionsRepository.js";
+import { archiveOldMemberRecords } from "../services/memberRecordsArchive.js";
 import { REGISTER_AUTO_THREAD_LIFETIME_MS, REGISTER_THREAD_SWEEP_INTERVAL_MS } from "../constants.js";
 import { parseRegisterForm, buildRegisterNickname, renderConfirmation, shouldAutoCompleteRegistration } from "../services/registration.js";
 import logger, { errorMessage } from "../utils/logger.js";
@@ -145,6 +146,12 @@ export default function registerRegisterWatcher(client: BotClient): void {
     // session (cookie never returns) would sit in web_sessions until the
     // next restart. Cheap synchronous delete — fine to run every tick here.
     sweepExpiredSessions();
+    // Also piggybacked here rather than given its own timer, same
+    // reasoning — a no-op query on every tick until a former member's
+    // record actually crosses MEMBER_RECORD_ARCHIVE_AFTER_MS.
+    archiveOldMemberRecords().catch((err) =>
+      logger.error(`Archivierung alter Mitgliedsdatensätze fehlgeschlagen: ${errorMessage(err)}`),
+    );
   }, REGISTER_THREAD_SWEEP_INTERVAL_MS);
 }
 

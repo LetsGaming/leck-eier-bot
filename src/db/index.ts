@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 
 // data/ always lives at the project root, one level above whichever of
 // src (dev) or dist (prod) is currently executing.
-const DATA_DIR = path.resolve(__dirname, "..", "..", "data");
+export const DATA_DIR = path.resolve(__dirname, "..", "..", "data");
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }

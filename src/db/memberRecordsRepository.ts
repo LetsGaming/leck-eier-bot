@@ -348,3 +348,22 @@ export function listExpiredRegisterThreads(nowIso: string): Array<{ userId: stri
 export function clearExpiredRegisterThread(userId: string): void {
   clearExpiredRegisterThreadStmt.run({ userId });
 }
+
+const selectArchivableMemberRecordsStmt = db.prepare<[string], MemberRecordRow>(
+  `SELECT ${COLUMNS} FROM member_records WHERE left_at IS NOT NULL AND left_at <= ?`,
+);
+
+const deleteMemberRecordStmt = db.prepare<{ userId: string }>(`DELETE FROM member_records WHERE user_id = @userId`);
+
+/** Every former member (`left_at` set) who left on or before `cutoffIso` — the archival candidates for `archiveOldMemberRecords()` in `services/memberRecordsArchive.ts`. */
+export function listArchivableMemberRecords(cutoffIso: string): MemberRecord[] {
+  return selectArchivableMemberRecordsStmt.all(cutoffIso).map(rowToRecord);
+}
+
+/** Deletes the given member_records rows — only ever called after their data has already been durably written to an archive file; see `archiveOldMemberRecords()`. */
+export function deleteMemberRecords(userIds: string[]): void {
+  const deleteAll = db.transaction((ids: string[]) => {
+    for (const userId of ids) deleteMemberRecordStmt.run({ userId });
+  });
+  deleteAll(userIds);
+}
