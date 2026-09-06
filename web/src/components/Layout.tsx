@@ -10,6 +10,7 @@ import {
   IconReactionRoles,
   IconSettings,
 } from "./NavIcons";
+import { useNavBadgeCounts, type NavBadgeCounts } from "../hooks/useNavBadgeCounts";
 import type { Me } from "../types";
 
 interface NavItem {
@@ -19,11 +20,6 @@ interface NavItem {
   end?: boolean;
   /** Reads a pending-work count off `NavBadgeCounts` for this item's badge. */
   countKey?: keyof NavBadgeCounts;
-}
-
-interface NavBadgeCounts {
-  pendingRegistrationCount: number;
-  unmatchedSignupCount: number;
 }
 
 // Grouped (with a visual divider, see below) rather than one flat list:
@@ -80,22 +76,8 @@ function NavLinks({ items, counts }: { items: NavItem[]; counts: NavBadgeCounts 
 
 export default function Layout({ me, onLogout, children }: LayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
-  const [counts, setCounts] = useState<NavBadgeCounts | null>(null);
   const location = useLocation();
-
-  // Refetched on every navigation so approving a registration or resolving
-  // an unmatched signup clears the sidebar badge without a full reload.
-  useEffect(() => {
-    api
-      .status()
-      .then((s) =>
-        setCounts({
-          pendingRegistrationCount: s.pendingRegistrationCount,
-          unmatchedSignupCount: s.unmatchedSignupCount,
-        }),
-      )
-      .catch(() => {});
-  }, [location.pathname]);
+  const { data: counts } = useNavBadgeCounts(location.pathname);
 
   // Below the mobile breakpoint the sidebar is an off-canvas drawer — close
   // it on every navigation so picking a page doesn't leave it covering the

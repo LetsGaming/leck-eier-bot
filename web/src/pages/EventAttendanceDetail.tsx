@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
 import { formatAbsolute } from "../dateFormat";
-import type { AttendanceStatus, EventAttendance, MemberAuditEntry } from "../types";
+import type { AttendanceStatus } from "../types";
 import { EVENT_STATUS_BADGE_CLASS, EVENT_STATUS_LABELS } from "../eventAttendanceLabels";
 import SignupRow from "../components/SignupRow";
+import { useEventAttendanceDetail, useInGuildMembers } from "../hooks/useEventAttendance";
 
 // Same predicate as the old list page's "Nur Probleme anzeigen" filter
 // (removed from the list in Task 13, relocated here per Ruling R5) — an
@@ -19,18 +20,10 @@ export default function EventAttendanceDetailPage() {
   const { showError, showSuccess } = useToast();
   const confirmDialog = useConfirm();
 
-  const [event, setEvent] = useState<EventAttendance | null>(null);
-  const [members, setMembers] = useState<MemberAuditEntry[]>([]);
   const [nameQuery, setNameQuery] = useState("");
   const [onlyProblems, setOnlyProblems] = useState(false);
 
-  useEffect(() => {
-    if (!eventId) return;
-    api
-      .eventAttendance(Number(eventId))
-      .then(setEvent)
-      .catch((err) => showError(errorMessage(err)));
-  }, [eventId, showError]);
+  const { data: event, setData: setEvent } = useEventAttendanceDetail(eventId);
 
   // The one place left in the app that still pays for the member list —
   // moved here from the list page (Task 13) since only the linking picker
@@ -38,12 +31,8 @@ export default function EventAttendanceDetailPage() {
   // in-guild-only endpoint (not memberAudit()) since this dropdown only ever
   // links a signup to a *current* member — it never needs the (growing,
   // unbounded) former-members half of the table.
-  useEffect(() => {
-    api
-      .inGuildMembers("")
-      .then((r) => setMembers(r.inGuild))
-      .catch((err) => showError(errorMessage(err)));
-  }, [showError]);
+  const { data: membersData } = useInGuildMembers();
+  const members = membersData ?? [];
 
   async function handleLink(signupId: number, userId: string | null): Promise<void> {
     try {

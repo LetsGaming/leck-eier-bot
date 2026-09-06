@@ -1,19 +1,15 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, errorMessage } from "../api";
-import { useToast } from "../components/ToastContext";
 import EventCard from "../components/EventCard";
 import MonthPicker, { monthLabel } from "../components/MonthPicker";
-import type { EventAttendanceListResponse, EventMonths } from "../types";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { useEventAttendanceList, useEventAttendanceMonths } from "../hooks/useEventAttendance";
 
 const DEBOUNCE_MS = 300;
 
 export default function EventAttendancePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(searchParams.get("q") ?? "");
-  const [listResponse, setListResponse] = useState<EventAttendanceListResponse | null>(null);
-  const [months, setMonths] = useState<EventMonths | null>(null);
-  const { showError } = useToast();
 
   const problems = searchParams.get("problems") === "1";
   const scope = searchParams.get("scope") === "all" ? "all" : "month";
@@ -26,48 +22,36 @@ export default function EventAttendancePage() {
 
   // Keep the search box in sync when the URL's ?q= changes from outside a
   // keystroke here (browser back/forward, or another param write clearing
-  // it) — the debounce effect below only ever writes the URL, never reads
-  // it back into local state, so without this a back-navigation would
-  // restore the URL but leave stale text in the input.
+  // it) — the debounce below only ever writes the URL, never reads it back
+  // into local state, so without this a back-navigation would restore the
+  // URL but leave stale text in the input.
   useEffect(() => {
     setSearchInput((current) => (current.trim() === q ? current : q));
   }, [q]);
 
   // Debounce the search box into ?q=, replacing history so typing doesn't
-  // stack an entry per keystroke.
+  // stack an entry per keystroke. useDebouncedValue gives an honest
+  // dependency array here (no eslint-disable needed) — it settles 300ms
+  // after typing stops, then this effect's the only thing that writes it.
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), DEBOUNCE_MS);
   useEffect(() => {
-    const trimmed = searchInput.trim();
-    const timer = setTimeout(() => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (trimmed) next.set("q", trimmed);
-          else next.delete("q");
-          return next;
-        },
-        { replace: true },
-      );
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (debouncedSearch) next.set("q", debouncedSearch);
+        else next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [debouncedSearch, setSearchParams]);
 
-  useEffect(() => {
-    api
-      .eventAttendanceMonths()
-      .then(setMonths)
-      .catch((err) => showError(errorMessage(err)));
-  }, [showError]);
-
-  useEffect(() => {
-    const params = problems
-      ? { q: q || undefined, problems: "1" as const }
-      : { month: monthParam ?? undefined, q: q || undefined, scope: scope === "all" ? ("all" as const) : undefined };
-    api
-      .eventAttendanceList(params)
-      .then(setListResponse)
-      .catch((err) => showError(errorMessage(err)));
-  }, [problems, monthParam, scope, q, showError]);
+  const { data: months } = useEventAttendanceMonths();
+  const { data: listResponse } = useEventAttendanceList(
+    problems
+      ? { q: q || undefined, problems: "1" }
+      : { month: monthParam ?? undefined, q: q || undefined, scope: scope === "all" ? "all" : undefined },
+  );
 
   function handleMonthChange(month: string | null): void {
     setSearchParams((prev) => {
