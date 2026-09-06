@@ -1,4 +1,3 @@
-import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   deleteBirthday,
@@ -9,6 +8,7 @@ import {
 import { daysUntil, getUpcomingBirthdays, isValidCalendarDate, syncAnchorMessage, toDateKey } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient } from "../../types.js";
+import type { ZodFastifyInstance } from "../utils.js";
 
 const EntryBodySchema = z
   .object({
@@ -19,8 +19,12 @@ const EntryBodySchema = z
   })
   .refine((b) => b.userId || b.name, { message: "Gib einen Discord-Benutzer oder einen Namen an." });
 
+const IdParamsSchema = z.object({
+  id: z.string(),
+});
+
 /** Now the only way birthdays get into the system besides self-registration (`/setmybirthday`, or posting a date in the birthday channel) — there's no more admin-maintained announcement message to parse. */
-export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient): void {
+export function registerBirthdaysRoutes(app: ZodFastifyInstance, client: BotClient): void {
   app.get("/birthdays", async () => getAllBirthdaysByDate());
 
   // Sends a pre-computed day-count rather than the Date itself — see
@@ -34,10 +38,8 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
     })),
   );
 
-  app.post("/birthdays", async (request, reply) => {
-    const body = EntryBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    const { day, month, userId, name } = body.data;
+  app.post("/birthdays", { schema: { body: EntryBodySchema } }, async (request, reply) => {
+    const { day, month, userId, name } = request.body;
     if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
 
     const mention = userId ? `<@${userId}>` : `@${name}`;
@@ -55,30 +57,32 @@ export function registerBirthdaysRoutes(app: FastifyInstance, client: BotClient)
     return reply.code(201).send({ id, date: toDateKey(day, month), mention, userId: userId ?? null, name: name ?? null, source: "list" });
   });
 
-  app.patch("/birthdays/:id", async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
+  app.patch(
+    "/birthdays/:id",
+    { schema: { params: IdParamsSchema, body: EntryBodySchema } },
+    async (request, reply) => {
+      const id = Number(request.params.id);
+      if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
 
-    const body = EntryBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-    const { day, month, userId, name } = body.data;
-    if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
+      const { day, month, userId, name } = request.body;
+      if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
 
-    const mention = userId ? `<@${userId}>` : `@${name}`;
-    try {
-      updateBirthdayEntry(id, { date: toDateKey(day, month), mention, userId: userId ?? null, name: name ?? null });
-    } catch (err) {
-      return reply.code(409).send({ error: `Eintrag konnte nicht aktualisiert werden: ${errorMessage(err)}` });
-    }
+      const mention = userId ? `<@${userId}>` : `@${name}`;
+      try {
+        updateBirthdayEntry(id, { date: toDateKey(day, month), mention, userId: userId ?? null, name: name ?? null });
+      } catch (err) {
+        return reply.code(409).send({ error: `Eintrag konnte nicht aktualisiert werden: ${errorMessage(err)}` });
+      }
 
-    syncAnchorMessage(client).catch((err) =>
-      logger.error(`Failed to sync birthday anchor after editing an entry: ${errorMessage(err)}`),
-    );
-    return { ok: true };
-  });
+      syncAnchorMessage(client).catch((err) =>
+        logger.error(`Failed to sync birthday anchor after editing an entry: ${errorMessage(err)}`),
+      );
+      return { ok: true };
+    },
+  );
 
-  app.delete("/birthdays/:id", async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
+  app.delete("/birthdays/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+    const id = Number(request.params.id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
 
     deleteBirthday(id);

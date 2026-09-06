@@ -1,11 +1,10 @@
 import cron from "node-cron";
 import { z } from "zod";
-import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { renderBirthdayTemplate, syncAnchorMessage } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Settings } from "../../types.js";
-import { pickDefined } from "../utils.js";
+import { pickDefined, type ZodFastifyInstance } from "../utils.js";
 
 const PatchBodySchema = z.object({
   template: z.string().min(1).max(2000).optional(),
@@ -35,15 +34,12 @@ function serializeBirthdaySettings(settings: ReturnType<typeof getSettings>) {
   };
 }
 
-export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: BotClient): void {
+export function registerBirthdaySettingsRoutes(app: ZodFastifyInstance, client: BotClient): void {
   app.get("/settings/birthday", async () => serializeBirthdaySettings(getSettings()));
 
-  app.patch("/settings/birthday", async (request, reply) => {
-    const body = PatchBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-
+  app.patch("/settings/birthday", { schema: { body: PatchBodySchema } }, async (request, reply) => {
     const { template, channelId, cron: cronExpression, modChannelId, anchorTemplate, anchorIntro, anchorUseFont, announcementUseFont } =
-      body.data;
+      request.body;
 
     if (template !== undefined && (!template.includes("{userMention}") || !template.includes("{userNick}"))) {
       return reply.code(400).send({ error: "Die Vorlage muss {userMention} und {userNick} enthalten." });
@@ -78,12 +74,9 @@ export function registerBirthdaySettingsRoutes(app: FastifyInstance, client: Bot
     return serializeBirthdaySettings(settings);
   });
 
-  app.post("/settings/birthday/preview", async (request, reply) => {
-    const body = PreviewBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-
+  app.post("/settings/birthday/preview", { schema: { body: PreviewBodySchema } }, async (request, reply) => {
     const session = request.session!;
-    const rendered = renderBirthdayTemplate(body.data.template, {
+    const rendered = renderBirthdayTemplate(request.body.template, {
       mention: `<@${session.userId}>`,
       userId: session.userId,
       name: session.username,

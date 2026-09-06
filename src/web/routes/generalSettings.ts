@@ -1,8 +1,7 @@
 import { z } from "zod";
-import type { FastifyInstance } from "fastify";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { isValidFontMap } from "../../utils/font.js";
-import { pickDefined } from "../utils.js";
+import { pickDefined, type ZodFastifyInstance } from "../utils.js";
 import type { Settings } from "../../types.js";
 
 const PatchBodySchema = z.object({
@@ -39,13 +38,10 @@ function serialize(settings: ReturnType<typeof getSettings>) {
   };
 }
 
-export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
+export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
   app.get("/settings/general", async () => serialize(getSettings()));
 
-  app.patch("/settings/general", async (request, reply) => {
-    const body = PatchBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: z.prettifyError(body.error) });
-
+  app.patch("/settings/general", { schema: { body: PatchBodySchema } }, async (request, reply) => {
     const {
       leaveNotificationsEnabled,
       fontMap,
@@ -60,7 +56,7 @@ export function registerGeneralSettingsRoutes(app: FastifyInstance): void {
       autoRegisterConfirmationTemplate,
       apolloEventChannelId,
       eventVoiceChannelId,
-    } = body.data;
+    } = request.body;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)

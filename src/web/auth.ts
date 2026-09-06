@@ -1,9 +1,11 @@
 import { randomBytes, randomUUID } from "crypto";
 import { PermissionsBitField } from "discord.js";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
+import type { FastifyRequest } from "fastify";
 import { createSession } from "../db/sessionsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import { getSessionFromRequest, logout, setSessionCookie } from "./session.js";
+import type { ZodFastifyInstance } from "./utils.js";
 import {
   DISCORD_API_BASE_URL,
   DISCORD_OAUTH_AUTHORIZE_URL,
@@ -27,6 +29,12 @@ interface DiscordUser {
 interface DiscordGuildMember {
   roles: string[];
 }
+
+const CallbackQuerystringSchema = z.object({
+  code: z.string().optional(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+});
 
 /**
  * A misrouted URL (wrong path, a proxy in front of discord.com, etc.) can
@@ -84,7 +92,7 @@ function resolveDashboardRole(client: BotClient, config: Config, userId: string,
   return hasAdminRole ? "admin" : null;
 }
 
-export function registerAuthRoutes(app: FastifyInstance, client: BotClient, config: Config): void {
+export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {
   const web = config.web!; // callers only invoke this once config.web is confirmed present
 
   if (config.devMockDiscord) {
@@ -139,8 +147,8 @@ export function registerAuthRoutes(app: FastifyInstance, client: BotClient, conf
     return reply.redirect(`${DISCORD_OAUTH_AUTHORIZE_URL}?${params.toString()}`);
   });
 
-  app.get("/auth/callback", async (request, reply) => {
-    const query = request.query as { code?: string; state?: string; error?: string };
+  app.get("/auth/callback", { schema: { querystring: CallbackQuerystringSchema } }, async (request, reply) => {
+    const query = request.query;
 
     const stateCookieRaw = request.cookies[WEB_OAUTH_STATE_COOKIE_NAME];
     reply.clearCookie(WEB_OAUTH_STATE_COOKIE_NAME, { path: "/" });

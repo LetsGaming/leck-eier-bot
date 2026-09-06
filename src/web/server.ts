@@ -1,10 +1,16 @@
 import path from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyFormbody from "@fastify/formbody";
 import fastifyStatic from "@fastify/static";
+import {
+  hasZodFastifySchemaValidationErrors,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from "fastify-type-provider-zod";
 import logger, { errorMessage } from "../utils/logger.js";
 import { sweepExpiredSessions } from "../db/sessionsRepository.js";
 import { registerAuthRoutes } from "./auth.js";
@@ -35,7 +41,36 @@ export async function startWebServer(client: BotClient, config: Config): Promise
 
   sweepExpiredSessions();
 
-  const app = Fastify({ logger: false, trustProxy: true });
+  const app = Fastify({ logger: false, trustProxy: true }).withTypeProvider<ZodTypeProvider>();
+
+  // Wires zod schemas (attached per-route via `schema: { body/params/querystring }`)
+  // into Fastify's own validation/serialization pipeline, so routes get
+  // request.body/params/query typed for free instead of hand-rolled
+  // `zod.safeParse` calls and unchecked `as` casts. See setErrorHandler
+  // below for how a validation failure is turned into a response.
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+
+  // Central error handler: the ONLY place that turns a thrown/validation
+  // error into an HTTP response for the whole API. Route handlers that want
+  // a specific status/body still just `return reply.code(...).send(...)`
+  // directly (that never reaches here — this only fires for thrown errors
+  // and schema-validation failures).
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    if (hasZodFastifySchemaValidationErrors(error)) {
+      const message = error.validation
+        .map((issue) => `${issue.instancePath || "/"}: ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: message });
+    }
+
+    // Anything else is an unexpected failure — never forward its message
+    // (may contain internals, stack details, DB errors, etc.) to the
+    // client. Log it server-side and return a generic body instead.
+    logger.error(`Unhandled error in ${request.method} ${request.url}: ${errorMessage(error)}`);
+    const statusCode = error.statusCode && error.statusCode >= 400 && error.statusCode < 500 ? error.statusCode : 500;
+    return reply.code(statusCode).send({ error: "Interner Serverfehler" });
+  });
 
   // Chrome warns (harmlessly — it just falls back to site-keying) if some
   // responses on an origin request origin-keyed process isolation and
