@@ -197,9 +197,8 @@ test("reactionRoles-equivalent: renderTemplate with no context reduces to plain 
 });
 
 // --- Feature-specific coverage: registration confirmation (renderTemplate call shape) ---
-// renderConfirmation() isn't exported either; this mirrors its exact
-// pre-render token rewrite + renderTemplate call from
-// src/events/registerWatcher.ts.
+// Mirrors renderConfirmation()'s exact pre-render token rewrite +
+// renderTemplate call from src/services/registration.ts.
 
 function renderConfirmationEquivalent(template: string, name: string, roleSelectionChannelId: string | null): string {
   const effectiveTemplate = roleSelectionChannelId

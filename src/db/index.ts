@@ -503,7 +503,7 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // submission, persisted so the dashboard's pending-registrations list can
   // show them directly instead of requiring staff to open the private
   // thread. Purely informational (alter isn't used to build the nickname —
-  // see buildRegisterNickname() in registerWatcher.ts). Nulled alongside
+  // see buildRegisterNickname() in services/registration.ts). Nulled alongside
   // register_thread_id/register_submitted_at whenever a registration is
   // cleared, same lifecycle.
   (d) => {

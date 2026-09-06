@@ -1,4 +1,4 @@
-import { AuditLogEvent, type GuildMember } from "discord.js";
+import { AuditLogEvent } from "discord.js";
 import {
   updateCacheMember,
   removeCacheMember,
@@ -11,7 +11,8 @@ import {
   recordRulesAcceptedIfJustVerified,
 } from "../services/memberRecords.js";
 import { removeBirthdayOnMemberLeave } from "../services/birthdays.js";
-import { completeRegistration, clearRegistrationOnLeave } from "./registerWatcher.js";
+import { stripRegisterGateRoleIfJustRegistered } from "../services/registerGate.js";
+import { clearRegistrationOnLeave } from "./registerWatcher.js";
 import { getSettings } from "../db/settingsRepository.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -30,36 +31,6 @@ function isRecentActionAgainst(
     entry.target?.id === userId &&
     now - entry.createdTimestamp < AUDIT_LOG_RECENT_WINDOW_MS
   );
-}
-
-/**
- * A member only sees #register while holding the register-gate role
- * (granted via reaction to the rules message). Once staff manually grant
- * the lowest membership tier role at registration, the gate role no longer
- * serves any purpose and is stripped so the channel disappears for them.
- * `registrationTierRoleId` must be the lowest tier specifically — later
- * promotions swap between higher tiers and must never re-trigger this.
- */
-async function stripRegisterGateRoleIfJustRegistered(
-  client: BotClient,
-  oldMember: GuildMember,
-  newMember: GuildMember,
-): Promise<void> {
-  const { registerGateRoleId, registrationTierRoleId } = getSettings();
-  if (!registerGateRoleId || !registrationTierRoleId) return;
-
-  const justGotRegistrationTier =
-    !oldMember.roles.cache.has(registrationTierRoleId) && newMember.roles.cache.has(registrationTierRoleId);
-  if (!justGotRegistrationTier) return;
-
-  // The pending-registration thread's job (see registerWatcher.ts) is done
-  // the moment staff grant the tier role, regardless of whether this member
-  // ever held the gate role in the first place.
-  await completeRegistration(client, newMember.id);
-
-  if (!newMember.roles.cache.has(registerGateRoleId)) return;
-
-  await newMember.roles.remove(registerGateRoleId, "Registriert — benötigt #register-Sichtbarkeit nicht mehr");
 }
 
 export default function registerMemberEvents(client: BotClient): void {

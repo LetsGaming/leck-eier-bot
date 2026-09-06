@@ -139,7 +139,7 @@ export type NameResolution =
  * deliberately NOT `matchesSearch()`'s substring logic, which would
  * false-positive here (e.g. "Lu" substring-matching both "Luna" and "Lucy").
  * Almost always resolves cleanly since this server's nickname convention
- * (see `buildRegisterNickname()` in `events/registerWatcher.ts`) is what
+ * (see `buildRegisterNickname()` in `services/registration.ts`) is what
  * `unfancy()`/`normalizeForSearch()` were built to undo; an unstyled name
  * that doesn't match anyone is the rare edge case this reports as
  * `unmatched` for manual reconciliation rather than guessing.

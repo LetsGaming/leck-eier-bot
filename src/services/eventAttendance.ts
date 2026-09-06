@@ -12,10 +12,36 @@ import {
   appendVoiceLog,
   setSignupAttendance,
   getEventById,
+  type ParsedSignupInput,
 } from "../db/eventAttendanceRepository.js";
+import type { ParsedApolloSignup } from "./apolloEventParser.js";
+import { resolveMemberByExactName, normalizeSignupName } from "./memberSearch.js";
 import { APOLLO_EVENT_EARLY_LEAVE_GRACE_MS, APOLLO_EVENT_ON_TIME_GRACE_MS } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { ApolloEvent, ApolloEventVoiceLogRow, AttendanceStatus, BotClient } from "../types.js";
+
+/**
+ * Resolves each parsed Apollo RSVP signup line to a guild member (or leaves
+ * it unresolved for later manual linking) — see `apolloEventWatcher.ts`'s
+ * `messageCreate`/`messageUpdate` handling, which persists the result via
+ * `replaceEventSignups()`. A `<@id>` mention short-circuits straight to that
+ * user; a plain-text name instead goes through `resolveMemberByExactName()`,
+ * whose `status` (e.g. "ambiguous", "unmatched") becomes this signup's
+ * `matchSource` when it isn't a clean match.
+ */
+export function buildSignupInputs(signups: ParsedApolloSignup[]): ParsedSignupInput[] {
+  return signups.map((signup) => {
+    const normalizedName = normalizeSignupName(signup.rawName);
+    if (signup.mentionUserId) {
+      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: signup.mentionUserId, matchSource: "auto" };
+    }
+    const resolution = resolveMemberByExactName(signup.rawName);
+    if (resolution.status === "matched") {
+      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: resolution.userId, matchSource: "auto" };
+    }
+    return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: null, matchSource: resolution.status };
+  });
+}
 
 export interface DerivedAttendance {
   status: "on_time" | "late" | "no_show" | "left_early";

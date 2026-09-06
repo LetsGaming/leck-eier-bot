@@ -7,11 +7,9 @@ import {
   appendVoiceLog,
   getEventByIdentity,
   setEventCancelled,
-  type ParsedSignupInput,
 } from "../db/eventAttendanceRepository.js";
 import { parseApolloEventEmbed } from "../services/apolloEventParser.js";
-import { resolveMemberByExactName, normalizeSignupName } from "../services/memberSearch.js";
-import { catchUpApolloEvents, sweepApolloEvents } from "../services/eventAttendance.js";
+import { catchUpApolloEvents, sweepApolloEvents, buildSignupInputs } from "../services/eventAttendance.js";
 import { APOLLO_BOT_USER_ID, APOLLO_EVENT_SWEEP_INTERVAL_MS } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { BotClient } from "../types.js";
@@ -60,17 +58,7 @@ async function tryHandleApolloMessage(client: BotClient, message: Message | Part
     endsAt: parsed.endsAt,
   });
 
-  const signupInputs: ParsedSignupInput[] = parsed.signups.map((signup) => {
-    const normalizedName = normalizeSignupName(signup.rawName);
-    if (signup.mentionUserId) {
-      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: signup.mentionUserId, matchSource: "auto" };
-    }
-    const resolution = resolveMemberByExactName(signup.rawName);
-    if (resolution.status === "matched") {
-      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: resolution.userId, matchSource: "auto" };
-    }
-    return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: null, matchSource: resolution.status };
-  });
+  const signupInputs = buildSignupInputs(parsed.signups);
 
   replaceEventSignups(event.id, signupInputs, event.status);
   logger.info(`Apollo-Event "${event.title}" (#${event.id}) aktualisiert: ${signupInputs.length} Anmeldungen.`);

@@ -60,7 +60,7 @@ export function recordMemberProfileUpdate(oldMember: GuildMember | PartialGuildM
  * - **Role-based** (default, off): this guild's actual rules gate is a
  *   reaction-role panel on the rules message that grants
  *   `registerGateRoleId` (see `stripRegisterGateRoleIfJustRegistered()` in
- *   `events/memberEvents.ts`, which strips that same role once registration
+ *   `services/registerGate.ts`, which strips that same role once registration
  *   completes) — so the signal is that role being newly granted. Works even
  *   for a guild that never uses Discord's own membership screening.
  * - **Discord-based** (on): Discord's native membership-screening `pending`

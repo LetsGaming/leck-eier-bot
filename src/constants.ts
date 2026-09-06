@@ -60,16 +60,16 @@ export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 
 // --- Self-service registration form ---
-/** `{name}` is the value pulled from the submitted form's `name:` line; `{roleChannel}` is a `#channel` mention of `roleSelectionChannelId`. See `registerWatcher.ts`. */
+/** `{name}` is the value pulled from the submitted form's `name:` line; `{roleChannel}` is a `#channel` mention of `roleSelectionChannelId`. See `services/registration.ts`. */
 export const DEFAULT_REGISTER_CONFIRMATION_TEMPLATE =
   "Danke {name}! Du wirst in Kürze registriert. Bis dahin kannst du dir schon in {roleChannel} deine Rollen aussuchen.";
-/** Matches a `name:`-labeled line anywhere in a register-form submission (case-insensitive) — see `parseRegisterForm()` in `registerWatcher.ts`. */
+/** Matches a `name:`-labeled line anywhere in a register-form submission (case-insensitive) — see `parseRegisterForm()` in `services/registration.ts`. */
 export const REGISTER_FORM_NAME_REGEX = /^\s*name\s*:\s*(.+)$/im;
-/** Matches an `sso name:`-labeled line (case-insensitive) — its last whitespace-separated word becomes the lowercase surname half of the generated nickname. Anchored so a plain `name:` line never matches this. See `parseRegisterForm()` in `registerWatcher.ts`. */
+/** Matches an `sso name:`-labeled line (case-insensitive) — its last whitespace-separated word becomes the lowercase surname half of the generated nickname. Anchored so a plain `name:` line never matches this. See `parseRegisterForm()` in `services/registration.ts`. */
 export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
-/** Matches an `alter:`-labeled line (case-insensitive) — purely informational, shown on the dashboard's pending-registrations list but not used to build the nickname. Optional: a submission missing this still counts as valid. See `parseRegisterForm()` in `registerWatcher.ts`. */
+/** Matches an `alter:`-labeled line (case-insensitive) — purely informational, shown on the dashboard's pending-registrations list but not used to build the nickname. Optional: a submission missing this still counts as valid. See `parseRegisterForm()` in `services/registration.ts`. */
 export const REGISTER_FORM_ALTER_REGEX = /^\s*alter\s*:\s*(.+)$/im;
-/** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `registerWatcher.ts`. */
+/** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `services/registration.ts`. */
 export const REGISTER_NICKNAME_EMOJI = "💙";
 /** `{name}`/`{roleChannel}` — same placeholders as DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. Posted instead of the normal template when `settings.registerAutoComplete` is on and the tier role was granted successfully. */
 export const DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE =

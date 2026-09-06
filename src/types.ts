@@ -101,7 +101,7 @@ export interface Settings {
   roleSelectionChannelId: string | null;
   /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders — see DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. */
   registerConfirmationTemplate: string;
-  /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in registerWatcher.ts). Defaults on. */
+  /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in services/registration.ts). Defaults on. */
   registerNicknameUseFont: boolean;
   /** Off by default. When on, a valid registration-form submission immediately grants `registrationTierRoleId` instead of waiting for staff — see `registerWatcher.ts`. The private thread still opens (posting `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after `REGISTER_AUTO_THREAD_LIFETIME_MS`. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
