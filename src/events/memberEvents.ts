@@ -1,10 +1,5 @@
 import { AuditLogEvent } from "discord.js";
 import {
-  updateCacheMember,
-  removeCacheMember,
-  getCachedMembers, // Added to retrieve the member before deletion
-} from "../services/memberCache.js";
-import {
   recordMemberJoin,
   recordMemberLeave,
   recordMemberProfileUpdate,
@@ -34,16 +29,15 @@ function isRecentActionAgainst(
 }
 
 export default function registerMemberEvents(client: BotClient): void {
-  // Add member to cache on join
+  // discord.js's own `guild.members.cache` (see services/memberCache.ts) is
+  // already updated by the client itself before either of these events
+  // fires — nothing needs to be done here to keep a cache in sync.
   client.on("guildMemberAdd", (member) => {
     logger.info(`New member joined: ${member.user.tag} (${member.id})`);
-    updateCacheMember(member);
     recordMemberJoin(member);
   });
 
-  // Update member in cache on nickname/role change
   client.on("guildMemberUpdate", (oldMember, newMember) => {
-    updateCacheMember(newMember);
     recordMemberProfileUpdate(oldMember, newMember);
     // A partial oldMember (missing most fields, `pending` included) means
     // Discord didn't send enough to diff against — nothing to compare.
@@ -58,15 +52,15 @@ export default function registerMemberEvents(client: BotClient): void {
   // Handle member leaving
   client.on("guildMemberRemove", async (member) => {
     const { guild, user } = member;
-    const cache = getCachedMembers();
 
-    // 1. Capture the nickname from cache BEFORE removing it
-    const cachedMember = cache.get(user.id);
-    const knownAs = cachedMember ? cachedMember.displayName : user.username;
-
-    // 2. Now remove from local cache
-    removeCacheMember(member.id);
-    recordMemberLeave(user.id, user.username, knownAs, cachedMember?.user.avatar ?? user.avatar ?? null);
+    // `member` here is discord.js's own record of who this was — by the
+    // time this event fires, the client has ALREADY deleted it from
+    // `guild.members.cache` (that's why a fresh `guild.members.cache.get()`
+    // lookup would come back empty), but `member` itself still carries every
+    // field it had a moment ago (nickname, avatar, etc.), so no separate
+    // cache lookup is needed to capture that pre-removal state.
+    const knownAs = member.displayName;
+    recordMemberLeave(user.id, user.username, knownAs, member.user.avatar ?? user.avatar ?? null);
 
     // A departed member's birthday entry (list or self-registered) has to
     // go too, from both the DB and the rendered anchor message — same
