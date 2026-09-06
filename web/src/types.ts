@@ -1,8 +1,26 @@
+import type { WebRole } from "../../contracts/webRole";
+import type { CommandPermission } from "../../contracts/commands";
+import type { MemberAuditEntry } from "../../contracts/memberAudit";
+import type { RegistrationEntry } from "../../contracts/registrations";
+import type {
+  EventAttendanceMonthsResponse,
+  EventSignupEntry,
+  EventAttendanceEntry,
+  EventAttendanceSummary,
+  EventAttendanceListResponse,
+  EventSignupCounts,
+} from "../../contracts/eventAttendance";
+
+export type {
+  WebRole,
+  MemberAuditEntry,
+  EventAttendanceSummary,
+  EventAttendanceListResponse,
+  EventSignupCounts,
+};
+
 export type SelectionType = "reactions" | "buttons" | "dropdown";
 export type PanelMessageType = "text" | "embed";
-
-/** Strict hierarchy, highest first: 'bot-owner' (always total access) > 'guild-owner' > 'admin'. */
-export type WebRole = "bot-owner" | "guild-owner" | "admin";
 
 export interface Me {
   userId: string;
@@ -155,7 +173,7 @@ export interface UpcomingBirthday {
 export interface CommandDef {
   name: string;
   description: string;
-  permission?: "none" | "admin" | "owner";
+  permission?: CommandPermission;
   enabled: boolean;
   guildOnly: boolean;
 }
@@ -188,26 +206,6 @@ export interface GeneralSettings {
   eventVoiceChannelId: string | null;
 }
 
-/**
- * One user's row on the dashboard's Member Audit page — current or former
- * (`inGuild` tells them apart). Every date is an ISO UTC string or `null`
- * ("not tracked", not "never happened" — see `MemberRecord` on the backend);
- * render them with `formatAbsolute()`/`formatRelative()` (`../dateFormat`),
- * which convert to the viewer's local timezone.
- */
-export interface MemberAuditEntry {
-  userId: string;
-  username: string;
-  tag: string;
-  displayName: string;
-  nickname: string | null;
-  avatarUrl: string;
-  inGuild: boolean;
-  joinedAt: string | null;
-  rulesAcceptedAt: string | null;
-  leftAt: string | null;
-}
-
 export interface MemberAuditResponse {
   inGuild: MemberAuditEntry[];
   left: MemberAuditEntry[];
@@ -226,25 +224,13 @@ export interface InGuildMembersResponse {
  */
 export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
 
-/** A member who's ever posted a self-service registration-form submission, regardless of outcome — see `registerWatcher.ts`. */
-export interface Registration {
-  userId: string;
-  username: string;
-  displayName: string;
-  nickname: string | null;
-  avatarUrl: string;
-  status: RegistrationStatus;
-  /** ISO UTC — when the registration was submitted. */
-  submittedAt: string | null;
-  /** Jump link to the private thread. Null once resolved — the thread no longer exists. */
-  threadUrl: string | null;
-  /** Raw `name:` field value, as submitted. */
-  submittedName: string | null;
-  /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */
-  submittedSsoName: string | null;
-  /** Raw `alter:` field value, as submitted. Null if the member left it out. */
-  submittedAge: string | null;
-}
+/**
+ * A member who's ever posted a self-service registration-form submission,
+ * regardless of outcome — see `registerWatcher.ts`. Canonical shape lives at
+ * `contracts/registrations.ts` as `RegistrationEntry`; kept under this local
+ * name here since it's the name every dashboard consumer already imports.
+ */
+export type Registration = RegistrationEntry;
 
 /** What a member clicked on Apollo's event embed. */
 export type ApolloRsvpChoice = "accepted" | "declined" | "tentative";
@@ -258,95 +244,22 @@ export type ApolloEventStatus = "scheduled" | "active" | "completed" | "cancelle
 /** on_time/late/no_show/left_early are derived from the tracked voice channel; not_tracked means the bot missed the whole window or the voice channel wasn't configured/visible. Null means not yet computed — still scheduled, or the signup is 'declined' (never tracked). */
 export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "not_tracked";
 
-/** One signed-up member on an `EventAttendance` entry. */
-export interface EventSignup {
-  id: number;
-  /** As it appeared in Apollo's embed, exactly. */
-  rawName: string;
-  choice: ApolloRsvpChoice;
-  userId: string | null;
-  displayName: string | null;
-  nickname: string | null;
-  avatarUrl: string | null;
-  matchSource: SignupMatchSource;
-  attendanceStatus: AttendanceStatus | null;
-  firstJoinedAt: string | null;
-  lastLeftAt: string | null;
-  /** Minutes late arriving — independent of `earlyMinutes` (a person can be both late AND leave early at once; neither fact overrides the other). */
-  lateMinutes: number | null;
-  /** Minutes their final departure was before the event ended, only when they never returned. Independent of `lateMinutes`. */
-  earlyMinutes: number | null;
-  /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed. Null while still present. */
-  withdrawnAt: string | null;
-}
+/**
+ * One signed-up member on an `EventAttendance` entry. Canonical shape lives
+ * at `contracts/eventAttendance.ts` as `EventSignupEntry`.
+ */
+export type EventSignup = EventSignupEntry;
 
-/** One Apollo-managed event with its full sign-up/attendance list — see `services/eventAttendance.ts` on the backend for the state machine and derivation rules. */
-export interface EventAttendance {
-  id: number;
-  apolloEventId: string | null;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  status: ApolloEventStatus;
-  /** The bot was offline for some/all of this event's tracking window — timestamps may be approximate. */
-  trackingIncomplete: boolean;
-  /** Jump link to the original Apollo message. */
-  messageUrl: string;
-  voiceChannelId: string | null;
-  signups: EventSignup[];
-}
+/**
+ * One Apollo-managed event with its full sign-up/attendance list — see
+ * `services/eventAttendance.ts` on the backend for the state machine and
+ * derivation rules. Canonical shape lives at `contracts/eventAttendance.ts`
+ * as `EventAttendanceEntry`.
+ */
+export type EventAttendance = EventAttendanceEntry;
 
-/** Per-event signup/attendance tallies — see `EventSignupCounts` on the backend (`src/db/eventAttendanceRepository.ts`). */
-export interface EventSignupCounts {
-  total: number;
-  accepted: number;
-  tentative: number;
-  declined: number;
-  /** Same predicate as the backend's `listEventsWithUnresolvedSignups`/`countUnmatchedSignups`. */
-  unresolved: number;
-  onTime: number;
-  late: number;
-  noShow: number;
-  leftEarly: number;
-  notTracked: number;
-  /** `attendanceStatus = 'on_time'` but `lateMinutes > 0` — a subset of `onTime`, not an alternative to it. */
-  lateWithinGrace: number;
-  /** `earlyMinutes > 0` and NOT flagged `left_early`. Independent of `leftEarly`/`onTime`/etc. */
-  earlyWithinGrace: number;
-  /** Sum of `lateMinutes` across all signups (nulls treated as 0). */
-  lateMinutesTotal: number;
-}
-
-/** One row in the event-attendance list view — see `GET /api/events/attendance`. Same event-level fields as `EventAttendance`, but with aggregate `counts` instead of the full `signups` array. */
-export interface EventAttendanceSummary {
-  id: number;
-  apolloEventId: string | null;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  status: ApolloEventStatus;
-  trackingIncomplete: boolean;
-  messageUrl: string;
-  voiceChannelId: string | null;
-  counts: EventSignupCounts;
-}
-
-/** Response shape of `GET /api/events/attendance`. */
-export interface EventAttendanceListResponse {
-  mode: "month" | "all" | "problems";
-  /** Echoed "YYYY-MM" for mode "month"; null for "all"/"problems". */
-  month: string | null;
-  timezone: string;
-  events: EventAttendanceSummary[];
-  total: number;
-  truncated: boolean;
-}
-
-/** Response shape of `GET /api/events/attendance/months`. */
-export interface EventMonths {
-  months: string[];
-  /** Event count per month key ("YYYY-MM") — drives the month picker's data highlighting/badges. */
-  counts: Record<string, number>;
-  current: string;
-  timezone: string;
-}
+/**
+ * Response shape of `GET /api/events/attendance/months`. Canonical shape
+ * lives at `contracts/eventAttendance.ts` as `EventAttendanceMonthsResponse`.
+ */
+export type EventMonths = EventAttendanceMonthsResponse;

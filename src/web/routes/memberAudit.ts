@@ -4,19 +4,7 @@ import { getMemberRecordsByIds, listFormerMembers } from "../../db/memberRecords
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT } from "../../constants.js";
 import type { ZodFastifyInstance } from "../utils.js";
-
-interface MemberAuditEntry {
-  userId: string;
-  username: string;
-  tag: string;
-  displayName: string;
-  nickname: string | null;
-  avatarUrl: string;
-  inGuild: boolean;
-  joinedAt: string | null;
-  rulesAcceptedAt: string | null;
-  leftAt: string | null;
-}
+import type { MemberAuditEntry } from "../../../contracts/memberAudit.js";
 
 /**
  * Discord CDN avatar URL built from a raw hash — needed for a former member,

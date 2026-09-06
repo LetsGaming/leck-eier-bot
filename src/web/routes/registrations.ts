@@ -6,27 +6,9 @@ import { buildAvatarUrl } from "./memberAudit.js";
 import { getSettings } from "../../db/settingsRepository.js";
 import { REGISTRATIONS_LIST_LIMIT } from "../../constants.js";
 import logger, { errorMessage } from "../../utils/logger.js";
-import type { BotClient, Config, RegistrationStatus } from "../../types.js";
+import type { BotClient, Config } from "../../types.js";
 import type { ZodFastifyInstance } from "../utils.js";
-
-interface RegistrationEntry {
-  userId: string;
-  username: string;
-  displayName: string;
-  nickname: string | null;
-  avatarUrl: string;
-  status: RegistrationStatus;
-  /** ISO UTC — when the registration was submitted. */
-  submittedAt: string | null;
-  /** Jump link to the private thread. Null once resolved (registered/removed/left) — the thread no longer exists. */
-  threadUrl: string | null;
-  /** Raw `name:` field value, as submitted. */
-  submittedName: string | null;
-  /** Raw `sso name:` field value, as submitted (the full value, not just the surname used for the nickname). */
-  submittedSsoName: string | null;
-  /** Raw `alter:` field value, as submitted. Null if the member left it out. */
-  submittedAge: string | null;
-}
+import type { RegistrationEntry } from "../../../contracts/registrations.js";
 
 const RegistrationsQuerySchema = z.object({
   q: z.string().optional(),

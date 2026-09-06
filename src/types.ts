@@ -5,8 +5,10 @@ import type {
   SlashCommandBuilder,
 } from "discord.js";
 import type { CommandPermission, PanelMessageType, SelectionType } from "./constants.js";
+import type { WebRole } from "../contracts/webRole.js";
 
 export type { Config } from "./config/schema.js";
+export type { WebRole };
 
 export interface Command {
   data: SlashCommandBuilder;
@@ -276,8 +278,11 @@ export interface ApolloEventVoiceLogRow {
  * Every route is currently gated to allow all three (see requireRole() in
  * web/session.ts) — the tiers exist so a route can be narrowed to e.g.
  * 'bot-owner'-only later without a schema change.
+ *
+ * Canonical definition lives at `contracts/webRole.ts` (re-exported above)
+ * so both this backend and the dashboard frontend (`web/src/types.ts`) share
+ * one source instead of two hand-kept copies.
  */
-export type WebRole = "bot-owner" | "guild-owner" | "admin";
 
 /** A logged-in dashboard session, backed by the `web_sessions` table. */
 export interface WebSession {

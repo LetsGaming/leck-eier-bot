@@ -18,15 +18,14 @@ import { getCachedMembers } from "../../services/memberCache.js";
 import { deriveAttendance, recomputeAttendanceForEvent } from "../../services/eventAttendance.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { monthRangeUtc, currentMonthKey, monthKeyInTimezone } from "../../utils/timezone.js";
+import type { ApolloEvent, ApolloEventSignup, Config } from "../../types.js";
 import type {
-  ApolloEvent,
-  ApolloEventSignup,
-  ApolloEventStatus,
-  ApolloRsvpChoice,
-  AttendanceStatus,
-  Config,
-  SignupMatchSource,
-} from "../../types.js";
+  EventAttendanceMonthsResponse,
+  EventSignupEntry,
+  EventAttendanceEntry,
+  EventAttendanceSummary,
+  EventAttendanceListResponse,
+} from "../../../contracts/eventAttendance.js";
 
 /** Cap on results for the unbounded "all months" / "problems" list modes — see `ListQuerySchema`'s mode precedence. */
 const PROBLEMS_MODE_LIMIT = 200;
@@ -48,75 +47,10 @@ const ZERO_SIGNUP_COUNTS: EventSignupCounts = {
   lateMinutesTotal: 0,
 };
 
-interface EventAttendanceMonthsResponse {
-  months: string[];
-  /** Event count per month key ("YYYY-MM"), for highlighting/badging months that hold data in the month picker. */
-  counts: Record<string, number>;
-  current: string;
-  timezone: string;
-}
-
 /** Shared `:id` param validation for the event-attendance detail/delete routes — 400 on a non-numeric id, `null` on success so the caller can proceed. */
 function parseEventIdParam(id: string): number | null {
   const numericId = Number(id);
   return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
-}
-
-interface EventSignupEntry {
-  id: number;
-  rawName: string;
-  choice: ApolloRsvpChoice;
-  userId: string | null;
-  displayName: string | null;
-  nickname: string | null;
-  avatarUrl: string | null;
-  matchSource: SignupMatchSource;
-  /** Null while the event is 'scheduled' and always for a 'declined' choice. Computed live (not read from the DB cache) while the event is 'active'. */
-  attendanceStatus: AttendanceStatus | null;
-  firstJoinedAt: string | null;
-  lastLeftAt: string | null;
-  /** Minutes late arriving — independent of `earlyMinutes` (both can be set at once). Computed live for an 'active' event, same as `attendanceStatus`. */
-  lateMinutes: number | null;
-  /** Minutes their final departure was before the event ended, only when they never returned. Independent of `lateMinutes`. */
-  earlyMinutes: number | null;
-  withdrawnAt: string | null;
-}
-
-interface EventAttendanceEntry {
-  id: number;
-  apolloEventId: string | null;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  status: ApolloEventStatus;
-  trackingIncomplete: boolean;
-  /** Jump link to the original Apollo message. */
-  messageUrl: string;
-  voiceChannelId: string | null;
-  signups: EventSignupEntry[];
-}
-
-interface EventAttendanceSummary {
-  id: number;
-  apolloEventId: string | null;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  status: ApolloEventStatus;
-  trackingIncomplete: boolean;
-  messageUrl: string;
-  voiceChannelId: string | null;
-  counts: EventSignupCounts;
-}
-
-interface EventAttendanceListResponse {
-  mode: "month" | "all" | "problems";
-  /** Echoed "YYYY-MM" for mode "month"; null for "all"/"problems". */
-  month: string | null;
-  timezone: string;
-  events: EventAttendanceSummary[];
-  total: number;
-  truncated: boolean;
 }
 
 const LinkSignupBodySchema = z.object({ userId: z.string().nullable() });
