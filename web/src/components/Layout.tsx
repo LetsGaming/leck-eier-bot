@@ -77,7 +77,7 @@ function NavLinks({ items, counts }: { items: NavItem[]; counts: NavBadgeCounts 
 export default function Layout({ me, onLogout, children }: LayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
-  const { data: counts } = useNavBadgeCounts(location.pathname);
+  const counts = useNavBadgeCounts(location.pathname);
 
   // Below the mobile breakpoint the sidebar is an off-canvas drawer — close
   // it on every navigation so picking a page doesn't leave it covering the
