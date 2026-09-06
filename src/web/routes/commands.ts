@@ -3,9 +3,17 @@ import { listCommandDefinitions } from "../../loaders/commandLoader.js";
 import { setCommandOverride } from "../../db/settingsRepository.js";
 import type { ZodFastifyInstance } from "../utils.js";
 
+const PermissionGateSchema = z.union([
+  z.object({ mode: z.literal("everyone") }),
+  z.object({ mode: z.literal("tier"), tier: z.enum(["bot-owner", "guild-owner", "admin"]) }),
+  z.object({ mode: z.literal("role"), roleId: z.string() }),
+]);
+
 const PatchBodySchema = z.object({
   enabled: z.boolean().optional(),
   guildOnly: z.boolean().optional(),
+  /** `null` clears the override, falling back to `defaultGateFor(permission)` — see PermissionGate in src/types.ts. */
+  permissionGate: PermissionGateSchema.nullable().optional(),
 });
 
 const PatchParamsSchema = z.object({
@@ -29,6 +37,7 @@ export function registerCommandRoutes(app: ZodFastifyInstance): void {
       setCommandOverride(name, {
         enabled: body.enabled ?? current.enabled,
         guildOnly: body.guildOnly ?? current.guildOnly,
+        permissionGate: body.permissionGate !== undefined ? body.permissionGate : current.permissionGate,
       });
 
       // setCommandOverride() emits SettingsEvent.Commands; the settingsBus

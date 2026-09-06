@@ -1,6 +1,6 @@
 import { db } from "./index.js";
 import { settingsBus, SettingsEvent } from "../services/settingsBus.js";
-import type { Settings } from "../types.js";
+import type { PermissionGate, Settings } from "../types.js";
 
 interface SettingsRow {
   birthday_template: string;
@@ -174,34 +174,56 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   return next;
 }
 
-const selectCommandStmt = db.prepare<[string], { enabled: 0 | 1; guild_only: 0 | 1 }>(
-  "SELECT enabled, guild_only FROM command_settings WHERE name = ?",
+interface CommandSettingsRow {
+  enabled: 0 | 1;
+  guild_only: 0 | 1;
+  permission_gate: string | null;
+}
+
+const selectCommandStmt = db.prepare<[string], CommandSettingsRow>(
+  "SELECT enabled, guild_only, permission_gate FROM command_settings WHERE name = ?",
 );
-const selectAllCommandsStmt = db.prepare<[], { name: string; enabled: 0 | 1; guild_only: 0 | 1 }>(
-  "SELECT name, enabled, guild_only FROM command_settings",
+const selectAllCommandsStmt = db.prepare<[], CommandSettingsRow & { name: string }>(
+  "SELECT name, enabled, guild_only, permission_gate FROM command_settings",
 );
-const upsertCommandStmt = db.prepare<{ name: string; enabled: 0 | 1; guildOnly: 0 | 1 }>(
-  `INSERT INTO command_settings (name, enabled, guild_only) VALUES (@name, @enabled, @guildOnly)
-   ON CONFLICT(name) DO UPDATE SET enabled = @enabled, guild_only = @guildOnly`,
+const upsertCommandStmt = db.prepare<{
+  name: string;
+  enabled: 0 | 1;
+  guildOnly: 0 | 1;
+  permissionGate: string | null;
+}>(
+  `INSERT INTO command_settings (name, enabled, guild_only, permission_gate)
+   VALUES (@name, @enabled, @guildOnly, @permissionGate)
+   ON CONFLICT(name) DO UPDATE SET enabled = @enabled, guild_only = @guildOnly, permission_gate = @permissionGate`,
 );
 
 export interface CommandOverride {
   enabled: boolean;
   guildOnly: boolean;
+  /** `null` = no override; the command falls back to `defaultGateFor(permission)`. See PermissionGate in types.ts. */
+  permissionGate: PermissionGate | null;
 }
 
-/** Falls back to {enabled: true, guildOnly: true} for commands that have never been overridden. */
+function rowToCommandOverride(row: CommandSettingsRow): CommandOverride {
+  return {
+    enabled: row.enabled === 1,
+    guildOnly: row.guild_only === 1,
+    // Same JSON-column convention as reaction_role_panels.allowed_role_ids —
+    // stored as TEXT, null passed through as SQL NULL.
+    permissionGate: row.permission_gate !== null ? (JSON.parse(row.permission_gate) as PermissionGate) : null,
+  };
+}
+
+/** Falls back to {enabled: true, guildOnly: true, permissionGate: null} for commands that have never been overridden. */
 export function getCommandOverride(name: string): CommandOverride {
   const row = selectCommandStmt.get(name);
-  return row
-    ? { enabled: row.enabled === 1, guildOnly: row.guild_only === 1 }
-    : { enabled: true, guildOnly: true };
+  return row ? rowToCommandOverride(row) : { enabled: true, guildOnly: true, permissionGate: null };
 }
 
 export function getAllCommandOverrides(): Record<string, CommandOverride> {
   const out: Record<string, CommandOverride> = {};
   for (const row of selectAllCommandsStmt.all()) {
-    out[row.name] = { enabled: row.enabled === 1, guildOnly: row.guild_only === 1 };
+    out[row.name] = rowToCommandOverride(row);
   }
   return out;
 }
@@ -211,6 +233,7 @@ export function setCommandOverride(name: string, override: CommandOverride): voi
     name,
     enabled: override.enabled ? 1 : 0,
     guildOnly: override.guildOnly ? 1 : 0,
+    permissionGate: override.permissionGate !== null ? JSON.stringify(override.permissionGate) : null,
   });
   settingsBus.emit(SettingsEvent.Commands);
 }

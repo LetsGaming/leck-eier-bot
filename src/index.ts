@@ -10,9 +10,9 @@ import {
 import cron, { type ScheduledTask } from "node-cron";
 import logger, { errorMessage } from "./utils/logger.js";
 import { loadConfig } from "./config/index.js";
-import { isAdmin, isConfigGuild, isOwner } from "./utils/utils.js";
+import { isConfigGuild } from "./utils/utils.js";
 import { createNoAdminEmbed } from "./utils/embedUtils.js";
-import { CommandPermission } from "./constants.js";
+import { checkCommandPermission, resolveCommandGate } from "./utils/commandPermissions.js";
 
 // Loaders & Handlers
 import { loadCommands, pushCommandDefinitions, reloadCommands } from "./loaders/commandLoader.js";
@@ -35,39 +35,50 @@ import { getSettings } from "./db/settingsRepository.js";
 import { settingsBus, SettingsEvent } from "./services/settingsBus.js";
 import { startWebServer } from "./web/server.js";
 import { createMockClient } from "./web/mockDiscordClient.js";
-import type { BotClient } from "./types.js";
+import type { BotClient, Command, Config } from "./types.js";
 
 /**
- * Verifies the interacting user is allowed to run the command, replying
- * with a rejection message if not. Centralized here so individual command
- * handlers don't each re-implement the same admin/owner check.
+ * Verifies the interacting user is allowed to run `cmd`, replying with a
+ * rejection message if not. Centralized here so individual command handlers
+ * don't each re-implement the same permission check. Thin wrapper over
+ * `resolveCommandGate()`/`checkCommandPermission()` (utils/commandPermissions.ts)
+ * — the actual gate resolution (dashboard override, falling back to the
+ * command's code-declared `CommandPermission`) and evaluation live there;
+ * this only owns the ephemeral denial reply, preserving the exact
+ * owner-vs-admin message split the old isOwner()/isAdmin()-based version had:
+ * `createNoAdminEmbed()` for an admin-or-guild-owner-tier gate (old
+ * `CommandPermission.Admin`), a bare rejection line for everything else — a
+ * bot-owner-tier gate (old `CommandPermission.Owner`) or a role-mode gate
+ * (new; has no admin-flavored wording to reuse).
  */
 async function hasCommandPermission(
   interaction: ChatInputCommandInteraction,
-  permission: CommandPermission | undefined,
+  client: BotClient,
+  config: Config,
+  cmd: Pick<Command, "permission" | "permissionGate">,
 ): Promise<boolean> {
-  switch (permission) {
-    case CommandPermission.Owner:
-      if (!isOwner(interaction)) {
-        await interaction.reply({
-          content: "❌ Du hast keine Berechtigung, diesen Befehl zu verwenden.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return false;
-      }
-      return true;
-    case CommandPermission.Admin:
-      if (!isAdmin(interaction)) {
-        await interaction.reply({
-          embeds: [createNoAdminEmbed()],
-          flags: MessageFlags.Ephemeral,
-        });
-        return false;
-      }
-      return true;
-    default:
-      return true;
+  const gate = resolveCommandGate({ permission: cmd.permission, permissionGate: cmd.permissionGate ?? null });
+  if (await checkCommandPermission(interaction, client, config, gate)) return true;
+
+  // Only an "admin"/"guild-owner" tier gate gets the old Admin-permission
+  // wording (both are, from the member's point of view, "you need at least
+  // admin-level access") — a bot-owner-tier gate or a role-mode gate get the
+  // old Owner-permission plain rejection instead, since "Du benötigst
+  // Administratorrechte" would be actively misleading for either (bot-owner
+  // status isn't an admin permission at all, and a role-mode gate may not be
+  // an admin-flavored role in the first place).
+  if (gate.mode === "tier" && (gate.tier === "admin" || gate.tier === "guild-owner")) {
+    await interaction.reply({
+      embeds: [createNoAdminEmbed()],
+      flags: MessageFlags.Ephemeral,
+    });
+  } else {
+    await interaction.reply({
+      content: "❌ Du hast keine Berechtigung, diesen Befehl zu verwenden.",
+      flags: MessageFlags.Ephemeral,
+    });
   }
+  return false;
 }
 
 const config = loadConfig();
@@ -215,7 +226,7 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    if (!(await hasCommandPermission(interaction, cmd.permission))) return;
+    if (!(await hasCommandPermission(interaction, client, config, cmd))) return;
 
     await cmd.execute(interaction);
   } catch (err) {

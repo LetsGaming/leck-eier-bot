@@ -700,6 +700,19 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX IF NOT EXISTS idx_member_records_register_status ON member_records(register_status);
     `);
   },
+  // v33: editable command permissions from the dashboard — a command's
+  // enforcement can now be overridden as either an arbitrary Discord role or
+  // a minimum dashboard RBAC tier (bot-owner / guild-owner / admin), instead
+  // of only ever following its code-declared CommandPermission. Stored as
+  // JSON (PermissionGate, src/types.ts), same TEXT-column convention as
+  // reaction_role_panels.allowed_role_ids. Nullable and additive — no rebuild
+  // needed (unlike v14/v21's rename cases) — NULL (every pre-existing row,
+  // and any row this hasn't been set on since) means "no override; fall back
+  // to defaultGateFor(permission)", resolved in code, not here. See
+  // docs/superpowers/specs/2026-09-05-command-permissions-design.md.
+  (d) => {
+    d.exec(`ALTER TABLE command_settings ADD COLUMN permission_gate TEXT;`);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

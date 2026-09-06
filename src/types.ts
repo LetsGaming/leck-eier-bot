@@ -4,11 +4,13 @@ import type {
   Collection,
   SlashCommandBuilder,
 } from "discord.js";
-import type { CommandPermission, PanelMessageType, SelectionType } from "./constants.js";
+import type { PanelMessageType, SelectionType } from "./constants.js";
+import { CommandPermission } from "./constants.js";
 import type { WebRole } from "../contracts/webRole.js";
+import type { PermissionGate } from "../contracts/permissionGate.js";
 
 export type { Config } from "./config/schema.js";
-export type { WebRole };
+export type { WebRole, PermissionGate };
 
 export interface Command {
   data: SlashCommandBuilder;
@@ -16,6 +18,33 @@ export interface Command {
   guildOnly?: boolean;
   /** Defaults to {@link CommandPermission.None} when omitted. */
   permission?: CommandPermission;
+  /**
+   * Dashboard-configured override of who may run this command, taking
+   * priority over `permission` once set — see `defaultGateFor()` below and
+   * `db/settingsRepository.ts`'s `CommandOverride`. `null`/undefined means
+   * "no override; fall back to `defaultGateFor(permission)`".
+   */
+  permissionGate?: PermissionGate | null;
+}
+
+/**
+ * The gate an override-less command enforces, derived from its code-declared
+ * `CommandPermission` (src/constants.ts): `None` -> everyone, `Admin` ->
+ * admin-tier-or-higher, `Owner` -> bot-owner-tier-or-higher (matching the
+ * previous hardcoded isOwner()/isAdmin() behavior in utils/utils.ts, now
+ * expressed as a tier so it composes with the dashboard's own RBAC
+ * hierarchy). Omitted `permission` is treated as `CommandPermission.None`.
+ */
+export function defaultGateFor(permission?: CommandPermission): PermissionGate {
+  switch (permission) {
+    case CommandPermission.Admin:
+      return { mode: "tier", tier: "admin" };
+    case CommandPermission.Owner:
+      return { mode: "tier", tier: "bot-owner" };
+    case CommandPermission.None:
+    default:
+      return { mode: "everyone" };
+  }
 }
 
 export type BotClient = Client & {

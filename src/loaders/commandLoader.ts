@@ -78,6 +78,7 @@ export async function loadCommands(client: BotClient): Promise<void> {
         execute: discovered.module.execute,
         guildOnly: override.guildOnly,
         permission: discovered.permission,
+        permissionGate: override.permissionGate,
       };
 
       client.commands.set(discovered.name, commandObject);

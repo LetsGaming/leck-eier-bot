@@ -94,8 +94,13 @@ function requestHostOrigin(request: FastifyRequest): string {
  * configured guild's owner (if not also the bot owner) gets 'guild-owner';
  * anyone else who holds Administrator in that guild (directly or via
  * @everyone) gets 'admin'.
+ *
+ * Exported so `utils/commandPermissions.ts` can reuse it for tier-mode
+ * command-permission enforcement instead of duplicating the owner/admin
+ * hierarchy — see the design spec's rationale for why command-permission
+ * "tier" mode needs real guild-owner detection, not just isOwner()/isAdmin().
  */
-function resolveDashboardRole(client: BotClient, config: Config, userId: string, roleIds: string[]): WebRole | null {
+export function resolveDashboardRole(client: BotClient, config: Config, userId: string, roleIds: string[]): WebRole | null {
   if (userId === config.botOwnerId) return "bot-owner";
 
   const guild = client.guilds.cache.get(config.guildId);
