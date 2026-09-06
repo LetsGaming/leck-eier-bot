@@ -1,8 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, errorMessage } from "../api";
-import { useToast } from "../components/ToastContext";
-import type { Status } from "../types";
+import { useStatus } from "../hooks/useStatus";
 
 function formatUptime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -13,15 +10,7 @@ function formatUptime(ms: number): string {
 }
 
 export default function Overview() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const { showError } = useToast();
-
-  useEffect(() => {
-    api
-      .status()
-      .then(setStatus)
-      .catch((err) => showError(errorMessage(err)));
-  }, [showError]);
+  const { data: status } = useStatus();
 
   const hasAttentionItems = !!status && (status.pendingRegistrationCount > 0 || status.unmatchedSignupCount > 0);
 

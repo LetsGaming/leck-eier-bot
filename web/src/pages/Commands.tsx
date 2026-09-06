@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
+import { useCommands } from "../hooks/useCommands";
 import { defaultGateFor } from "../types";
 import type { CommandDef, PermissionGate, RoleOption, WebRole } from "../types";
 
@@ -37,25 +38,13 @@ function effectiveGate(c: CommandDef): PermissionGate {
 }
 
 export default function Commands() {
-  const [commands, setCommands] = useState<CommandDef[] | null>(null);
-  const [roles, setRoles] = useState<RoleOption[]>([]);
+  const { commands, setCommands, roles } = useCommands();
   const [pending, setPending] = useState<string | null>(null);
   // Tracks a command mid-switch to "role" mode before a role has actually
   // been picked/saved — the underlying gate is still "everyone"/"tier" at
   // that point, so the select's displayed mode would otherwise snap back.
   const [pendingMode, setPendingMode] = useState<Record<string, GateMode>>({});
   const { showError } = useToast();
-
-  useEffect(() => {
-    api
-      .commands()
-      .then(setCommands)
-      .catch((err) => showError(errorMessage(err)));
-    api
-      .roles()
-      .then(setRoles)
-      .catch((err) => showError(errorMessage(err)));
-  }, [showError]);
 
   async function toggle(name: string, field: "enabled" | "guildOnly", value: boolean) {
     setPending(name);

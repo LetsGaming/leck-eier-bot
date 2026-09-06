@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
 import { formatAbsolute, formatRelative } from "../dateFormat";
-import type { MemberAuditEntry, MemberAuditResponse, Registration, RegistrationStatus } from "../types";
+import { useMemberAudit } from "../hooks/useMemberAudit";
+import { useRegistrations } from "../hooks/useRegistrations";
+import type { MemberAuditEntry, Registration, RegistrationStatus } from "../types";
 
 const DEBOUNCE_MS = 300;
 
@@ -22,21 +24,10 @@ const STATUS_BADGE_CLASS: Record<RegistrationStatus, string> = {
 };
 
 function RegistrationsCard({ query }: { query: string }) {
-  const [entries, setEntries] = useState<Registration[] | null>(null);
+  const { data: entries, reload: load } = useRegistrations(query);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
   const confirmDialog = useConfirm();
-
-  const load = useCallback(() => {
-    api
-      .registrations(query)
-      .then(setEntries)
-      .catch((err) => showError(errorMessage(err)));
-  }, [query, showError]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   async function handleApprove(entry: Registration) {
     const ok = await confirmDialog({
@@ -231,9 +222,6 @@ function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showL
 export default function MemberAudit() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [results, setResults] = useState<MemberAuditResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const { showError } = useToast();
 
   const trimmed = query.trim();
 
@@ -245,14 +233,7 @@ export default function MemberAudit() {
     return () => clearTimeout(timer);
   }, [trimmed]);
 
-  useEffect(() => {
-    setLoading(true);
-    api
-      .memberAudit(debouncedQuery)
-      .then(setResults)
-      .catch((err) => showError(errorMessage(err)))
-      .finally(() => setLoading(false));
-  }, [debouncedQuery, showError]);
+  const { data: results, loading } = useMemberAudit(debouncedQuery);
 
   return (
     <div>
