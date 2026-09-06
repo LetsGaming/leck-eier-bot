@@ -540,6 +540,18 @@ function roleLabel(mapping: ReactionRoleMapping, guild: Guild): string {
  * `buildPanelText`/`buildPanelEmbed` below), so with an empty context this
  * reduces to exactly `applyFont(text, fontMap)` when the panel's font toggle
  * is on. See utils/font.ts.
+ *
+ * Known, low-risk limitation from introducing token syntax at all: if an
+ * admin-typed title/description/label literally contains `{...}`-shaped
+ * text (e.g. a stray `{like this}`), the old pre-migration code font-mapped
+ * it like any other text, but `renderTemplate()` treats it as an unresolved
+ * token — it doesn't match any `styled`/`raw`/core key, so pass 1 leaves it
+ * untouched and it survives completely unstyled. This is a structural
+ * consequence of the shared engine recognizing `{...}` as token syntax
+ * everywhere, not something specific to this call site; it's far less
+ * likely to occur in practice than the anchor-template issue this module's
+ * sibling (`buildAnchorParts()` in birthdays.ts) had, and isn't worth a
+ * special case here — documented rather than fixed.
  */
 function styled(panel: ReactionRolePanelWithMappings, text: string): string {
   return renderTemplate(text, {}, {}, { useFont: panel.useFont, fontMap: getSettings().fontMap });

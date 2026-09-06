@@ -116,8 +116,12 @@ export function renderBirthdayTemplate(
  * `birthdayAnnouncementUseFont` is on). This intentionally does NOT route
  * font-mapping through `renderTemplate()`'s `styled` bucket — doing so would
  * protect those raw values from font-mapping and produce different output
- * than before. Only `buildAnchorParts()` below uses the styled/raw
- * two-pass model, since that already matches its pre-migration behavior.
+ * than before. `buildAnchorParts()` below also bypasses `renderTemplate()`'s
+ * `styled`/`useFont: true` pass, for the analogous reason that it font-maps
+ * the *whole template's* literal text (not just the substituted value) —
+ * see its own doc comment. Neither migrated function actually uses
+ * `renderTemplate()`'s styled bucket with `useFont: true`; both apply
+ * `applyFont()` by hand instead, at the point their pre-migration code did.
  */
 export function buildBirthdayMessage(
   b: Pick<BirthdayEntry, "mention" | "userId" | "name">,
@@ -330,6 +334,20 @@ export interface AnchorPart {
  * font is configured. `intro` is also always plain text, never styled.
  * Pure function of its arguments — never touches Discord itself; see
  * `syncAnchorMessage()` for that part.
+ *
+ * Deliberately does NOT pass `{ styled: { month }, useFont: true }` straight
+ * into `renderTemplate()` — that would font-map every literal-text run of
+ * `template` itself (per `renderTemplate()`'s general pass-1 contract; see
+ * `messageTemplate.ts`), not just the `{month}` value, which is *not* what
+ * the pre-migration `.replace()` chain did (it only ever ran `applyFont()`
+ * on the substituted month heading, leaving admin-typed template text like
+ * "Born in " or ":\n" untouched). Since `birthdayAnchorTemplate` is a
+ * free-text dashboard field that regularly contains such literal text, this
+ * function instead font-maps `monthHeading` by hand (mirroring the old
+ * code exactly) and calls `renderTemplate()` with `useFont: false` so the
+ * engine only does plain substitution — the same "bypass the engine's own
+ * font pass, apply it ourselves" pattern `buildBirthdayMessage()` uses
+ * below, for the same byte-for-byte-parity reason.
  */
 export function buildAnchorParts(
   entries: ReturnType<typeof getAllBirthdaysByDate>,
@@ -355,6 +373,10 @@ export function buildAnchorParts(
       .map((d) => `${BIRTHDAY_LIST_MARKER} ${d.dateKey}: ${d.list.map((e) => e.mention).join(", ")}`)
       .join("\n");
     const monthName = MONTH_NAMES[month - 1]!;
+    // Font-mapped by hand, matching the pre-migration `applyFont(monthName,
+    // fontMap)` call exactly — see this function's doc comment for why this
+    // isn't routed through renderTemplate()'s `styled` bucket/`useFont: true`.
+    const monthHeading = applyFont(monthName, fontMap);
 
     // `{entries}` is only substituted through renderTemplate() when the
     // template actually contains it — matching the old code's fallback of
@@ -363,9 +385,9 @@ export function buildAnchorParts(
     const hasEntriesToken = template.includes("{entries}");
     const rendered = renderTemplate(
       template,
-      { styled: { month: monthName }, raw: hasEntriesToken ? { entries: entryLines } : {} },
+      { raw: { month: monthHeading, ...(hasEntriesToken ? { entries: entryLines } : {}) } },
       {},
-      { useFont: true, fontMap },
+      { useFont: false, fontMap: null },
     );
 
     monthParts.push({

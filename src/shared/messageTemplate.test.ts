@@ -147,6 +147,27 @@ test("birthdays: buildAnchorParts fonts {month} but leaves {entries} raw, per-mo
   assert.equal(marchPart!.text, "mäRZ\nღ: 05.03: <@1>");
 });
 
+test("birthdays: buildAnchorParts does NOT font-map the template's own literal text — only the {month} value (regression)", () => {
+  // Regression guard for a real bug: buildAnchorParts() must reproduce the
+  // pre-migration `.replace()` chain, which only ever ran applyFont() on the
+  // substituted month heading — never on the template's own literal text.
+  // renderTemplate()'s general pass-1 contract *does* font-map a whole
+  // template's literal text runs (see the "raw context is substituted
+  // unstyled" test above, where "Hello" IS font-mapped) — that's correct
+  // and intentional for the engine in general, but buildAnchorParts() must
+  // deliberately bypass it (see its doc comment in birthdays.ts) precisely
+  // because birthdayAnchorTemplate is a free-text field that commonly
+  // contains literal Latin-letter text like "Born in " below, which the old
+  // code never touched.
+  const parts = buildAnchorParts(birthdaysOn("05.03"), "Born in {month}:\n{entries}", SWAP_CASE_FONT_MAP, null);
+  const marchPart = parts.find((p) => p.key === "3");
+  assert.ok(marchPart);
+  // "Born in " and ":\n" stay exactly as typed; only "März" is font-mapped
+  // ('ä' isn't in the Latin reference table and passes through unchanged);
+  // the entries line (mentions/dates) is untouched either way.
+  assert.equal(marchPart!.text, "Born in mäRZ:\nღ: 05.03: <@1>");
+});
+
 test("birthdays: buildAnchorParts appends entries after the template when {entries} is absent", () => {
   const parts = buildAnchorParts(birthdaysOn("05.03"), "{month}", null, null);
   const marchPart = parts.find((p) => p.key === "3");
