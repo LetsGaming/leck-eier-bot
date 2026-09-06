@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
@@ -30,13 +30,24 @@ export function useFetchedResource<T>(fetcher: () => Promise<T>, deps: unknown[]
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const { showError } = useToast();
+  // Guards against a slow, now-superseded fetch overwriting a faster later
+  // one's result — e.g. a page whose `deps` change quickly (a search box)
+  // firing several fetches whose responses can resolve out of order.
+  const requestIdRef = useRef(0);
 
   const load = useCallback(() => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     fetcher()
-      .then(setData)
-      .catch((err) => showError(errorMessage(err)))
-      .finally(() => setLoading(false));
+      .then((result) => {
+        if (requestId === requestIdRef.current) setData(result);
+      })
+      .catch((err) => {
+        if (requestId === requestIdRef.current) showError(errorMessage(err));
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
     // `deps` is supplied by each call site and intentionally spread here —
     // it lets every page-specific hook control exactly what re-triggers a
     // fetch without this generic hook needing to know their shape.
