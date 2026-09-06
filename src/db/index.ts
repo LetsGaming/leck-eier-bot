@@ -727,9 +727,101 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
  * edit to a migration's SQL or logic changes its hash — exactly the misuse
  * this is meant to catch. This never runs the migration; it only hashes its
  * source text.
+ *
+ * The raw `.toString()` output is NOT stable across this project's two
+ * runtimes: `npm run dev` runs via `tsx`/esbuild, which transpiles to a
+ * fully minified form (comments stripped, all insignificant whitespace
+ * removed, optional parens/semicolons dropped), while `npm start` runs the
+ * `tsc`-compiled output, which preserves comments and the original
+ * formatting essentially verbatim. Both runtimes are designed to operate
+ * against the same `data/bot.sqlite` file (see the DB_PATH comment above),
+ * so an unedited migration must hash identically regardless of which one
+ * produced it. Verified empirically (both directly against this file and
+ * with a standalone harness covering every migration shape used below —
+ * plain `d.exec`, multi-statement SQL, an in-body comment, a conditional
+ * `d.prepare(...).get()`/`.run()`, and a `for...of` loop calling
+ * `.run()`) that plain comment-stripping + whitespace-collapsing is NOT
+ * enough: esbuild's output also drops the parens around a single-identifier
+ * arrow parameter (`(d) =>` -> `d=>`) and the semicolon before a closing
+ * brace, which tsc's output keeps — both are real token-level differences,
+ * not just whitespace. `normalizeSource` below removes comments, canonicalizes
+ * that arrow-parens form, strips all insignificant whitespace outside of
+ * string/template literals, and drops a semicolon directly before `}` —
+ * after which both transpilers' output converges to the same normalized
+ * string, while a real edit to the migration's SQL or logic (inside or
+ * outside a literal) still changes that normalized string and is still
+ * caught. Note this also normalizes line endings everywhere, including
+ * *inside* literal content: on a Windows checkout (CRLF working-tree files),
+ * tsc's output preserves the source file's literal `\r\n` bytes inside a
+ * template literal verbatim, while esbuild's output normalizes them to
+ * `\n` — verified empirically to otherwise produce different hashes for
+ * the exact same, unedited multi-line SQL template literal.
  */
+function normalizeSource(source: string): string {
+  let s = source.replace(/\r\n?/g, "\n");
+  // Strip block comments (/* ... */), including JSDoc-style ones.
+  s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+  // Strip line comments (// ...). This is a simple heuristic (it does not
+  // special-case `//` inside string/template literals), but the migration
+  // functions in this file never contain a literal `//` inside their SQL,
+  // so it is safe in practice here.
+  s = s.replace(/\/\/[^\n]*/g, "");
+  // Canonicalize a parenthesized single-identifier arrow parameter to the
+  // bare form esbuild's transpiled output uses (`(d) => ...` -> `d=>...`) —
+  // tsc's output keeps the parens verbatim. Every migration here is a
+  // single-parameter `(d) => { ... }` closure, so this narrow rewrite is
+  // sufficient; it is not a general JS normalizer.
+  s = s.replace(/\(\s*([A-Za-z_$][\w$]*)\s*\)(\s*=>)/g, "$1$2");
+
+  // Strip all insignificant whitespace *outside* of string/template
+  // literals — collapsing to a single space (rather than removing
+  // entirely) is not enough, since esbuild's output has zero whitespace
+  // around most operators/punctuation while tsc's keeps normal formatting.
+  // Literal contents are left untouched: they are semantically meaningful
+  // (part of the SQL or an interpolated value) and already identical
+  // across transpilers.
+  const literalRe = /`(?:\\.|\$\{[^}]*\}|[^`\\])*`|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const chunks: Array<{ text: string; literal: boolean }> = [];
+  while ((match = literalRe.exec(s)) !== null) {
+    chunks.push({ text: s.slice(lastIndex, match.index), literal: false });
+    chunks.push({ text: match[0], literal: true });
+    lastIndex = match.index + match[0].length;
+  }
+  chunks.push({ text: s.slice(lastIndex), literal: false });
+
+  let out = "";
+  for (const chunk of chunks) {
+    if (chunk.literal) {
+      out += chunk.text;
+      continue;
+    }
+    // Re-insert a single space only where needed to keep two adjacent word
+    // characters (identifiers/keywords/numbers) from merging into one
+    // token; drop every other whitespace run entirely.
+    const tokens = chunk.text.match(/[A-Za-z0-9_$]+|\s+|./g) ?? [];
+    for (const tok of tokens) {
+      if (/^\s+$/.test(tok)) continue;
+      const isWord = /^[A-Za-z0-9_$]+$/.test(tok);
+      const prevChar = out[out.length - 1];
+      if (isWord && prevChar !== undefined && /[A-Za-z0-9_$]/.test(prevChar)) {
+        out += " ";
+      }
+      out += tok;
+    }
+  }
+
+  // Drop a semicolon that only exists to terminate the last statement
+  // before a closing brace — optional in JS (ASI), but esbuild's output
+  // omits it while tsc's formatted output keeps it.
+  out = out.replace(/;}/g, "}");
+
+  return out;
+}
+
 function migrationHash(fn: (d: Database.Database) => void): string {
-  return createHash("sha256").update(fn.toString()).digest("hex");
+  return createHash("sha256").update(normalizeSource(fn.toString())).digest("hex");
 }
 
 // Verification table: one row per migration version giving the hash its
