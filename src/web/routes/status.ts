@@ -61,6 +61,7 @@ export function registerStatusRoutes(app: FastifyInstance, client: BotClient, co
         ? {
             botTag: client.user?.tag ?? null,
             uptimeMs: client.uptime ?? 0,
+            guildName: client.guilds.cache.get(config.guildId)?.name ?? null,
             cachedMemberCount: isCacheReady() ? getCachedMembers().size : 0,
             reactionRolePanelCount: listPanels().length,
           }

@@ -64,6 +64,7 @@ export interface CommunitySnapshotActivity {
 export interface BotOwnerStats {
   botTag: string | null;
   uptimeMs: number;
+  guildName: string | null;
   cachedMemberCount: number;
   reactionRolePanelCount: number;
 }
