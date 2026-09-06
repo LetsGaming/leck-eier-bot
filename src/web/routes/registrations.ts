@@ -4,7 +4,7 @@ import { getCachedMembers } from "../../services/memberCache.js";
 import { removeRegistration, completeRegistration } from "../../events/registerWatcher.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { getSettings } from "../../db/settingsRepository.js";
-import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
+import { REGISTRATIONS_LIST_LIMIT } from "../../constants.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Config, RegistrationStatus } from "../../types.js";
 import type { ZodFastifyInstance } from "../utils.js";
@@ -28,60 +28,49 @@ interface RegistrationEntry {
   submittedAge: string | null;
 }
 
-const RegistrationsQuerySchema = z.object({ q: z.string().optional() });
+const RegistrationsQuerySchema = z.object({
+  q: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(REGISTRATIONS_LIST_LIMIT).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
 const UserIdParamsSchema = z.object({ userId: z.string() });
 
 /** Dashboard visibility/control over self-service registration-form submissions — see `registerWatcher.ts`. Shows full history (pending/registered/removed/left), not just what's currently pending. */
 export function registerRegistrationRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {
   app.get("/members/registrations", { schema: { querystring: RegistrationsQuerySchema } }, async (request) => {
-    const query = request.query.q?.trim() ?? "";
+    const { q, limit, offset } = request.query;
     const cache = getCachedMembers();
 
-    const entries = listRegistrations().map((record): RegistrationEntry => {
-      const cached = cache.get(record.userId);
-      // registerStatus is guaranteed non-null here — listRegistrations() only
-      // returns rows where it's set.
-      const status = record.registerStatus!;
-      return {
-        userId: record.userId,
-        username: cached?.user.username ?? record.username,
-        displayName: cached?.displayName ?? record.displayName,
-        nickname: cached?.nickname ?? null,
-        avatarUrl: cached?.displayAvatarURL({ size: 64 }) ?? buildAvatarUrl(record.userId, record.avatar),
-        status,
-        submittedAt: record.registerSubmittedAt,
-        threadUrl:
-          status === "pending" && record.registerThreadId
-            ? `https://discord.com/channels/${config.guildId}/${record.registerThreadId}`
-            : null,
-        submittedName: record.registerSubmittedName,
-        submittedSsoName: record.registerSubmittedSsoName,
-        submittedAge: record.registerSubmittedAge,
-      };
-    });
-
-    // Include the raw form-submitted names alongside the resolved Discord
-    // identity — an admin searching for a registrant most likely knows the
-    // name they typed into the form, not their Discord username.
-    const names = (entry: RegistrationEntry) => [
-      entry.username,
-      entry.displayName,
-      entry.nickname,
-      entry.submittedName,
-      entry.submittedSsoName,
-    ];
-
-    const filtered = entries.filter((entry) => matchesSearch(query, names(entry)));
-
-    if (!query) {
-      return filtered;
-    }
-
-    return filtered.sort((a, b) => {
-      const scoreDiff = scoreMatch(query, names(b)) - scoreMatch(query, names(a));
-      if (scoreDiff !== 0) return scoreDiff;
-      return (b.submittedAt ?? "").localeCompare(a.submittedAt ?? "");
-    });
+    // The search itself (username/display name/submitted form names) runs in
+    // SQL now — see listRegistrations()'s doc comment for the tradeoffs vs.
+    // the old in-JS matchesSearch()/scoreMatch(), including the one search
+    // field this drops: a member's current *nickname* (a live Discord field,
+    // never persisted on member_records, so it can't be pushed into the SQL
+    // WHERE/ORDER BY without re-introducing an unbounded per-row JS pass).
+    return listRegistrations({ query: q, limit: limit ?? REGISTRATIONS_LIST_LIMIT, offset }).map(
+      (record): RegistrationEntry => {
+        const cached = cache.get(record.userId);
+        // registerStatus is guaranteed non-null here — listRegistrations()
+        // only returns rows where it's set.
+        const status = record.registerStatus!;
+        return {
+          userId: record.userId,
+          username: cached?.user.username ?? record.username,
+          displayName: cached?.displayName ?? record.displayName,
+          nickname: cached?.nickname ?? null,
+          avatarUrl: cached?.displayAvatarURL({ size: 64 }) ?? buildAvatarUrl(record.userId, record.avatar),
+          status,
+          submittedAt: record.registerSubmittedAt,
+          threadUrl:
+            status === "pending" && record.registerThreadId
+              ? `https://discord.com/channels/${config.guildId}/${record.registerThreadId}`
+              : null,
+          submittedName: record.registerSubmittedName,
+          submittedSsoName: record.registerSubmittedSsoName,
+          submittedAge: record.registerSubmittedAge,
+        };
+      },
+    );
   });
 
   app.delete("/members/registrations/:userId", { schema: { params: UserIdParamsSchema } }, async (request, reply) => {

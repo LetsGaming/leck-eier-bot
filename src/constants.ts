@@ -12,6 +12,8 @@ export const FIND_USER_RESULT_LIMIT = 15;
 export const FIND_USER_LIST_LIMIT = 500;
 /** Cap on how many former members the dashboard's Member Audit page returns (most-recently-left first) — the in-guild side is bounded by guild size instead. */
 export const MEMBER_AUDIT_LEFT_LIMIT = 500;
+/** Cap on how many registration-form submissions the dashboard's Registrierungen list returns (most-recently-submitted first). */
+export const REGISTRATIONS_LIST_LIMIT = 500;
 /** Discord error code for "message is too old to bulk delete". */
 export const DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE = 50034;
 

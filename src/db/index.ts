@@ -685,6 +685,21 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       "INSERT OR IGNORE INTO command_registration_state (id, definitions_hash) VALUES (1, NULL)",
     ).run();
   },
+  // v32: memberRecordsRepository.ts's listRegistrations()/listFormerMembers()
+  // now filter in SQL (`register_status IS NOT NULL` / `in_guild = 0`)
+  // instead of loading the whole table and filtering in JS — see that file's
+  // MemberSearchOptions doc comment. `in_guild` already had an index (v13);
+  // `register_status` didn't, so this adds one to keep the registrations
+  // query's WHERE clause index-served rather than a full scan. No index on
+  // the LIKE-searched columns (username/display_name/register_submitted_*):
+  // same reasoning as idx_apollo_events_starts_at (:663) — a leading-wildcard
+  // `LIKE '%x%'` can't use a B-tree index regardless, so one would only add
+  // write cost.
+  (d) => {
+    d.exec(`
+      CREATE INDEX IF NOT EXISTS idx_member_records_register_status ON member_records(register_status);
+    `);
+  },
 ];
 
 const currentVersion = db.pragma("user_version", { simple: true }) as number;

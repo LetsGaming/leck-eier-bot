@@ -32,12 +32,15 @@ export default function EventAttendanceDetailPage() {
       .catch((err) => showError(errorMessage(err)));
   }, [eventId, showError]);
 
-  // The one place left in the app that still pays for the full member list —
+  // The one place left in the app that still pays for the member list —
   // moved here from the list page (Task 13) since only the linking picker
-  // needs it, and it's scoped to a single event now.
+  // needs it, and it's scoped to a single event now. Uses the lightweight
+  // in-guild-only endpoint (not memberAudit()) since this dropdown only ever
+  // links a signup to a *current* member — it never needs the (growing,
+  // unbounded) former-members half of the table.
   useEffect(() => {
     api
-      .memberAudit("")
+      .inGuildMembers("")
       .then((r) => setMembers(r.inGuild))
       .catch((err) => showError(errorMessage(err)));
   }, [showError]);

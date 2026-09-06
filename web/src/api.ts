@@ -10,6 +10,7 @@ import type {
   EventAttendanceListResponse,
   EventMonths,
   GeneralSettings,
+  InGuildMembersResponse,
   Mapping,
   MappingInput,
   Me,
@@ -66,8 +67,23 @@ export const api = {
   roles: () => request<RoleOption[]>("/discord/roles"),
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 
-  memberAudit: (query: string) => request<MemberAuditResponse>(`/members/audit?q=${encodeURIComponent(query)}`),
-  registrations: (query = "") => request<Registration[]>(`/members/registrations?q=${encodeURIComponent(query)}`),
+  memberAudit: (query: string, opts: { limit?: number; offset?: number } = {}) => {
+    const search = new URLSearchParams({ q: query });
+    if (opts.limit !== undefined) search.set("limit", String(opts.limit));
+    if (opts.offset !== undefined) search.set("offset", String(opts.offset));
+    return request<MemberAuditResponse>(`/members/audit?${search.toString()}`);
+  },
+  // Lightweight variant of memberAudit() for callers (e.g.
+  // EventAttendanceDetail.tsx's member-linking dropdown) that only need
+  // currently-in-guild members — skips the former-members query server-side.
+  inGuildMembers: (query = "") =>
+    request<InGuildMembersResponse>(`/members/audit?inGuildOnly=1&q=${encodeURIComponent(query)}`),
+  registrations: (query = "", opts: { limit?: number; offset?: number } = {}) => {
+    const search = new URLSearchParams({ q: query });
+    if (opts.limit !== undefined) search.set("limit", String(opts.limit));
+    if (opts.offset !== undefined) search.set("offset", String(opts.offset));
+    return request<Registration[]>(`/members/registrations?${search.toString()}`);
+  },
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
   approveRegistration: (userId: string) =>
     request<void>(`/members/registrations/${userId}/approve`, { method: "POST" }),

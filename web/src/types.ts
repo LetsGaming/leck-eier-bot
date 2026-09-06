@@ -213,6 +213,11 @@ export interface MemberAuditResponse {
   left: MemberAuditEntry[];
 }
 
+/** `GET /members/audit?inGuildOnly=1` — the lightweight shape used by EventAttendanceDetail.tsx's member-linking dropdown, which never needs the (growing, unbounded) former-members half of the table. */
+export interface InGuildMembersResponse {
+  inGuild: MemberAuditEntry[];
+}
+
 /**
  * 'pending' = form submitted, awaiting staff action, private thread open.
  * 'registered' = staff granted the registration-tier role.

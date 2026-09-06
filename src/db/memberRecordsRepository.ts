@@ -42,18 +42,43 @@ function rowToRecord(row: MemberRecordRow): MemberRecord {
 const COLUMNS =
   "user_id, username, display_name, avatar, joined_at, rules_accepted_at, left_at, in_guild, register_thread_id, register_submitted_at, register_submitted_name, register_submitted_sso_name, register_submitted_age, register_status, register_thread_expires_at";
 
-const selectAllStmt = db.prepare<[], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records`);
 const selectByIdStmt = db.prepare<[string], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records WHERE user_id = ?`);
-// Every registration ever submitted, not just currently-pending ones — the
-// dashboard shows full history (pending/registered/removed/left) rather
-// than rows disappearing once resolved. Former members are included too
-// (no in_guild filter), so a "left" entry stays visible.
-const selectRegistrationsStmt = db.prepare<[], MemberRecordRow>(
-  `SELECT ${COLUMNS} FROM member_records WHERE register_status IS NOT NULL ORDER BY register_submitted_at DESC`,
-);
 const countPendingRegistrationsStmt = db.prepare<[], { total: number }>(
   `SELECT COUNT(*) AS total FROM member_records WHERE register_status = 'pending'`,
 );
+
+/**
+ * Options shared by `listFormerMembers()`/`listRegistrations()`'s SQL-side
+ * search+pagination. `query` is matched via a case-insensitive `LIKE
+ * '%query%'` against a fixed set of columns (see each function) — this is a
+ * deliberate approximation of the old in-JS `matchesSearch()`/`scoreMatch()`
+ * (services/memberSearch.ts), which additionally transliterates fancy
+ * Unicode lookalike characters (e.g. mathematical bold/italic letters) and
+ * strips diacritics before comparing. SQLite's `LIKE`/`LOWER` only
+ * understand ASCII case-folding, so a search like "lu" will NOT match a
+ * stylized name such as "𝓛𝓾𝓷𝓪" the way the old JS path did. That gap is an
+ * accepted tradeoff: closing the unbounded full-table-scan-plus-per-row-
+ * transliteration problem (which blocks the shared Node event loop, and
+ * therefore the Discord gateway heartbeat, for as long as the query takes)
+ * is far higher priority than preserving fancy-Unicode fuzzy matching for an
+ * admin's ad-hoc search. Plain-ASCII substring/prefix/exact search — by far
+ * the common case — behaves identically to before.
+ *
+ * Ordering approximates the old tiered `scoreMatch()` (exact > prefix >
+ * word-boundary > substring) with a 3-tier SQL `CASE` (exact > prefix >
+ * substring) — the "match at the start of a word" tier is folded into the
+ * plain substring tier here, since expressing word-boundary matching in SQL
+ * would need per-row string splitting with no indexable benefit anyway. The
+ * `limit`/`offset` pair lets a caller page through results without gaps or
+ * duplicates as long as the underlying table isn't concurrently mutated
+ * between pages, same as any offset-based SQL pagination.
+ */
+export interface MemberSearchOptions {
+  /** Trimmed, non-normalized search text. Empty/omitted matches everything. */
+  query?: string;
+  limit: number;
+  offset?: number;
+}
 
 interface ProfileInput {
   userId: string;
@@ -95,18 +120,113 @@ const recordLeaveStmt = db.prepare<ProfileInput & { timestamp: string }>(
      left_at = @timestamp, in_guild = 0`,
 );
 
-export function listAllMemberRecords(): MemberRecord[] {
-  return selectAllStmt.all().map(rowToRecord);
-}
-
 export function getMemberRecord(userId: string): MemberRecord | null {
   const row = selectByIdStmt.get(userId);
   return row ? rowToRecord(row) : null;
 }
 
-/** Every member who's ever submitted a registration form, regardless of outcome — see `register_status` on `member_records`. */
-export function listRegistrations(): MemberRecord[] {
-  return selectRegistrationsStmt.all().map(rowToRecord);
+/**
+ * Batched lookup by primary key for a bounded set of ids — e.g. the
+ * dashboard's Member Audit page enriching the *currently in-guild* members
+ * (bounded by guild size, from the live member cache) with their
+ * `joined_at`/`rules_accepted_at` history, without pulling in the unbounded
+ * "every member ever seen" table. Returns nothing for ids with no record.
+ */
+export function getMemberRecordsByIds(userIds: string[]): Map<string, MemberRecord> {
+  if (userIds.length === 0) return new Map();
+  const placeholders = userIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare<string[], MemberRecordRow>(`SELECT ${COLUMNS} FROM member_records WHERE user_id IN (${placeholders})`)
+    .all(...userIds);
+  return new Map(rows.map((row) => [row.user_id, rowToRecord(row)]));
+}
+
+/** Escapes `%`/`_`/`\` so they're matched literally rather than as `LIKE` wildcards, then wraps the query for a substring/prefix search. */
+function likeParams(query: string) {
+  const escaped = query.toLowerCase().replace(/[\\%_]/g, "\\$&");
+  return { exact: query.toLowerCase(), like: `%${escaped}%`, prefix: `${escaped}%` };
+}
+
+interface SearchStmtParams {
+  exact: string;
+  like: string;
+  prefix: string;
+  limit: number;
+  offset: number;
+}
+
+const selectFormerMembersStmt = db.prepare<SearchStmtParams, MemberRecordRow>(`
+  SELECT ${COLUMNS} FROM member_records
+  WHERE in_guild = 0
+    AND (@exact = '' OR LOWER(username) LIKE @like ESCAPE '\\' OR LOWER(display_name) LIKE @like ESCAPE '\\')
+  ORDER BY
+    CASE
+      WHEN @exact = '' THEN 0
+      WHEN LOWER(username) = @exact OR LOWER(display_name) = @exact THEN 0
+      WHEN LOWER(username) LIKE @prefix ESCAPE '\\' OR LOWER(display_name) LIKE @prefix ESCAPE '\\' THEN 1
+      ELSE 2
+    END,
+    left_at DESC
+  LIMIT @limit OFFSET @offset
+`);
+
+const selectRegistrationsStmt = db.prepare<SearchStmtParams, MemberRecordRow>(`
+  SELECT ${COLUMNS} FROM member_records
+  WHERE register_status IS NOT NULL
+    AND (
+      @exact = ''
+      OR LOWER(username) LIKE @like ESCAPE '\\'
+      OR LOWER(display_name) LIKE @like ESCAPE '\\'
+      OR LOWER(register_submitted_name) LIKE @like ESCAPE '\\'
+      OR LOWER(register_submitted_sso_name) LIKE @like ESCAPE '\\'
+    )
+  ORDER BY
+    CASE
+      WHEN @exact = '' THEN 0
+      WHEN LOWER(username) = @exact OR LOWER(display_name) = @exact
+        OR LOWER(register_submitted_name) = @exact OR LOWER(register_submitted_sso_name) = @exact THEN 0
+      WHEN LOWER(username) LIKE @prefix ESCAPE '\\' OR LOWER(display_name) LIKE @prefix ESCAPE '\\'
+        OR LOWER(register_submitted_name) LIKE @prefix ESCAPE '\\' OR LOWER(register_submitted_sso_name) LIKE @prefix ESCAPE '\\' THEN 1
+      ELSE 2
+    END,
+    register_submitted_at DESC
+  LIMIT @limit OFFSET @offset
+`);
+
+/**
+ * Former members only (`in_guild = 0`), newest-left-first by default,
+ * optionally filtered by `options.query` against username/display name — see
+ * `MemberSearchOptions` for the search-approximation and ordering tradeoffs.
+ * This is the unbounded half of the old `listAllMemberRecords()` scan: the
+ * in-guild half is naturally bounded by current guild size and is served
+ * from the live member cache instead (see `memberAudit.ts`).
+ */
+export function listFormerMembers(options: MemberSearchOptions): MemberRecord[] {
+  const { exact, like, prefix } = likeParams(options.query?.trim() ?? "");
+  return selectFormerMembersStmt
+    .all({ exact, like, prefix, limit: options.limit, offset: options.offset ?? 0 })
+    .map(rowToRecord);
+}
+
+/**
+ * Every member who's ever submitted a registration form, regardless of
+ * outcome — see `register_status` on `member_records`. Optionally filtered
+ * by `options.query` against the resolved-identity columns
+ * (username/display name) and the raw form-submitted name/SSO-name fields —
+ * see `MemberSearchOptions` for the search-approximation tradeoffs. Unlike
+ * the route's old in-JS search, this does NOT also match the member's
+ * current *nickname* — nickname is a live Discord field, not persisted on
+ * `member_records`, and matching it here (post-SQL, before pagination is
+ * applied) would silently drop rows that only match by nickname off the
+ * page instead of ranking them in. That's an accepted, documented gap: a
+ * search for someone's current nickname alone (not their username/display
+ * name/submitted form names) may not find them anymore.
+ */
+export function listRegistrations(options: MemberSearchOptions): MemberRecord[] {
+  const { exact, like, prefix } = likeParams(options.query?.trim() ?? "");
+  return selectRegistrationsStmt
+    .all({ exact, like, prefix, limit: options.limit, offset: options.offset ?? 0 })
+    .map(rowToRecord);
 }
 
 /** Registrations awaiting staff review — surfaced on Overview as an attention count. */
