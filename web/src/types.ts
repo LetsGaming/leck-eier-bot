@@ -1,5 +1,6 @@
 import type { WebRole } from "../../contracts/webRole";
 import type { CommandPermission } from "../../contracts/commands";
+import type { PermissionGate } from "../../contracts/permissionGate";
 import type { MemberAuditEntry } from "../../contracts/memberAudit";
 import type { RegistrationEntry } from "../../contracts/registrations";
 import type {
@@ -13,6 +14,7 @@ import type {
 
 export type {
   WebRole,
+  PermissionGate,
   MemberAuditEntry,
   EventAttendanceSummary,
   EventAttendanceListResponse,
@@ -173,9 +175,32 @@ export interface UpcomingBirthday {
 export interface CommandDef {
   name: string;
   description: string;
+  /** Code-declared default, used only to compute the "Standard: …" fallback label — see `defaultGateFor()` below. */
   permission?: CommandPermission;
+  /** Dashboard-configured override of who may run this command. `null` = no override; falls back to `defaultGateFor(permission)`. */
+  permissionGate: PermissionGate | null;
   enabled: boolean;
   guildOnly: boolean;
+}
+
+/**
+ * Client-side mirror of `src/types.ts`'s `defaultGateFor()` on the bot side —
+ * the two never share code (one runs in the browser, one on the bot), but
+ * must implement the exact same `CommandPermission` -> `PermissionGate`
+ * mapping so the dashboard's "Standard: …" hint always matches what the bot
+ * actually enforces when no override is set. See
+ * `docs/superpowers/specs/2026-09-05-command-permissions-design.md`.
+ */
+export function defaultGateFor(permission?: CommandPermission): PermissionGate {
+  switch (permission) {
+    case "admin":
+      return { mode: "tier", tier: "admin" };
+    case "owner":
+      return { mode: "tier", tier: "bot-owner" };
+    case "none":
+    default:
+      return { mode: "everyone" };
+  }
 }
 
 export interface GeneralSettings {

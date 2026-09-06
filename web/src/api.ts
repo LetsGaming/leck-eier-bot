@@ -15,6 +15,7 @@ import type {
   MappingInput,
   Me,
   MemberAuditResponse,
+  PermissionGate,
   Registration,
   UpcomingBirthday,
   Panel,
@@ -131,8 +132,10 @@ export const api = {
   deleteBirthday: (id: number) => request<void>(`/birthdays/${id}`, { method: "DELETE" }),
 
   commands: () => request<CommandDef[]>("/commands"),
-  updateCommand: (name: string, body: { enabled?: boolean; guildOnly?: boolean }) =>
-    request<CommandDef>(`/commands/${name}`, { method: "PATCH", ...json(body) }),
+  updateCommand: (
+    name: string,
+    body: { enabled?: boolean; guildOnly?: boolean; permissionGate?: PermissionGate | null },
+  ) => request<CommandDef>(`/commands/${name}`, { method: "PATCH", ...json(body) }),
 
   generalSettings: () => request<GeneralSettings>("/settings/general"),
   updateGeneralSettings: (body: Partial<GeneralSettings>) =>

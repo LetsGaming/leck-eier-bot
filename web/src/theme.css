@@ -1040,6 +1040,11 @@ th {
   color: var(--text-muted);
 }
 
+.muted.small {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
 .loading {
   color: var(--text-muted);
   padding: 40px 0;
