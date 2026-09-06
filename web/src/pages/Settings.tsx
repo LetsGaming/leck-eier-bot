@@ -82,11 +82,11 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
           </div>
           {fontMap &&
             ([...fontMap].length === FONT_REFERENCE.length ? (
-              <div className="preview-box" style={{ marginTop: 8 }}>
+              <div className="preview-box mt-8">
                 Vorschau: {applyFont("The quick brown fox", fontMap)}
               </div>
             ) : (
-              <div className="preview-box" style={{ marginTop: 8 }}>
+              <div className="preview-box mt-8">
                 <span className="muted">Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).</span>
               </div>
             ))}
@@ -254,7 +254,7 @@ function RegistrierungSection({
                 einzufügen.
               </div>
             </div>
-            <div className="preview-box" style={{ marginBottom: 12 }}>
+            <div className="preview-box mb-12">
               {/*
                 Mirrors renderConfirmation() in src/events/registerWatcher.ts
                 exactly: {name} is `raw` (never font-mapped, matching the
@@ -281,7 +281,7 @@ function RegistrierungSection({
               {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
             </button>
 
-            <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid var(--border)" }} />
+            <hr className="divider" />
 
             <label className="switch">
               <input
@@ -311,7 +311,7 @@ function RegistrierungSection({
                 für einen beliebigen Kanal.
               </div>
             </div>
-            <div className="preview-box" style={{ marginBottom: 12 }}>
+            <div className="preview-box mb-12">
               <TemplatePreview
                 template={
                   settings?.roleSelectionChannelId

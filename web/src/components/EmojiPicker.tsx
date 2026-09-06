@@ -114,7 +114,7 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
                 </button>
               ))}
               {filteredStandard.length === 0 && filteredCustom.length === 0 && (
-                <span className="muted" style={{ padding: 8 }}>
+                <span className="muted emoji-picker-empty">
                   Keine Treffer.
                 </span>
               )}

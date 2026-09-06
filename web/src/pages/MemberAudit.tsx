@@ -103,7 +103,7 @@ function RegistrationsCard({ query }: { query: string }) {
               {entries.map((entry) => (
                 <tr key={entry.userId}>
                   <td className="stack-plain">
-                    <img src={entry.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
+                    <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
                   </td>
                   <td data-label="Anzeigename">{entry.displayName}</td>
                   <td className="muted" data-label="Nickname">
@@ -132,7 +132,7 @@ function RegistrationsCard({ query }: { query: string }) {
                       <span className="muted">—</span>
                     )}
                   </td>
-                  <td className="stack-plain" style={{ display: "flex", gap: 8 }}>
+                  <td className="stack-plain actions-cell">
                     {entry.status === "pending" && (
                       <>
                         <button disabled={busyUserId === entry.userId} onClick={() => handleApprove(entry)}>
@@ -177,7 +177,7 @@ function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boo
   return (
     <tr>
       <td className="stack-plain">
-        <img src={entry.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
+        <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
       </td>
       <td data-label="Name">{entry.displayName}</td>
       <td className="muted" data-label="Benutzername">

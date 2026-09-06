@@ -131,7 +131,7 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
         <div className="user">
           Angemeldet als <strong>{me.username}</strong> ({me.role})
           <div>
-            <button onClick={handleLogout} style={{ marginTop: 8 }}>
+            <button onClick={handleLogout} className="mt-8">
               Abmelden
             </button>
           </div>

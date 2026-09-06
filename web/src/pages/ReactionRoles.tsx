@@ -161,7 +161,7 @@ export default function ReactionRoles() {
           ) : (
             <>
               {typeof selectedId === "number" && selected && !selected.sent && (
-                <div className="alert" style={{ background: "var(--bg-inset)", border: "1px solid var(--border)" }}>
+                <div className="alert neutral">
                   <strong>Entwurf</strong> — es wurde noch nichts auf Discord gepostet. Konfiguriere alles unten und
                   klicke dann auf <strong>Senden</strong>, wenn du bereit bist.
                 </div>
@@ -216,7 +216,7 @@ export default function ReactionRoles() {
                   )
                 )}
                 {typeof selectedId === "number" && selected && !selected.managed && (
-                  <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
+                  <p className="hint hint-tight">
                     An eine bestehende Nachricht angehängt — ihr Inhalt wird nie bearbeitet.
                   </p>
                 )}
@@ -330,7 +330,7 @@ export default function ReactionRoles() {
                   </>
                 )}
                 {selected?.messageId && (
-                  <p className="hint" style={{ marginTop: 12 }}>
+                  <p className="hint mt-12">
                     {selected.managed ? "Gepostet als" : "Angehängt an"} Nachricht <code>{selected.messageId}</code> in #
                     {channels.find((c) => c.id === selected.channelId)?.name ?? selected.channelId}
                   </p>
@@ -479,7 +479,7 @@ export default function ReactionRoles() {
                           <span className="grow">
                             {roleNamesLabel(m.roleIds)}
                             {m.roleIds.some((id) => !roleIsManageable(id)) && (
-                              <span className="badge warn" style={{ marginLeft: 8 }}>
+                              <span className="badge warn ml-8">
                                 Bot kann nicht zuweisen: {roleNamesLabel(m.roleIds.filter((id) => !roleIsManageable(id)))}
                               </span>
                             )}
@@ -504,7 +504,7 @@ export default function ReactionRoles() {
                       ),
                     )}
 
-                  <h2 style={{ marginTop: 20 }}>
+                  <h2 className="mt-20">
                     {atOptionCap ? `Hinzufügen (Limit von ${optionCap} erreicht)` : `${optionWord} hinzufügen`}
                   </h2>
                   {!atOptionCap && (
@@ -528,7 +528,7 @@ export default function ReactionRoles() {
               {selectedId !== null && (
                 <details className="card">
                   <summary>Erweiterte Optionen</summary>
-                  <div style={{ marginTop: 16 }}>
+                  <div className="mt-16">
                     <div className="field">
                       <label className="switch">
                         <input

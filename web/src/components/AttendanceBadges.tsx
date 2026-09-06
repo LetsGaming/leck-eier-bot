@@ -52,7 +52,7 @@ export function LatenessCell({ signup, event }: { signup: EventSignup; event: Ev
   if (!lateTier && !earlyTier) return <span className="muted">—</span>;
 
   return (
-    <div className="stack-plain" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.25rem" }}>
+    <div className="stack-plain badge-stack">
       {lateTier && (
         <span
           className={`badge ${TIER_BADGE_CLASS[lateTier]}`}

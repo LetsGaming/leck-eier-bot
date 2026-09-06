@@ -173,7 +173,7 @@ export default function Birthdays() {
               {nextUp.map((b) => (
                 <div className="stat-tile" key={b.dateKey}>
                   <div className="label">Als Nächstes — {relativeDay(b.daysUntil)}</div>
-                  <div className="value" style={{ fontSize: 18 }}>
+                  <div className="value fs-18">
                     {b.dateKey}
                   </div>
                   <div className="muted">{b.entries.map(entryLabel).join(", ")}</div>
@@ -190,8 +190,8 @@ export default function Birthdays() {
               können bei Bedarf hier weiterhin korrigiert werden.
             </p>
 
-            <div className="row" style={{ alignItems: "flex-end", marginBottom: 12 }}>
-              <div className="field" style={{ maxWidth: 90 }}>
+            <div className="row mb-12">
+              <div className="field field-narrow">
                 <label htmlFor="entryDay">Tag</label>
                 <input
                   id="entryDay"
@@ -202,7 +202,7 @@ export default function Birthdays() {
                   onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
                 />
               </div>
-              <div className="field" style={{ maxWidth: 90 }}>
+              <div className="field field-narrow">
                 <label htmlFor="entryMonth">Monat</label>
                 <input
                   id="entryMonth"
@@ -233,13 +233,13 @@ export default function Birthdays() {
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                 />
               </div>
-              <div className="field" style={{ flex: "0 0 auto" }}>
+              <div className="field field-auto">
                 <label>&nbsp;</label>
                 <button className="primary" onClick={handleSaveEntry} disabled={savingEntry}>
                   {draft.id === null ? "Hinzufügen" : "Änderung speichern"}
                 </button>
                 {draft.id !== null && (
-                  <button onClick={() => setDraft(EMPTY_DRAFT)} style={{ marginLeft: 8 }}>
+                  <button onClick={() => setDraft(EMPTY_DRAFT)} className="ml-8">
                     Abbrechen
                   </button>
                 )}
@@ -310,7 +310,7 @@ export default function Birthdays() {
                 Formatiert die Ankündigung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten
                 Schrift, sofern konfiguriert.
               </div>
-              <label className="switch" style={{ marginTop: 12 }}>
+              <label className="switch mt-12">
                 <input
                   type="checkbox"
                   checked={showAnnouncementPreview}
@@ -319,7 +319,7 @@ export default function Birthdays() {
                 Vorschau
               </label>
               {showAnnouncementPreview && (
-                <div style={{ marginTop: 12 }}>
+                <div className="mt-12">
                   {/*
                     Mirrors buildBirthdayMessage()/renderBirthdayTemplate() in
                     src/services/birthdays.ts EXACTLY as it actually behaves
@@ -435,7 +435,7 @@ export default function Birthdays() {
                 festgelegten Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert
                 dargestellt.
               </div>
-              <label className="switch" style={{ marginTop: 12 }}>
+              <label className="switch mt-12">
                 <input
                   type="checkbox"
                   checked={showAnchorPreview}
@@ -444,7 +444,7 @@ export default function Birthdays() {
                 Vorschau
               </label>
               {showAnchorPreview && (
-                <div style={{ marginTop: 12 }}>
+                <div className="mt-12">
                   {/*
                     Mirrors buildAnchorParts() in src/services/birthdays.ts
                     EXACTLY as it actually behaves today (post-Task-7-fix):
@@ -475,7 +475,7 @@ export default function Birthdays() {
                   </div>
                 </div>
               )}
-              <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
+              <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} className="mt-8">
                 {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
               </button>
             </div>

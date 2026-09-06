@@ -44,31 +44,14 @@ export default function RoleCheckboxList({ options, value, onChange, placeholder
           placeholder={placeholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ marginBottom: 6 }}
+          className="role-checkbox-search"
         />
       )}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          background: "var(--bg-inset)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius)",
-          padding: 8,
-          maxHeight: 140,
-          overflowY: "auto",
-          minWidth: 0,
-        }}
-      >
+      <div className="role-checkbox-grid">
         {options.length === 0 && <span className="muted">Keine Rollen gefunden.</span>}
         {options.length > 0 && filtered.length === 0 && <span className="muted">Keine Treffer.</span>}
         {filtered.map((o) => (
-          <label
-            key={o.value}
-            className="switch"
-            style={{ fontSize: 13, background: "var(--bg-elevated)", padding: "2px 8px", borderRadius: 999 }}
-          >
+          <label key={o.value} className="switch role-checkbox-pill">
             <input
               type="checkbox"
               checked={value.includes(o.value)}

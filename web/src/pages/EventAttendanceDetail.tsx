@@ -160,12 +160,12 @@ export default function EventAttendanceDetailPage() {
             <span className="muted small">Nicht getrackt</span>
             <strong>{tallies.notTracked}</strong>
             {tallies.lateWithinGrace > 0 && (
-              <p className="muted small" style={{ width: "100%", margin: 0 }}>
+              <p className="muted small tally-note">
                 davon {tallies.lateWithinGrace} leicht verspätet (unter 5 Min.)
               </p>
             )}
             {tallies.earlyWithinGrace > 0 && (
-              <p className="muted small" style={{ width: "100%", margin: 0 }}>
+              <p className="muted small tally-note">
                 davon {tallies.earlyWithinGrace} leicht früher gegangen (unter 5 Min.)
               </p>
             )}

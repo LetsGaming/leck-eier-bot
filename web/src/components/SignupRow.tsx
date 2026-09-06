@@ -32,9 +32,9 @@ export default function SignupRow({
     <tr>
       <td className="stack-plain">
         {signup.avatarUrl ? (
-          <img src={signup.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: "50%" }} />
+          <img src={signup.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
         ) : (
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--border)" }} />
+          <div className="avatar-placeholder" />
         )}
       </td>
       <td data-label="Mitglied">

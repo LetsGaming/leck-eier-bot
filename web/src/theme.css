@@ -256,6 +256,12 @@ h3 {
   word-break: break-word;
 }
 
+/* A `.stat-tile .value` shrunk down for a date-shaped value (Birthdays'
+   "next up" tile) instead of the default large number size. */
+.stat-tile .value.fs-18 {
+  font-size: 18px;
+}
+
 label {
   display: block;
   font-weight: 500;
@@ -313,6 +319,14 @@ textarea:focus {
   color: var(--text-muted);
   font-size: 12px;
   margin-top: 4px;
+}
+
+/* A `.hint` pulled up to sit tighter against the control above it (used
+   once, on ReactionRoles' "attached to an existing message" note, which
+   sits right under a <select> with no field wrapper of its own). */
+.hint-tight {
+  margin-top: -8px;
+  margin-bottom: 16px;
 }
 
 .row {
@@ -437,6 +451,32 @@ th {
   color: #a12226;
 }
 
+/* RoleCheckboxList — a filtered multi-select checkbox grid (Allowed roles /
+   Reactions role picker). */
+.role-checkbox-search {
+  margin-bottom: 6px;
+}
+
+.role-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.role-checkbox-pill {
+  font-size: 13px;
+  background: var(--bg-elevated);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
 .mapping-row {
   display: flex;
   flex-wrap: wrap;
@@ -516,6 +556,10 @@ th {
   margin-bottom: 6px;
   text-align: left;
   background: var(--bg-inset);
+}
+
+.emoji-picker-empty {
+  padding: 8px;
 }
 
 .emoji-grid {
@@ -1045,6 +1089,78 @@ th {
   margin-top: 4px;
 }
 
+/* Small spacing-utility scale — added for the Task 16 inline-style sweep.
+   Kept intentionally tiny (just the handful of margin values that recurred
+   verbatim across pages/components) rather than a full utility framework,
+   matching this codebase's otherwise purpose-named CSS classes. */
+.mt-8 {
+  margin-top: 8px;
+}
+
+.mt-12 {
+  margin-top: 12px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.mb-12 {
+  margin-bottom: 12px;
+}
+
+.ml-8 {
+  margin-left: 8px;
+}
+
+/* A form `.row` that also needs bottom spacing below it (e.g. before a
+   table) — `.row` itself has no default margin-bottom. */
+.row.mb-12 {
+  margin-bottom: 12px;
+}
+
+/* A `.field` capped to a short numeric-input width (day/month pickers) or
+   shrunk to its content instead of stretching like its `.row` siblings. */
+.field-narrow {
+  max-width: 90px;
+}
+
+.field-auto {
+  flex: 0 0 auto;
+}
+
+/* A plain <hr> styled to match the rest of the app's border color instead
+   of the browser default inset line. */
+.divider {
+  margin: 20px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* A neutral/"draft" flavor of `.alert` — no color, just the inset
+   background + border used for informational (non error/success) notices. */
+.alert.neutral {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+}
+
+/* A 28px round avatar image (member/signup tables) and its no-avatar
+   placeholder swatch of the same size. */
+.avatar-round {
+  border-radius: 50%;
+}
+
+.avatar-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
 .loading {
   color: var(--text-muted);
   padding: 40px 0;
@@ -1183,6 +1299,14 @@ th {
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+/* Forces a "davon ... leicht verspätet"-style footnote onto its own line
+   within a `.tally-grid` (which otherwise flows its label/value pairs
+   inline) and drops the <p>/`.muted.small` default margins. */
+.tally-note {
+  width: 100%;
+  margin: 0;
 }
 
 .empty-state {
@@ -1447,4 +1571,20 @@ th {
     display: block;
     text-align: left;
   }
+}
+
+/* A `.stack-plain` action cell (Member Audit's Genehmigen/Entfernen buttons)
+   that still needs its own row layout, independent of the mobile-stacking
+   rule above. */
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+
+/* Stacks the lateness/early-leave badges in AttendanceBadges' LatenessCell
+   vertically instead of the default inline `.stack-plain` row. */
+.badge-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
 }
