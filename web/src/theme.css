@@ -933,6 +933,20 @@ th {
   font-size: 13px;
 }
 
+.template-editor {
+  position: relative;
+}
+
+.template-editor-popover {
+  top: auto;
+  margin-top: 4px;
+  max-width: 320px;
+}
+
+.template-preview-text {
+  white-space: pre-wrap;
+}
+
 .rr-layout {
   display: flex;
   gap: 24px;

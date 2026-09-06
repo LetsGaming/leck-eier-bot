@@ -122,8 +122,6 @@ export const api = {
   birthdaySettings: () => request<BirthdaySettings>("/settings/birthday"),
   updateBirthdaySettings: (body: Partial<BirthdaySettings>) =>
     request<BirthdaySettings>("/settings/birthday", { method: "PATCH", ...json(body) }),
-  previewBirthday: (template: string) =>
-    request<{ rendered: string }>("/settings/birthday/preview", { method: "POST", ...json({ template }) }),
   syncBirthdayAnchor: () => request<{ ok: boolean }>("/settings/birthday/sync-anchor", { method: "POST" }),
   birthdays: () => request<BirthdaysByDate>("/birthdays"),
   upcomingBirthdays: () => request<UpcomingBirthday[]>("/birthdays/upcoming"),

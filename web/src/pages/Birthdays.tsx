@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
+import TemplateEditor from "../components/TemplateEditor";
+import TemplatePreview from "../components/TemplatePreview";
 import { useToast } from "../components/ToastContext";
+import { applyFont } from "../utils/font";
 import { toChannelOptions } from "../utils/selectOptions";
 import type { BirthdayEntry, Channel, UpcomingBirthday } from "../types";
+
+/** Sample values shown in the live preview — the real message uses the actual member's mention/nick/everyone-ping at send time. */
+const PREVIEW_CONTEXT = { userMention: "@Beispielperson", everyoneMention: "@everyone", userNick: "Beispielperson" };
+const PREVIEW_MONTH = "März";
+const PREVIEW_ENTRIES = "📅 05.03: @Beispielperson";
 
 function relativeDay(days: number): string {
   if (days === 0) return "heute";
@@ -36,7 +44,9 @@ export default function Birthdays() {
   const [anchorIntro, setAnchorIntro] = useState("");
   const [anchorUseFont, setAnchorUseFont] = useState(false);
   const [announcementUseFont, setAnnouncementUseFont] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [fontMap, setFontMap] = useState<string | null>(null);
+  const [showAnnouncementPreview, setShowAnnouncementPreview] = useState(false);
+  const [showAnchorPreview, setShowAnchorPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncingAnchor, setSyncingAnchor] = useState(false);
   const [draft, setDraft] = useState<EntryDraft>(EMPTY_DRAFT);
@@ -44,8 +54,8 @@ export default function Birthdays() {
   const { showError, showSuccess } = useToast();
 
   function loadAll() {
-    Promise.all([api.birthdaySettings(), api.channels(), api.upcomingBirthdays()])
-      .then(([s, c, u]) => {
+    Promise.all([api.birthdaySettings(), api.channels(), api.upcomingBirthdays(), api.generalSettings()])
+      .then(([s, c, u, general]) => {
         setTemplate(s.template);
         setChannelId(s.channelId ?? "");
         setCronExpr(s.cron);
@@ -56,20 +66,12 @@ export default function Birthdays() {
         setAnnouncementUseFont(s.announcementUseFont);
         setChannels(c);
         setUpcoming(u);
+        setFontMap(general.fontMap);
       })
       .catch((err) => showError(errorMessage(err)));
   }
 
   useEffect(loadAll, []);
-
-  async function handlePreview() {
-    try {
-      const { rendered } = await api.previewBirthday(template);
-      setPreview(rendered);
-    } catch (err) {
-      showError(errorMessage(err));
-    }
-  }
 
   async function handleSave() {
     setSaving(true);
@@ -284,7 +286,7 @@ export default function Birthdays() {
               <h2>Nachrichtenvorlage</h2>
               <div className="field">
                 <label htmlFor="template">Vorlage</label>
-                <textarea id="template" value={template} onChange={(e) => setTemplate(e.target.value)} />
+                <TemplateEditor id="template" value={template} onChange={setTemplate} channels={channels} />
                 <div className="hint">
                   Platzhalter: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>,{" "}
                   <code>{"{everyoneMention}"}</code>
@@ -302,10 +304,42 @@ export default function Birthdays() {
                 Formatiert die Ankündigung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten
                 Schrift, sofern konfiguriert.
               </div>
-              <button onClick={handlePreview}>Vorschau</button>
-              {preview && (
-                <div className="preview-box" style={{ marginTop: 12 }}>
-                  {preview}
+              <label className="switch" style={{ marginTop: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={showAnnouncementPreview}
+                  onChange={(e) => setShowAnnouncementPreview(e.target.checked)}
+                />
+                Vorschau
+              </label>
+              {showAnnouncementPreview && (
+                <div style={{ marginTop: 12 }}>
+                  {/*
+                    Mirrors buildBirthdayMessage()/renderBirthdayTemplate() in
+                    src/services/birthdays.ts EXACTLY as it actually behaves
+                    today (post-Task-7-fix), not a naive reading of the
+                    engine's own styled/raw split: the backend substitutes
+                    {userMention}/{everyoneMention}/{userNick} unstyled first,
+                    then hand-applies applyFont() to the WHOLE resulting
+                    string. Since applyFont() is a pure, position-independent
+                    character map, font-mapping the fully-assembled string is
+                    byte-identical to font-mapping the template's literal text
+                    and each substituted value independently — which is
+                    exactly what passing these three tokens through
+                    renderTemplate()'s `styled` bucket (with useFont set to
+                    the real announcementUseFont toggle) does. So, unlike
+                    buildAnchorParts below, this one call is a faithful
+                    single-shot mirror of the real backend behavior.
+                  */}
+                  <div className="preview-box">
+                    <TemplatePreview
+                      template={template}
+                      context={{ styled: PREVIEW_CONTEXT }}
+                      channels={channels}
+                      useFont={announcementUseFont}
+                      fontMap={fontMap}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -374,10 +408,11 @@ export default function Birthdays() {
               </div>
               <div className="field">
                 <label htmlFor="anchorTemplate">Vorlage für Monatsüberschriften</label>
-                <textarea
+                <TemplateEditor
                   id="anchorTemplate"
                   value={anchorTemplate}
-                  onChange={(e) => setAnchorTemplate(e.target.value)}
+                  onChange={setAnchorTemplate}
+                  channels={channels}
                 />
                 <div className="hint">
                   Platzhalter: <code>{"{month}"}</code> (mit der Schrift unten formatiert, falls gesetzt),{" "}
@@ -394,6 +429,46 @@ export default function Birthdays() {
                 festgelegten Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert
                 dargestellt.
               </div>
+              <label className="switch" style={{ marginTop: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={showAnchorPreview}
+                  onChange={(e) => setShowAnchorPreview(e.target.checked)}
+                />
+                Vorschau
+              </label>
+              {showAnchorPreview && (
+                <div style={{ marginTop: 12 }}>
+                  {/*
+                    Mirrors buildAnchorParts() in src/services/birthdays.ts
+                    EXACTLY as it actually behaves today (post-Task-7-fix):
+                    unlike the announcement template above, the anchor
+                    template's own literal text (e.g. "Born in ") must NEVER
+                    be font-mapped, only {month}'s substituted value — the
+                    backend deliberately bypasses renderTemplate()'s own font
+                    pass for this reason (see buildAnchorParts()'s doc
+                    comment) by hand-applying applyFont() to just the month
+                    heading, then rendering with useFont:false. Reproduced
+                    here identically: font-map PREVIEW_MONTH by hand, pass it
+                    (and the unstyled entries line) through TemplatePreview's
+                    `raw` bucket with useFont hardcoded to false.
+                  */}
+                  <div className="preview-box">
+                    <TemplatePreview
+                      template={anchorTemplate}
+                      context={{
+                        raw: {
+                          month: applyFont(PREVIEW_MONTH, anchorUseFont ? fontMap : null),
+                          entries: PREVIEW_ENTRIES,
+                        },
+                      }}
+                      channels={channels}
+                      useFont={false}
+                      fontMap={null}
+                    />
+                  </div>
+                </div>
+              )}
               <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} style={{ marginTop: 8 }}>
                 {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
               </button>

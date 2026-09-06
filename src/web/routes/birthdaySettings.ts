@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { z } from "zod";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
-import { renderBirthdayTemplate, syncAnchorMessage } from "../../services/birthdays.js";
+import { syncAnchorMessage } from "../../services/birthdays.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Settings } from "../../types.js";
 import { pickDefined, type ZodFastifyInstance } from "../utils.js";
@@ -15,10 +15,6 @@ const PatchBodySchema = z.object({
   anchorIntro: z.string().max(500).nullable().optional(),
   anchorUseFont: z.boolean().optional(),
   announcementUseFont: z.boolean().optional(),
-});
-
-const PreviewBodySchema = z.object({
-  template: z.string().min(1).max(2000),
 });
 
 function serializeBirthdaySettings(settings: ReturnType<typeof getSettings>) {
@@ -72,16 +68,6 @@ export function registerBirthdaySettingsRoutes(app: ZodFastifyInstance, client: 
     );
 
     return serializeBirthdaySettings(settings);
-  });
-
-  app.post("/settings/birthday/preview", { schema: { body: PreviewBodySchema } }, async (request, reply) => {
-    const session = request.session!;
-    const rendered = renderBirthdayTemplate(request.body.template, {
-      mention: `<@${session.userId}>`,
-      userId: session.userId,
-      name: session.username,
-    });
-    return { rendered };
   });
 
   /** Manually regenerates the bot-managed anchor message — e.g. after an admin edits a birthday entry directly. */

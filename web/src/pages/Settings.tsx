@@ -4,9 +4,15 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
 import Tabs from "../components/Tabs";
+import TemplateEditor from "../components/TemplateEditor";
+import TemplatePreview from "../components/TemplatePreview";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
+
+/** Sample values shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` and `{roleChannel}` fallback text exactly (see src/events/registerWatcher.ts). */
+const PREVIEW_REGISTER_NAME = "Beispielperson";
+const PREVIEW_ROLE_CHANNEL_FALLBACK = "dem Rollen-Kanal";
 
 const ROLE_LABELS: Record<string, string> = {
   "bot-owner": "Bot-Besitzer",
@@ -232,15 +238,40 @@ function RegistrierungSection({
             </label>
             <div className="field">
               <label htmlFor="register-confirmation-template">Bestätigungstext</label>
-              <textarea
+              <TemplateEditor
                 id="register-confirmation-template"
-                rows={3}
                 value={confirmationTemplate}
-                onChange={(e) => setConfirmationTemplate(e.target.value)}
+                onChange={setConfirmationTemplate}
+                channels={channels}
               />
               <div className="hint">
-                Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile) und <code>{"{roleChannel}"}</code>.
+                Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile) und <code>{"{roleChannel}"}</code> (der
+                oben festgelegte Rollen-Kanal) — oder tippe <code>#</code>, um direkt einen beliebigen Kanal
+                einzufügen.
               </div>
+            </div>
+            <div className="preview-box" style={{ marginBottom: 12 }}>
+              {/*
+                Mirrors renderConfirmation() in src/events/registerWatcher.ts
+                exactly: {name} is `raw` (never font-mapped, matching the
+                real function — it never applies applyFont at all), and
+                {roleChannel} is rewritten to {channel:<id>} before
+                rendering when a role-selection channel is configured, so it
+                resolves through the core `channel` resolver (here, to a
+                "#name" mockup instead of a real <#id> mention) — otherwise
+                it's left for the `raw` bucket's identical fallback text.
+              */}
+              <TemplatePreview
+                template={
+                  settings?.roleSelectionChannelId
+                    ? confirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
+                    : confirmationTemplate
+                }
+                context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
+                channels={channels}
+                useFont={false}
+                fontMap={null}
+              />
             </div>
             <button className="primary" onClick={handleSaveConfirmationTemplate} disabled={savingConfirmationTemplate}>
               {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
@@ -264,16 +295,30 @@ function RegistrierungSection({
             </div>
             <div className="field">
               <label htmlFor="auto-register-confirmation-template">Bestätigungstext (automatische Registrierung)</label>
-              <textarea
+              <TemplateEditor
                 id="auto-register-confirmation-template"
-                rows={3}
                 value={autoConfirmationTemplate}
-                onChange={(e) => setAutoConfirmationTemplate(e.target.value)}
+                onChange={setAutoConfirmationTemplate}
+                channels={channels}
               />
               <div className="hint">
                 Wird stattdessen gepostet, wenn die automatische Registrierung erfolgreich war. Gleiche
-                Platzhalter: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code>.
+                Platzhalter: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code> — oder tippe <code>#</code>{" "}
+                für einen beliebigen Kanal.
               </div>
+            </div>
+            <div className="preview-box" style={{ marginBottom: 12 }}>
+              <TemplatePreview
+                template={
+                  settings?.roleSelectionChannelId
+                    ? autoConfirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
+                    : autoConfirmationTemplate
+                }
+                context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
+                channels={channels}
+                useFont={false}
+                fontMap={null}
+              />
             </div>
             <button
               className="primary"

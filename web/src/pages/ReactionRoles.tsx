@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "../api";
 import EmojiPicker from "../components/EmojiPicker";
 import RoleCheckboxList from "../components/RoleCheckboxList";
-import MessagePreview from "../components/MessagePreview";
 import SearchableSelect from "../components/SearchableSelect";
+import TemplateEditor from "../components/TemplateEditor";
+import TemplatePreview from "../components/TemplatePreview";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
+import { buildCoreResolvers, mockifyChannelMentions, renderTemplate } from "../utils/messageTemplate";
 import type {
   Channel,
   CreatePanelInput,
@@ -36,6 +38,43 @@ function multiRemovableHint(allowMultiple: boolean, removable: boolean): string 
   const multi = allowMultiple ? "gleichzeitig mehr als eine Rolle aus diesem Panel besitzen" : "gleichzeitig nur eine Rolle aus diesem Panel besitzen";
   const remove = removable ? "eine Rolle später wieder abgeben können" : "eine Rolle nie wieder abgeben können, sobald sie sie haben (im Stil einer Regelakzeptanz)";
   return `Mitglieder können ${multi}, und ${remove}.`;
+}
+
+/**
+ * `MessagePreview.tsx`'s panel-shape-specific mockup chrome (Discord-bubble
+ * header, embed box, reactions/buttons/dropdown rows), folded in here now
+ * that this is the one remaining caller — see the design spec's "Migration
+ * of existing features" section. `TemplatePreview` (used below, in the
+ * `Vorschau` card) handles just the token-resolved title/body text; button
+ * and dropdown option labels aren't template-editable text (they're plain
+ * role names, no `{token}` syntax expected), so they're styled directly via
+ * the mirror engine's `renderTemplate()` here instead of through a full
+ * `TemplatePreview` block — matching `reactionRoles.ts`'s real `styled()`
+ * helper, which does exactly the same for every one of these strings
+ * (title, body, and each button/dropdown label) on the bot side.
+ */
+function previewEmojiNode(mapping: Mapping) {
+  if (mapping.emojiId) {
+    return (
+      <img
+        src={`https://cdn.discordapp.com/emojis/${mapping.emojiId}.png`}
+        alt={mapping.emojiName ?? ""}
+        className="message-preview-emoji-img"
+      />
+    );
+  }
+  return mapping.emojiName;
+}
+
+function previewBodyText(
+  description: string,
+  selectionType: SelectionType,
+  sorted: Mapping[],
+  resolveRoleLabel: (m: Mapping) => string,
+): string {
+  if (selectionType !== "reactions") return description || "";
+  const lines = sorted.map((m) => `${m.emojiId ? `[${m.emojiName}]` : (m.emojiName ?? "")} — ${resolveRoleLabel(m)}`);
+  return [description, lines.join("\n")].filter(Boolean).join("\n\n");
 }
 
 function parseMessageLink(link: string): { channelId: string; messageId: string } | null {
@@ -547,21 +586,22 @@ export default function ReactionRoles() {
                     {form.messageType === "embed" && (
                       <div className="field">
                         <label htmlFor="rr-title">Embed-Titel</label>
-                        <input
+                        <TemplateEditor
                           id="rr-title"
-                          type="text"
                           value={form.title}
-                          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                          onChange={(v) => setForm((f) => ({ ...f, title: v }))}
+                          channels={channels}
                           placeholder={form.name || "Reaktionsrollen"}
                         />
                       </div>
                     )}
                     <div className="field">
                       <label htmlFor="rr-description">Nachrichtentext</label>
-                      <textarea
+                      <TemplateEditor
                         id="rr-description"
                         value={form.description}
-                        onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                        onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+                        channels={channels}
                         placeholder={
                           effectiveSelectionType === "reactions"
                             ? "Reagiere, um eine Rolle zu erhalten!"
@@ -611,21 +651,118 @@ export default function ReactionRoles() {
                 )}
               </div>
 
-              {!isExistingMessageMode && (
-                <div className="card">
-                  <h2>Vorschau</h2>
-                  <MessagePreview
-                    messageType={form.messageType}
-                    selectionType={effectiveSelectionType}
-                    title={form.title || form.name}
-                    description={form.description}
-                    mappings={selected?.mappings ?? []}
-                    resolveRoleLabel={(m) => m.label ?? roleNamesLabel(m.roleIds)}
-                    fontMap={fontMap}
-                    useFont={form.useFont}
-                  />
-                </div>
-              )}
+              {!isExistingMessageMode &&
+                (() => {
+                  const previewMappings = [...(selected?.mappings ?? [])].sort((a, b) => a.position - b.position);
+                  const resolveRoleLabel = (m: Mapping) => m.label ?? roleNamesLabel(m.roleIds);
+                  const titleTemplate = form.title || form.name;
+                  const bodyTemplate = previewBodyText(form.description, effectiveSelectionType, previewMappings, resolveRoleLabel);
+                  // Button/dropdown option labels aren't template textareas —
+                  // styled directly via the mirror engine, matching
+                  // reactionRoles.ts's real styled() call shape exactly
+                  // (renderTemplate with no context, `useFont`/`fontMap` as
+                  // configured for this panel).
+                  const styleLabel = (text: string) =>
+                    mockifyChannelMentions(
+                      renderTemplate(text, {}, buildCoreResolvers(channels), { useFont: form.useFont, fontMap }),
+                      channels,
+                    );
+
+                  return (
+                    <div className="card">
+                      <h2>Vorschau</h2>
+                      <div className="message-preview">
+                        <div className="message-preview-header">
+                          <div className="message-preview-avatar">🤖</div>
+                          <div>
+                            <span className="message-preview-author">
+                              leck-eier-bot <span className="message-preview-bot-tag">BOT</span>
+                            </span>
+                            <span className="muted message-preview-timestamp">Heute um 12:00</span>
+                          </div>
+                        </div>
+
+                        {form.messageType === "embed" ? (
+                          <div className="message-preview-embed">
+                            {titleTemplate && (
+                              <div className="message-preview-embed-title">
+                                <TemplatePreview
+                                  template={titleTemplate}
+                                  context={{}}
+                                  channels={channels}
+                                  useFont={form.useFont}
+                                  fontMap={fontMap}
+                                />
+                              </div>
+                            )}
+                            <div className="message-preview-embed-desc">
+                              {bodyTemplate ? (
+                                <TemplatePreview
+                                  template={bodyTemplate}
+                                  context={{}}
+                                  channels={channels}
+                                  useFont={form.useFont}
+                                  fontMap={fontMap}
+                                />
+                              ) : (
+                                <span className="muted">Keine Beschreibung festgelegt.</span>
+                              )}
+                            </div>
+                          </div>
+                        ) : bodyTemplate ? (
+                          <div className="message-preview-text">
+                            <TemplatePreview
+                              template={bodyTemplate}
+                              context={{}}
+                              channels={channels}
+                              useFont={form.useFont}
+                              fontMap={fontMap}
+                            />
+                          </div>
+                        ) : (
+                          <div className="message-preview-text">
+                            <span className="muted">Kein Nachrichtentext festgelegt.</span>
+                          </div>
+                        )}
+
+                        {effectiveSelectionType === "reactions" && (
+                          <div className="message-preview-reactions">
+                            {previewMappings.length === 0 && <span className="muted">Noch keine Rollen hinzugefügt.</span>}
+                            {previewMappings.map((m) => (
+                              <span className="message-preview-reaction" key={m.id}>
+                                {previewEmojiNode(m)} <span className="muted">1</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {effectiveSelectionType === "buttons" && (
+                          <div className="message-preview-buttons">
+                            {previewMappings.length === 0 && <span className="muted">Noch keine Buttons hinzugefügt.</span>}
+                            {previewMappings.map((m) => (
+                              <span className="message-preview-button" key={m.id}>
+                                {previewEmojiNode(m)} {styleLabel(resolveRoleLabel(m))}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {effectiveSelectionType === "dropdown" && (
+                          <div className="message-preview-dropdown">
+                            <span className="muted">
+                              {previewMappings.length === 0
+                                ? "Noch keine Optionen hinzugefügt"
+                                : previewMappings.length === 1
+                                  ? styleLabel(resolveRoleLabel(previewMappings[0]!))
+                                  : `${styleLabel(resolveRoleLabel(previewMappings[0]!))} +${previewMappings.length - 1} weitere`}
+                            </span>
+                            <span>▾</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
               {typeof selectedId === "number" && selected && (
                 <div className="card">
