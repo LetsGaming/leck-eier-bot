@@ -6,7 +6,7 @@ import { renderBirthdayTemplate, buildAnchorParts } from "../services/birthdays.
 import type { BirthdaysByDate } from "../types.js";
 
 function birthdaysOn(dateKey: string): BirthdaysByDate {
-  return { [dateKey]: [{ id: 1, mention: "<@1>", userId: "1", name: "A", source: "list" }] };
+  return { [dateKey]: [{ id: 1, date: dateKey, mention: "<@1>", userId: "1", name: "A", source: "list" }] };
 }
 
 /**

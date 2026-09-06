@@ -598,6 +598,30 @@ export function setSignupAttendance(signupId: number, update: SignupAttendanceUp
   setSignupAttendanceStmt.run({ id: signupId, ...update });
 }
 
+interface SignupWithEventRow extends SignupRow {
+  event_title: string;
+  event_starts_at: string;
+}
+
+const selectSignupsForUserStmt = db.prepare<[string], SignupWithEventRow>(`
+  SELECT s.id, s.event_id, s.raw_name, s.normalized_name, s.choice, s.user_id, s.match_source, s.withdrawn_at,
+         s.attendance_status, s.first_joined_at, s.last_left_at, s.late_minutes, s.early_minutes,
+         e.title AS event_title, e.starts_at AS event_starts_at
+  FROM apollo_event_signups s
+  JOIN apollo_events e ON e.id = s.event_id
+  WHERE s.user_id = ?
+  ORDER BY e.starts_at DESC
+`);
+
+/** Every event this member has ever signed up for (any RSVP choice), newest event first — powers the member-overview aggregation's event-history section (`GET /api/members/:userId`). */
+export function listSignupsForUser(userId: string): (ApolloEventSignup & { eventTitle: string; eventStartsAt: string })[] {
+  return selectSignupsForUserStmt.all(userId).map((row) => ({
+    ...rowToSignup(row),
+    eventTitle: row.event_title,
+    eventStartsAt: row.event_starts_at,
+  }));
+}
+
 export function listVoiceLog(eventId: number): ApolloEventVoiceLogRow[] {
   return selectVoiceLogStmt.all(eventId).map(rowToVoiceLog);
 }

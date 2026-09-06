@@ -11,7 +11,7 @@ interface BirthdayRow {
 }
 
 function rowToEntry(row: BirthdayRow): BirthdayEntry {
-  return { id: row.id, mention: row.mention, userId: row.user_id, name: row.name, source: row.source };
+  return { id: row.id, date: row.date, mention: row.mention, userId: row.user_id, name: row.name, source: row.source };
 }
 
 const selectByDateStmt = db.prepare<[string], BirthdayRow>(
@@ -19,6 +19,9 @@ const selectByDateStmt = db.prepare<[string], BirthdayRow>(
 );
 const selectAllStmt = db.prepare<[], BirthdayRow>(
   "SELECT id, date, mention, user_id, name, source FROM birthdays ORDER BY date",
+);
+const selectByUserIdStmt = db.prepare<[string], BirthdayRow>(
+  "SELECT id, date, mention, user_id, name, source FROM birthdays WHERE user_id = ?",
 );
 const insertListStmt = db.prepare<{
   date: string;
@@ -55,6 +58,61 @@ export function getAllBirthdaysByDate(): BirthdaysByDate {
     (grouped[row.date] ??= []).push(rowToEntry(row));
   }
   return grouped;
+}
+
+/** A member's own birthday, if one is on file — used by the member-overview aggregation (`GET /api/members/:userId`). Null if this user has never registered/been given one. */
+export function getBirthdayForUser(userId: string): BirthdayEntry | null {
+  const row = selectByUserIdStmt.get(userId);
+  return row ? rowToEntry(row) : null;
+}
+
+/**
+ * One birthday falling within the next `days` calendar days (today itself
+ * counts as "upcoming"), resolved to its actual next occurrence — used by
+ * `/api/status`'s `communitySnapshot.birthdaysThisWeek`. Sorted soonest-first.
+ */
+export interface UpcomingBirthdayEntry {
+  userId: string | null;
+  name: string | null;
+  mention: string;
+  /** ISO UTC (server-local midnight) of the resolved next occurrence — this year's, or next year's if this year's has already passed. */
+  date: string;
+}
+
+/**
+ * This deliberately re-implements the year-wraparound resolution
+ * `getUpcomingBirthdays()` (`services/birthdays.ts`) already does, rather
+ * than calling it: the db layer here must not depend on the services layer
+ * (the reverse dependency direction is used everywhere else in this repo —
+ * services call repositories, never back), and `getUpcomingBirthdays()`
+ * additionally groups by date/does display-oriented shaping this caller
+ * doesn't want. Both must stay in sync if the "next occurrence" rule ever
+ * changes.
+ */
+export function listBirthdaysInNextDays(days: number): UpcomingBirthdayEntry[] {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const currentYear = now.getFullYear();
+  const todayMonth = now.getMonth();
+  const todayDate = now.getDate();
+  const horizonMs = startOfToday.getTime() + days * 86_400_000;
+
+  const result: UpcomingBirthdayEntry[] = [];
+  for (const row of selectAllStmt.all()) {
+    const [ddStr, mmStr] = row.date.split(".");
+    const dd = Number(ddStr);
+    const month = Number(mmStr) - 1;
+    if (!Number.isInteger(dd) || !Number.isInteger(month)) continue;
+    const alreadyPassedThisYear = month < todayMonth || (month === todayMonth && dd < todayDate);
+    const year = alreadyPassedThisYear ? currentYear + 1 : currentYear;
+    const occursOn = new Date(year, month, dd);
+    if (occursOn.getTime() >= startOfToday.getTime() && occursOn.getTime() <= horizonMs) {
+      result.push({ userId: row.user_id, name: row.name, mention: row.mention, date: occursOn.toISOString() });
+    }
+  }
+
+  result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return result;
 }
 
 /** Adds an admin-entered birthday (dashboard "Add birthday") — always `source: 'list'`. Returns the new entry's id. */

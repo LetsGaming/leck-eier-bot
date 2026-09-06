@@ -54,6 +54,8 @@ export type BotClient = Client & {
 export interface BirthdayEntry {
   /** Row id in the `birthdays` table — needed to target a specific entry for the dashboard's edit/delete actions (see web/routes/birthdays.ts). */
   id: number;
+  /** `DD.MM`, no year — birthdays repeat annually. See `services/birthdays.ts`'s `toDateKey()`/`getUpcomingBirthdays()` for how this resolves to an actual calendar date. */
+  date: string;
   mention: string;
   userId: string | null;
   name: string | null;

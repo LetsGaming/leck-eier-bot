@@ -14,6 +14,14 @@ export const FIND_USER_LIST_LIMIT = 500;
 export const MEMBER_AUDIT_LEFT_LIMIT = 500;
 /** Cap on how many registration-form submissions the dashboard's Registrierungen list returns (most-recently-submitted first). */
 export const REGISTRATIONS_LIST_LIMIT = 500;
+/** How many days ahead `/api/status`'s `communitySnapshot.birthdaysThisWeek` looks — see `listBirthdaysInNextDays()` in `db/birthdaysRepository.ts`. */
+export const COMMUNITY_SNAPSHOT_BIRTHDAY_WINDOW_DAYS = 7;
+/** How many days ahead `/api/status`'s `communitySnapshot.upcomingEvents` looks. */
+export const COMMUNITY_SNAPSHOT_UPCOMING_EVENTS_WINDOW_DAYS = 30;
+/** Cap on `/api/status`'s `communitySnapshot.upcomingEvents` (soonest first). */
+export const COMMUNITY_SNAPSHOT_UPCOMING_EVENTS_LIMIT = 5;
+/** Cap on `/api/status`'s `communitySnapshot.recentAuditActivity` (most recent first) — see `listRecentMemberActivity()` in `db/memberRecordsRepository.ts`. */
+export const COMMUNITY_SNAPSHOT_RECENT_ACTIVITY_LIMIT = 10;
 /** Discord error code for "message is too old to bulk delete". */
 export const DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE = 50034;
 

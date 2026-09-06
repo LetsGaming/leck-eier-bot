@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { isCacheReady, getCachedMembers } from "../../services/memberCache.js";
-import { getMemberRecordsByIds, listFormerMembers } from "../../db/memberRecordsRepository.js";
+import { getMemberRecord, getMemberRecordsByIds, listFormerMembers } from "../../db/memberRecordsRepository.js";
+import { getBirthdayForUser } from "../../db/birthdaysRepository.js";
+import { listSignupsForUser } from "../../db/eventAttendanceRepository.js";
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
 import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT } from "../../constants.js";
 import type { ZodFastifyInstance } from "../utils.js";
 import type { MemberAuditEntry } from "../../../contracts/memberAudit.js";
+import type { MemberOverview } from "../../../contracts/memberOverview.js";
 
 /**
  * Discord CDN avatar URL built from a raw hash — needed for a former member,
@@ -36,6 +39,8 @@ const AuditQuerySchema = z.object({
    */
   inGuildOnly: z.enum(["0", "1"]).optional().default("0"),
 });
+
+const UserIdParamsSchema = z.object({ userId: z.string() });
 
 export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
   app.get("/members/audit", { schema: { querystring: AuditQuerySchema } }, async (request, reply) => {
@@ -104,5 +109,50 @@ export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
     }));
 
     return { inGuild, left };
+  });
+
+  /**
+   * Aggregates this member's identity/audit/registration record (already
+   * unified in one `MemberRecord` row — see `memberRecordsRepository.ts`),
+   * birthday, and cross-event signup history into one response, so the
+   * dashboard's member-overview page doesn't need three separate round
+   * trips for data all keyed by the same Discord `userId`. 404 if
+   * `getMemberRecord` finds nothing — a `userId` with zero footprint isn't a
+   * valid overview target; birthday/registration/event-history are each
+   * independently nullable/empty otherwise, not error conditions.
+   */
+  app.get("/members/:userId", { schema: { params: UserIdParamsSchema } }, async (request, reply) => {
+    const { userId } = request.params;
+    const record = getMemberRecord(userId);
+    if (!record) return reply.code(404).send({ error: "Mitglied nicht gefunden." });
+
+    // A current member's live identity fields are fresher than the DB
+    // record (same reasoning as the in-guild branch above); a former member
+    // has no cached entry, so the DB record is the only source left.
+    const cached = getCachedMembers().get(userId);
+    const birthday = getBirthdayForUser(userId);
+    const [birthdayDay, birthdayMonth] = birthday ? birthday.date.split(".").map((part) => Number(part)) : [];
+
+    const overview: MemberOverview = {
+      userId,
+      username: cached?.user.username ?? record.username,
+      displayName: cached?.displayName ?? record.displayName,
+      nickname: cached?.nickname ?? null,
+      avatarUrl: cached ? cached.displayAvatarURL({ size: 64 }) : buildAvatarUrl(userId, record.avatar),
+      inGuild: record.inGuild,
+      joinedAt: cached?.joinedAt?.toISOString() ?? record.joinedAt,
+      leftAt: record.leftAt,
+      rulesAcceptedAt: record.rulesAcceptedAt,
+      registration: record.registerStatus ? { status: record.registerStatus, submittedAt: record.registerSubmittedAt } : null,
+      birthday: birthday && birthdayDay !== undefined && birthdayMonth !== undefined ? { day: birthdayDay, month: birthdayMonth } : null,
+      eventHistory: listSignupsForUser(userId).map((signup) => ({
+        eventId: signup.eventId,
+        eventTitle: signup.eventTitle,
+        startsAt: signup.eventStartsAt,
+        choice: signup.choice,
+        attendanceStatus: signup.attendanceStatus,
+      })),
+    };
+    return overview;
   });
 }

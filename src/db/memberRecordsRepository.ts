@@ -234,6 +234,50 @@ export function countPendingRegistrations(): number {
   return countPendingRegistrationsStmt.get()!.total;
 }
 
+export interface RecentMemberActivity {
+  userId: string;
+  displayName: string;
+  event: "joined" | "left" | "rulesAccepted";
+  /** ISO UTC. */
+  at: string;
+}
+
+interface RecentActivityRow {
+  user_id: string;
+  display_name: string;
+  event: "joined" | "left" | "rulesAccepted";
+  at: string;
+}
+
+/**
+ * One row per (user, event-type) pair across `joined_at`/`left_at`/
+ * `rules_accepted_at` — three independent timestamps a single member row can
+ * carry all at once (e.g. rejoined after having left before) — most-recent
+ * first, capped at `limit` total rows across all three event types combined
+ * (not `limit` per type). Powers `/api/status`'s
+ * `communitySnapshot.recentAuditActivity`.
+ */
+const selectRecentActivityStmt = db.prepare<{ limit: number }, RecentActivityRow>(`
+  SELECT user_id, display_name, event, at FROM (
+    SELECT user_id, display_name, 'joined' AS event, joined_at AS at FROM member_records WHERE joined_at IS NOT NULL
+    UNION ALL
+    SELECT user_id, display_name, 'left' AS event, left_at AS at FROM member_records WHERE left_at IS NOT NULL
+    UNION ALL
+    SELECT user_id, display_name, 'rulesAccepted' AS event, rules_accepted_at AS at FROM member_records WHERE rules_accepted_at IS NOT NULL
+  )
+  ORDER BY at DESC
+  LIMIT @limit
+`);
+
+export function listRecentMemberActivity(limit: number): RecentMemberActivity[] {
+  return selectRecentActivityStmt.all({ limit }).map((row) => ({
+    userId: row.user_id,
+    displayName: row.display_name,
+    event: row.event,
+    at: row.at,
+  }));
+}
+
 export function upsertJoin(entry: ProfileInput & { joinedAt: string | null }): void {
   upsertJoinStmt.run(entry);
 }
