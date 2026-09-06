@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { createHash } from "crypto";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -715,10 +716,73 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   },
 ];
 
+/**
+ * Hashes a migration's exact source (its function body, via `.toString()`)
+ * so we can detect if an already-shipped migration was edited in place after
+ * the fact — SQLite's `user_version` pragma alone only tracks *how many*
+ * migrations have run, not whether the code behind an already-applied one
+ * still matches what actually ran. `.toString()` captures the migration
+ * closure's full literal source (including any interpolated constants
+ * written into the template string at the time it was authored), so any
+ * edit to a migration's SQL or logic changes its hash — exactly the misuse
+ * this is meant to catch. This never runs the migration; it only hashes its
+ * source text.
+ */
+function migrationHash(fn: (d: Database.Database) => void): string {
+  return createHash("sha256").update(fn.toString()).digest("hex");
+}
+
+// Verification table: one row per migration version giving the hash its
+// source had when it (last) ran. Created up front — independent of whether
+// this is a fresh database or one with migrations already applied — since
+// the verification pass below needs it to exist before it can read/backfill
+// anything.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    hash TEXT NOT NULL
+  );
+`);
+
+const getMigrationHashStmt = db.prepare("SELECT hash FROM schema_migrations WHERE version = ?");
+const recordMigrationHashStmt = db.prepare(
+  "INSERT OR REPLACE INTO schema_migrations (version, hash) VALUES (?, ?)",
+);
+
 const currentVersion = db.pragma("user_version", { simple: true }) as number;
+
+// Verify every already-applied migration's source still matches what
+// actually ran, refusing to boot on a mismatch (someone edited a shipped
+// migration's SQL after the fact, which `user_version` alone would silently
+// accept). `version` here matches the `user_version` value in effect right
+// after that migration ran, i.e. `MIGRATIONS` index + 1.
+for (let v = 0; v < currentVersion; v++) {
+  const version = v + 1;
+  const expectedHash = migrationHash(MIGRATIONS[v]!);
+  const recorded = getMigrationHashStmt.get(version) as { hash: string } | undefined;
+  if (recorded === undefined) {
+    // Bootstrap/backfill case: a database that predates this checksum layer
+    // (or was upgraded across several migrations at once before this code
+    // existed) has no schema_migrations row for some or all of its
+    // already-applied migrations. There is no prior hash for those versions
+    // to have drifted from, so there's nothing to refuse — record the
+    // current hash as the new baseline instead of failing to boot.
+    recordMigrationHashStmt.run(version, expectedHash);
+  } else if (recorded.hash !== expectedHash) {
+    throw new Error(
+      `Refusing to start: migration v${version}'s source has changed since it was applied ` +
+        `(recorded hash ${recorded.hash}, current hash ${expectedHash}). An already-shipped ` +
+        "migration must never be edited in place — revert the change and add a new migration " +
+        "instead.",
+    );
+  }
+}
+
 for (let v = currentVersion; v < MIGRATIONS.length; v++) {
+  const version = v + 1;
   db.transaction(() => {
     MIGRATIONS[v]!(db);
-    db.pragma(`user_version = ${v + 1}`);
+    db.pragma(`user_version = ${version}`);
+    recordMigrationHashStmt.run(version, migrationHash(MIGRATIONS[v]!));
   })();
 }
