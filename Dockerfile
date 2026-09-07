@@ -13,8 +13,11 @@ RUN npx tsc
 
 # ---- Build: dashboard SPA (separate package.json, own deps/lockfile) ----
 FROM node:lts-slim AS build-web
-WORKDIR /app/web
+WORKDIR /app
 
+COPY contracts ./contracts
+
+WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
