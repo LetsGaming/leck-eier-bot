@@ -42,8 +42,8 @@ test("migration v33: existing command_settings rows get permission_gate = NULL",
 });
 
 test("migration v33: a NULL permission_gate falls back to defaultGateFor(permission), not a hardcoded default", async () => {
-  const { defaultGateFor } = await import("../types.js");
-  const { CommandPermission } = await import("../constants.js");
+  const { defaultGateFor } = await import("../../src/types.js");
+  const { CommandPermission } = await import("../../src/constants.js");
 
   const db = makePreV33Db();
   db.prepare("INSERT INTO command_settings (name, enabled, guild_only) VALUES (?, 1, 1)").run("some-admin-command");

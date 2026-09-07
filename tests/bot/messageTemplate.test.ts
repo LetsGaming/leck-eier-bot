@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderTemplate } from "./messageTemplate.js";
-import { FONT_REFERENCE } from "../utils/font.js";
-import { renderBirthdayTemplate, buildAnchorParts } from "../services/birthdays.js";
-import type { BirthdaysByDate } from "../types.js";
+import { renderTemplate } from "../../src/shared/messageTemplate.js";
+import { FONT_REFERENCE } from "../../src/utils/font.js";
+import { renderBirthdayTemplate, buildAnchorParts } from "../../src/services/birthdays.js";
+import type { BirthdaysByDate } from "../../src/types.js";
 
 function birthdaysOn(dateKey: string): BirthdaysByDate {
   return { [dateKey]: [{ id: 1, date: dateKey, mention: "<@1>", userId: "1", name: "A", source: "list" }] };

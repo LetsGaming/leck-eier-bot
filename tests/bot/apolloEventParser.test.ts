@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Embed, APIEmbed } from "discord.js";
-import { parseApolloEventEmbed, type ApolloMessageLike } from "./apolloEventParser.js";
-import { APOLLO_EVENT_DEFAULT_DURATION_MS } from "../constants.js";
+import { parseApolloEventEmbed, type ApolloMessageLike } from "../../src/services/apolloEventParser.js";
+import { APOLLO_EVENT_DEFAULT_DURATION_MS } from "../../src/constants.js";
 
 /**
  * Builds a synthetic `Embed`-shaped object from plain API-embed data — the

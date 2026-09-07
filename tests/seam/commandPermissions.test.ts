@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Collection, PermissionsBitField, type ChatInputCommandInteraction } from "discord.js";
-import { checkCommandPermission, resolveCommandGate, TIER_RANK } from "./commandPermissions.js";
-import { CommandPermission } from "../constants.js";
-import type { BotClient, Config, PermissionGate } from "../types.js";
+import { checkCommandPermission, resolveCommandGate, TIER_RANK } from "../../src/utils/commandPermissions.js";
+import { CommandPermission } from "../../src/constants.js";
+import type { BotClient, Config, PermissionGate } from "../../src/types.js";
 
 // --- resolveCommandGate --------------------------------------------------
 
