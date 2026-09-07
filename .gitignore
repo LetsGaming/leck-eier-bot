@@ -6,3 +6,5 @@ web/node_modules/*
 web/dist/*
 .env
 ***/general/test.js
+.superpowers/
+.playwright-mcp/
