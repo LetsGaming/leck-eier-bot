@@ -233,6 +233,8 @@ export interface GeneralSettings {
   registerConfirmationTemplate: string;
   /** Whether the generated nickname's first-name half renders through the global font set above. Defaults on. */
   registerNicknameUseFont: boolean;
+  /** Prefixed onto every registration-form-generated nickname, e.g. "💙VORNAME — nachname". */
+  registerNicknameEmoji: string;
   /** Off by default. When on, a valid registration-form submission immediately grants the registration-tier role instead of waiting for staff. The private thread still opens (with `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after an hour. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
   /** Posted in the private thread instead of `registerConfirmationTemplate` when `registerAutoComplete` successfully grants the tier role. Same `{name}`/`{roleChannel}` placeholders. */

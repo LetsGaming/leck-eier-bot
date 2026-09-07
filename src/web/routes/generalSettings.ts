@@ -14,6 +14,7 @@ const PatchBodySchema = z.object({
   roleSelectionChannelId: z.string().nullable().optional(),
   registerConfirmationTemplate: z.string().min(1).optional(),
   registerNicknameUseFont: z.boolean().optional(),
+  registerNicknameEmoji: z.string().min(1).optional(),
   registerAutoComplete: z.boolean().optional(),
   autoRegisterConfirmationTemplate: z.string().min(1).optional(),
   apolloEventChannelId: z.string().nullable().optional(),
@@ -31,6 +32,7 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     roleSelectionChannelId: settings.roleSelectionChannelId,
     registerConfirmationTemplate: settings.registerConfirmationTemplate,
     registerNicknameUseFont: settings.registerNicknameUseFont,
+    registerNicknameEmoji: settings.registerNicknameEmoji,
     registerAutoComplete: settings.registerAutoComplete,
     autoRegisterConfirmationTemplate: settings.autoRegisterConfirmationTemplate,
     apolloEventChannelId: settings.apolloEventChannelId,
@@ -52,6 +54,7 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
       roleSelectionChannelId,
       registerConfirmationTemplate,
       registerNicknameUseFont,
+      registerNicknameEmoji,
       registerAutoComplete,
       autoRegisterConfirmationTemplate,
       apolloEventChannelId,
@@ -61,6 +64,12 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
       return reply
         .code(400)
         .send({ error: "Die Schrift muss genau 52 Zeichen lang sein und AaBbCc...XxYyZz eins zu eins entsprechen." });
+    }
+    // Prefixed onto a name that itself has to fit Discord's 32-character
+    // nickname cap (see DISCORD_NICKNAME_MAX_LENGTH/buildRegisterNickname())
+    // — capped well below that so there's still room left for the name.
+    if (registerNicknameEmoji !== undefined && [...registerNicknameEmoji].length > 8) {
+      return reply.code(400).send({ error: "Das Emoji darf höchstens 8 Zeichen lang sein." });
     }
 
     const settings = updateSettings(
@@ -74,6 +83,7 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
         roleSelectionChannelId: roleSelectionChannelId !== undefined ? roleSelectionChannelId || null : undefined,
         registerConfirmationTemplate,
         registerNicknameUseFont,
+        registerNicknameEmoji,
         registerAutoComplete,
         autoRegisterConfirmationTemplate,
         apolloEventChannelId: apolloEventChannelId !== undefined ? apolloEventChannelId || null : undefined,

@@ -105,6 +105,8 @@ export interface Settings {
   registerConfirmationTemplate: string;
   /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in services/registration.ts). Defaults on. */
   registerNicknameUseFont: boolean;
+  /** Prefixed onto every registration-form-generated nickname (see `buildRegisterNickname()`). Was a hardcoded constant (REGISTER_NICKNAME_EMOJI) before this became a setting; defaults to that same value on existing installs. */
+  registerNicknameEmoji: string;
   /** Off by default. When on, a valid registration-form submission immediately grants `registrationTierRoleId` instead of waiting for staff — see `registerWatcher.ts`. The private thread still opens (posting `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after `REGISTER_AUTO_THREAD_LIFETIME_MS`. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
   /** Posted in the private thread instead of `registerConfirmationTemplate` when `registerAutoComplete` successfully grants the tier role. Same `{name}`/`{roleChannel}` placeholders — see DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE. */

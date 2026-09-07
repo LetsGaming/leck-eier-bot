@@ -59,7 +59,12 @@ export default function registerRegisterWatcher(client: BotClient): void {
       return;
     }
 
-    const nickname = buildRegisterNickname(fields, settings.fontMap, settings.registerNicknameUseFont);
+    const nickname = buildRegisterNickname(
+      fields,
+      settings.fontMap,
+      settings.registerNicknameUseFont,
+      settings.registerNicknameEmoji,
+    );
     try {
       await member.setNickname(nickname, "Selbst-Registrierung via #register-Formular");
     } catch (err) {
@@ -160,15 +165,19 @@ export default function registerRegisterWatcher(client: BotClient): void {
 }
 
 /**
- * Deletes the private thread for every auto-completed registration
- * (settings.registerAutoComplete) whose one-hour lifetime has passed. Run
- * once at startup (to catch up on anything missed while offline) and then
- * on REGISTER_THREAD_SWEEP_INTERVAL_MS — see `registerRegisterWatcher()`.
+ * Deletes the private thread for every completed registration whose
+ * one-hour post-confirmation lifetime has passed — both the
+ * settings.registerAutoComplete path (thread opened already showing the
+ * confirmation) and the staff-manual path (`completeRegistration()` above,
+ * which posts the same confirmation and keeps the thread open the same way)
+ * end up here. Run once at startup (to catch up on anything missed while
+ * offline) and then on REGISTER_THREAD_SWEEP_INTERVAL_MS — see
+ * `registerRegisterWatcher()`.
  */
 export async function sweepExpiredRegisterThreads(client: BotClient): Promise<void> {
   const expired = listExpiredRegisterThreads(new Date().toISOString());
   for (const { userId, threadId } of expired) {
-    await deleteDiscordThread(client, threadId, "Automatische Registrierung — Zeitlimit erreicht");
+    await deleteDiscordThread(client, threadId, "Registrierung abgeschlossen — Zeitlimit erreicht");
     clearExpiredRegisterThread(userId);
   }
 }
@@ -191,17 +200,49 @@ async function deleteDiscordThread(client: BotClient, threadId: string, reason: 
   }
 }
 
+/** Best-effort post of `content` into a thread — same swallow-and-log policy as `deleteDiscordThread()`. */
+async function sendToThread(client: BotClient, threadId: string, content: string): Promise<void> {
+  try {
+    const thread = await client.channels.fetch(threadId).catch(() => null);
+    if (thread?.isThread()) {
+      await thread.send({ content });
+    }
+  } catch (err) {
+    logger.warn(`Registrierungs-Thread ${threadId} konnte nicht benachrichtigt werden: ${errorMessage(err)}`);
+  }
+}
+
 /**
  * Staff manually granted `registrationTierRoleId` (see
- * `stripRegisterGateRoleIfJustRegistered` in `services/registerGate.ts`) — the
- * private thread's job is done, but the submitted info stays on the
- * dashboard's Registrierungen list with status "Registriert" rather than
- * being deleted.
+ * `stripRegisterGateRoleIfJustRegistered` in `services/registerGate.ts`).
+ * Posts `settings.autoRegisterConfirmationTemplate` into the thread — the
+ * same "you are now registered" text the auto-complete path uses at
+ * submission time, decoupled from `registerAutoComplete`: it's really just
+ * "the message shown once registration is actually finalized," regardless
+ * of whether that happened instantly or after a staff review. The thread
+ * then stays open for `REGISTER_AUTO_THREAD_LIFETIME_MS` (same window the
+ * auto-complete path uses, deleted later by `sweepExpiredRegisterThreads()`)
+ * instead of being deleted immediately, so the member has a chance to read
+ * it. A no-op (both here and at the DB layer) if there's no pending thread —
+ * e.g. this also fires as a fallthrough when the tier role was granted via
+ * the auto-complete path, which already moved the status off 'pending'
+ * (see the doc comment on that branch in `tryHandleSubmission()`).
  */
 export async function completeRegistration(client: BotClient, userId: string): Promise<void> {
-  const threadId = pendingThreadId(userId);
-  if (threadId) await deleteDiscordThread(client, threadId, "Registrierung abgeschlossen");
-  dbCompleteRegistration(userId);
+  const record = getMemberRecord(userId);
+  if (!record || record.registerStatus !== "pending" || !record.registerThreadId) {
+    dbCompleteRegistration(userId);
+    return;
+  }
+
+  const settings = getSettings();
+  const note = renderConfirmation(
+    settings.autoRegisterConfirmationTemplate,
+    record.registerSubmittedName ?? "",
+    settings.roleSelectionChannelId,
+  );
+  await sendToThread(client, record.registerThreadId, note);
+  completeRegistrationKeepThread(userId, new Date(Date.now() + REGISTER_AUTO_THREAD_LIFETIME_MS).toISOString());
 }
 
 /** Manually reset from the dashboard's Registrierungen list — deletes the thread and flips status to "Entfernt", letting the member submit the form again. */

@@ -9,6 +9,7 @@ import {
   DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE,
   DEFAULT_REGISTER_CONFIRMATION_TEMPLATE,
   DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE,
+  REGISTER_NICKNAME_EMOJI,
 } from "../constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -713,6 +714,18 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // docs/superpowers/specs/2026-09-05-command-permissions-design.md.
   (d) => {
     d.exec(`ALTER TABLE command_settings ADD COLUMN permission_gate TEXT;`);
+  },
+  // v34: the emoji prefixed onto every registration-form-generated nickname
+  // (see buildRegisterNickname() in services/registration.ts) was previously
+  // a hardcoded constant (REGISTER_NICKNAME_EMOJI) — now a per-server
+  // setting, editable from the dashboard's Registrierungsformular card.
+  // REGISTER_NICKNAME_EMOJI is kept as this column's seed default so
+  // existing installs keep their current nickname format unchanged.
+  (d) => {
+    // Template-string interpolation is safe here: REGISTER_NICKNAME_EMOJI
+    // is a hardcoded constant. If this pattern is copied for config/env/user
+    // values, they must be bound as parameters instead, never interpolated.
+    d.exec(`ALTER TABLE settings ADD COLUMN register_nickname_emoji TEXT NOT NULL DEFAULT '${REGISTER_NICKNAME_EMOJI}';`);
   },
 ];
 

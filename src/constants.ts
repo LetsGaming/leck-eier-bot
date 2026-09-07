@@ -77,7 +77,7 @@ export const REGISTER_FORM_NAME_REGEX = /^\s*name\s*:\s*(.+)$/im;
 export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
 /** Matches an `alter:`-labeled line (case-insensitive) — purely informational, shown on the dashboard's pending-registrations list but not used to build the nickname. Optional: a submission missing this still counts as valid. See `parseRegisterForm()` in `services/registration.ts`. */
 export const REGISTER_FORM_ALTER_REGEX = /^\s*alter\s*:\s*(.+)$/im;
-/** Prefixes every nickname the register-form flow generates — see `buildRegisterNickname()` in `services/registration.ts`. */
+/** Seed default for `settings.registerNicknameEmoji` (the emoji prefixed onto every registration-form-generated nickname — see `buildRegisterNickname()` in `services/registration.ts`) — editable per-server from the dashboard from here on, not a fixed constant. */
 export const REGISTER_NICKNAME_EMOJI = "💙";
 /** `{name}`/`{roleChannel}` — same placeholders as DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. Posted instead of the normal template when `settings.registerAutoComplete` is on and the tier role was granted successfully. */
 export const DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE =

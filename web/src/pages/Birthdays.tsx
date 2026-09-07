@@ -199,9 +199,7 @@ export default function Birthdays() {
           <div className="card">
             <h2>Eingetragene Geburtstage</h2>
             <p className="muted small">
-              Füge hier einen Eintrag hinzu, bearbeite oder entferne ihn — die Ankernachricht wird automatisch
-              aktualisiert. Mit "selbst registriert" markierte Einträge wurden vom Mitglied selbst hinzugefügt und
-              können bei Bedarf hier weiterhin korrigiert werden.
+              Einträge hinzufügen, bearbeiten oder entfernen — die Ankernachricht wird automatisch aktualisiert.
             </p>
 
             <div className="row mb-12">
@@ -264,6 +262,10 @@ export default function Birthdays() {
               <p className="muted">Noch keine Geburtstage eingetragen.</p>
             ) : (
               <div className="table-scroll">
+                <div className="hint mb-12">
+                  Mit "selbst registriert" markierte Einträge wurden vom Mitglied selbst hinzugefügt und können hier
+                  bei Bedarf weiterhin korrigiert werden.
+                </div>
                 <table className="stack-on-mobile">
                   <thead>
                     <tr>
@@ -369,9 +371,7 @@ export default function Birthdays() {
             <div className="card">
               <h2>Ankernachricht &amp; tägliche Ankündigung</h2>
               <p className="muted small">
-                Der Bot postet und pflegt die Geburtstagsliste selbst im unten angegebenen Kanal (aufgeteilt auf
-                mehrere Nachrichten, falls die vollständige Liste Discords 2000-Zeichen-Limit überschreitet) und
-                postet dort auch die tägliche Ankündigung.
+                Legt fest, wo der Bot die Geburtstagsliste postet und wann er die tägliche Ankündigung sendet.
               </p>
               <div className="field">
                 <label htmlFor="channel">Kanal</label>
@@ -383,6 +383,10 @@ export default function Birthdays() {
                   emptyLabel="— keiner —"
                   options={toChannelOptions(channels)}
                 />
+                <div className="hint">
+                  Der Bot pflegt die Geburtstagsliste hier automatisch (aufgeteilt auf mehrere Nachrichten, falls sie
+                  Discords 2000-Zeichen-Limit überschreitet) und postet hier auch die tägliche Ankündigung.
+                </div>
               </div>
               <div className="field">
                 <label htmlFor="cron">Zeitplan der täglichen Aufgabe (Cron)</label>

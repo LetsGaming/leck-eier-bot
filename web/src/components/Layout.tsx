@@ -31,8 +31,8 @@ const ATTENTION_NAV_ITEMS: NavItem[] = [
   { to: "/events", label: "Event-Anwesenheit", icon: IconEvents, countKey: "unmatchedSignupCount" },
 ];
 const SETUP_NAV_ITEMS: NavItem[] = [
-  { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
   { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
+  { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
   { to: "/commands", label: "Befehle", icon: IconCommands },
   { to: "/settings", label: "Einstellungen", icon: IconSettings },
 ];

@@ -18,6 +18,29 @@ import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
 const PREVIEW_REGISTER_NAME = "Beispielperson";
 const PREVIEW_ROLE_CHANNEL_FALLBACK = "dem Rollen-Kanal";
 
+/** Sample name/sso-name for the nickname-format preview below — same shape a real "name:"/"sso name:" submission produces. */
+const PREVIEW_NICKNAME_FIRST_NAME = "Areum";
+const PREVIEW_NICKNAME_SSO_LAST_NAME = "Shadowray";
+/** Mirrors DISCORD_NICKNAME_MAX_LENGTH (src/constants.ts) — Discord's hard cap on a member's nickname length. */
+const DISCORD_NICKNAME_MAX_LENGTH = 32;
+
+/**
+ * Mirrors `buildRegisterNickname()` in `src/services/registration.ts` —
+ * same emoji + font + truncation formula, fed sample values instead of a
+ * real form submission, so this card's "Nickname-Format" preview always
+ * matches what the bot would actually set.
+ */
+function previewRegisterNickname(emoji: string, fontMap: string | null, useFont: boolean): string {
+  const styledFirstName = useFont
+    ? applyFont(PREVIEW_NICKNAME_FIRST_NAME.toUpperCase(), fontMap)
+    : PREVIEW_NICKNAME_FIRST_NAME.toUpperCase();
+  const full = `${emoji}${styledFirstName} — ${PREVIEW_NICKNAME_SSO_LAST_NAME.toLowerCase()}`;
+  if ([...full].length <= DISCORD_NICKNAME_MAX_LENGTH) return full;
+
+  const nameOnly = `${emoji}${styledFirstName}`;
+  return [...nameOnly].slice(0, DISCORD_NICKNAME_MAX_LENGTH).join("");
+}
+
 const ROLE_LABELS: Record<string, string> = {
   "bot-owner": "Bot-Besitzer",
   "guild-owner": "Server-Besitzer",
@@ -63,9 +86,8 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
       <div className="card">
         <h2>Schrift</h2>
         <p className="muted small">
-          Eine "Fancy-Text"-Schrift, die der Bot beim Erstellen von Nachrichten verwenden kann — hier einmal
-          festlegen und dann pro Funktion aktivieren, wo sie zutrifft (die Geburtstagsankündigung und
-          Ankernachricht, der Text eines Reaktionsrollen-Panels). Leer lassen, um nichts zu formatieren.
+          Eine "Fancy-Text"-Schrift, einmal festgelegt und dann pro Funktion einzeln aktivierbar (Geburtstage,
+          Reaktionsrollen, Registrierung). Leer lassen, um nichts zu formatieren.
         </p>
         <div className="field">
           <label htmlFor="fontMap">Schrift</label>
@@ -104,6 +126,10 @@ interface RegistrierungSectionProps {
   update: (patch: Partial<GeneralSettings>) => Promise<void>;
   roles: RoleOption[];
   channels: Channel[];
+  nicknameEmoji: string;
+  setNicknameEmoji: (v: string) => void;
+  handleSaveNicknameEmoji: () => void;
+  savingNicknameEmoji: boolean;
   confirmationTemplate: string;
   setConfirmationTemplate: (v: string) => void;
   handleSaveConfirmationTemplate: () => void;
@@ -119,6 +145,10 @@ function RegistrierungSection({
   update,
   roles,
   channels,
+  nicknameEmoji,
+  setNicknameEmoji,
+  handleSaveNicknameEmoji,
+  savingNicknameEmoji,
   confirmationTemplate,
   setConfirmationTemplate,
   handleSaveConfirmationTemplate,
@@ -133,10 +163,8 @@ function RegistrierungSection({
       <div className="card">
         <h2>Registrierung</h2>
         <p className="muted small">
-          Wenn einem Mitglied manuell die untenstehende Registrierungsrolle gegeben wird, entfernt der Bot
-          automatisch die Registrierungssperre-Rolle, sodass ein durch diese Rolle gesperrter Kanal (z. B.
-          #register) verschwindet, sobald das Mitglied registriert ist. Lasse ein Feld leer, um dies zu
-          deaktivieren.
+          Entfernt die Registrierungssperre-Rolle automatisch, sobald ein Mitglied die Registrierungsrolle erhält
+          — so verschwindet z. B. #register nach der Registrierung. Lasse ein Feld leer, um dies zu deaktivieren.
         </p>
         {!settings ? (
           <div className="loading">Wird geladen…</div>
@@ -179,11 +207,9 @@ function RegistrierungSection({
               erkennen
             </label>
             <div className="hint">
-              Aus (Standard): Ein Mitglied gilt als hat-die-Regeln-akzeptiert, sobald es die obige
-              Registrierungssperre-Rolle erhält (z. B. durch Reagieren auf die Regelnachricht) — rollenbasiert. Ein:
-              verwendet stattdessen Discords eigenes "pending"-Flag des Mitgliedschafts-Screenings, für Server, die
-              sich auf diese integrierte Funktion statt auf eine Reaktionsrolle verlassen. Betrifft nur die Spalte
-              "Regeln akzeptiert" in der <a href="/members">Mitgliederprüfung</a>.
+              Aus (Standard): erkannt am Erhalt der Registrierungssperre-Rolle oben. Ein: erkannt an Discords
+              eigenem "pending"-Flag. Betrifft nur die Spalte "Regeln akzeptiert" in der{" "}
+              <a href="/members">Mitgliederprüfung</a>.
             </div>
           </>
         )}
@@ -192,15 +218,9 @@ function RegistrierungSection({
       <div className="card">
         <h2>Registrierungsformular</h2>
         <p className="muted small">
-          Postet ein Mitglied im unten festgelegten Kanal eine Nachricht mit einer "name:"- und einer "sso
-          name:"-Zeile (z. B. das Anmeldeformular), setzt der Bot automatisch den Servernickname im Format{" "}
-          <strong>💙VORNAME — nachname</strong> — der Vorname großgeschrieben (optional über die globale Schrift
-          gestylt, siehe Schalter unten), der Nachname aus dem sso-Namen klein und immer ohne Schrift — und legt
-          einen privaten Thread an der Nachricht an, in dem der untenstehende Bestätigungstext gepostet wird. Der
-          Thread wird automatisch gelöscht, sobald dem Mitglied die Registrierungsrolle (siehe oben) vergeben wird
-          — manuell durch ein Team-Mitglied, oder sofort automatisch, wenn der Schalter unten aktiviert ist (dann
-          bleibt der Thread noch eine Stunde offen und zeigt den zweiten Bestätigungstext). Lasse den Kanal leer,
-          um dies zu deaktivieren.
+          Erkennt eine "name:"/"sso name:"-Nachricht im Kanal unten (z. B. das Anmeldeformular), setzt daraufhin
+          den Nickname (Format siehe unten) und eröffnet einen privaten Bestätigungs-Thread. Lasse den Kanal leer,
+          um das Formular zu deaktivieren.
         </p>
         {!settings ? (
           <div className="loading">Wird geladen…</div>
@@ -232,16 +252,49 @@ function RegistrierungSection({
                 Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
               </div>
             </div>
+
+            <hr className="divider" />
+
+            <h3>Nickname-Format</h3>
+            <p className="muted small">
+              Der Vorname aus der "name:"-Zeile in Großbuchstaben, der Nachname aus dem sso-Namen klein und immer
+              ohne Schrift.
+            </p>
+            <div className="field">
+              <label htmlFor="register-nickname-emoji">Emoji</label>
+              <input
+                id="register-nickname-emoji"
+                type="text"
+                value={nicknameEmoji}
+                onChange={(e) => setNicknameEmoji(e.target.value)}
+              />
+              <div className="hint">Vorangestellt an jeden generierten Nickname.</div>
+            </div>
             <label className="switch">
               <input
                 type="checkbox"
                 checked={settings.registerNicknameUseFont}
                 onChange={(e) => update({ registerNicknameUseFont: e.target.checked })}
               />
-              Vornamen im generierten Nickname über die globale Schrift (siehe "Schrift" oben) stylen
+              Vornamen über die globale Schrift (siehe "Schrift" oben) stylen
             </label>
+            <div className="preview-box mt-8 mb-12">
+              {previewRegisterNickname(
+                nicknameEmoji,
+                settings.fontMap,
+                settings.registerNicknameUseFont,
+              )}
+            </div>
+            <button className="primary" onClick={handleSaveNicknameEmoji} disabled={savingNicknameEmoji}>
+              {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
+            </button>
+
+            <hr className="divider" />
+
+            <h3>Bestätigungstext</h3>
+            <p className="muted small">Gepostet in den privaten Thread, sobald das Formular eingereicht wird.</p>
             <div className="field">
-              <label htmlFor="register-confirmation-template">Bestätigungstext</label>
+              <label htmlFor="register-confirmation-template">Text</label>
               <TemplateEditor
                 id="register-confirmation-template"
                 value={confirmationTemplate}
@@ -283,22 +336,26 @@ function RegistrierungSection({
 
             <hr className="divider" />
 
+            <h3>Abschluss</h3>
+            <p className="muted small">
+              Reguläre Registrierung: der Thread bleibt offen, bis ein Team-Mitglied die Registrierungsrolle (siehe
+              oben) manuell vergibt — der Bot postet dann den Text unten in den Thread und schließt ihn eine Stunde
+              später automatisch.
+            </p>
             <label className="switch">
               <input
                 type="checkbox"
                 checked={settings.registerAutoComplete}
                 onChange={(e) => update({ registerAutoComplete: e.target.checked })}
               />
-              Registrierung automatisch abschließen (Registrierungsrolle sofort vergeben, ohne manuelle Prüfung)
+              Stattdessen sofort automatisch abschließen (ohne manuelle Prüfung)
             </label>
             <div className="hint">
-              Aus (Standard): Der Thread bleibt offen, bis ein Team-Mitglied die Registrierungsrolle (siehe oben)
-              manuell vergibt. Ein: Der Bot vergibt die Registrierungsrolle sofort bei Formular-Einreichung — der
-              Thread öffnet sich trotzdem, zeigt aber den untenstehenden Text und schließt sich automatisch nach
-              einer Stunde. Ohne gesetzte Registrierungsrolle (siehe oben) hat dieser Schalter keine Wirkung.
+              Vergibt die Registrierungsrolle sofort bei Formular-Einreichung und postet den Text unten direkt.
+              Ohne gesetzte Registrierungsrolle (siehe oben) hat dieser Schalter keine Wirkung.
             </div>
             <div className="field">
-              <label htmlFor="auto-register-confirmation-template">Bestätigungstext (automatische Registrierung)</label>
+              <label htmlFor="auto-register-confirmation-template">Text (Registrierung abgeschlossen)</label>
               <TemplateEditor
                 id="auto-register-confirmation-template"
                 value={autoConfirmationTemplate}
@@ -306,9 +363,7 @@ function RegistrierungSection({
                 channels={channels}
               />
               <div className="hint">
-                Wird stattdessen gepostet, wenn die automatische Registrierung erfolgreich war. Gleiche
-                Platzhalter: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code> — oder tippe <code>#</code>{" "}
-                für einen beliebigen Kanal.
+                Gleiche Platzhalter wie oben: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code>.
               </div>
             </div>
             <div className="preview-box mb-12">
@@ -350,10 +405,8 @@ function EventsSection({ settings, update, channels, voiceChannels }: EventsSect
     <div className="card">
       <h2>Event-Anwesenheit (Apollo)</h2>
       <p className="muted small">
-        Postet der Apollo-Bot im unten festgelegten Kanal ein Event mit Zusagen/Absagen/Vielleicht-Liste, erkennt
-        der Bot das automatisch, gleicht die Namen mit den Servermitgliedern ab und prüft beim Start des Events,
-        wer sich im festgelegten Sprachkanal befindet — inklusive Verspätungen und vorzeitigem Verlassen bis zum
-        Ende des Events. Das Ergebnis erscheint unter <a href="/events">Event-Anwesenheit</a> im Menü. Lasse einen
+        Erkennt Apollo-Events im Kanal unten und prüft anhand des Sprachkanals, wer teilgenommen hat (inkl.
+        Verspätung/vorzeitigem Verlassen). Ergebnis unter <a href="/events">Event-Anwesenheit</a>. Lasse einen
         Kanal leer, um dies zu deaktivieren.
       </p>
       {!settings ? (
@@ -414,6 +467,8 @@ export default function Settings({ me }: { me: Me }) {
 
   const [fontMap, setFontMap] = useState("");
   const [savingFont, setSavingFont] = useState(false);
+  const [nicknameEmoji, setNicknameEmoji] = useState("");
+  const [savingNicknameEmoji, setSavingNicknameEmoji] = useState(false);
   const [confirmationTemplate, setConfirmationTemplate] = useState("");
   const [savingConfirmationTemplate, setSavingConfirmationTemplate] = useState(false);
   const [autoConfirmationTemplate, setAutoConfirmationTemplate] = useState("");
@@ -439,6 +494,7 @@ export default function Settings({ me }: { me: Me }) {
     const s = settingsRes.data;
     if (!s) return;
     setFontMap(s.fontMap ?? "");
+    setNicknameEmoji(s.registerNicknameEmoji);
     setConfirmationTemplate(s.registerConfirmationTemplate);
     setAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
   }, [settingsRes.data]);
@@ -463,6 +519,19 @@ export default function Settings({ me }: { me: Me }) {
       showError(errorMessage(err));
     } finally {
       setSavingFont(false);
+    }
+  }
+
+  async function handleSaveNicknameEmoji() {
+    setSavingNicknameEmoji(true);
+    try {
+      const updated = await api.updateGeneralSettings({ registerNicknameEmoji: nicknameEmoji });
+      settingsRes.setData(updated);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingNicknameEmoji(false);
     }
   }
 
@@ -515,6 +584,10 @@ export default function Settings({ me }: { me: Me }) {
             update={update}
             roles={roles}
             channels={channels}
+            nicknameEmoji={nicknameEmoji}
+            setNicknameEmoji={setNicknameEmoji}
+            handleSaveNicknameEmoji={handleSaveNicknameEmoji}
+            savingNicknameEmoji={savingNicknameEmoji}
             confirmationTemplate={confirmationTemplate}
             setConfirmationTemplate={setConfirmationTemplate}
             handleSaveConfirmationTemplate={handleSaveConfirmationTemplate}

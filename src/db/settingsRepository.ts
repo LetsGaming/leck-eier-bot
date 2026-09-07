@@ -21,6 +21,7 @@ interface SettingsRow {
   role_selection_channel_id: string | null;
   register_confirmation_template: string;
   register_nickname_use_font: 0 | 1;
+  register_nickname_emoji: string;
   register_auto_complete: 0 | 1;
   auto_register_confirmation_template: string;
   apollo_event_channel_id: string | null;
@@ -47,6 +48,7 @@ function rowToSettings(row: SettingsRow): Settings {
     roleSelectionChannelId: row.role_selection_channel_id,
     registerConfirmationTemplate: row.register_confirmation_template,
     registerNicknameUseFont: row.register_nickname_use_font === 1,
+    registerNicknameEmoji: row.register_nickname_emoji,
     registerAutoComplete: row.register_auto_complete === 1,
     autoRegisterConfirmationTemplate: row.auto_register_confirmation_template,
     apolloEventChannelId: row.apollo_event_channel_id,
@@ -61,7 +63,7 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_announcement_use_font, leave_notifications_enabled,
           register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening,
           register_channel_id, role_selection_channel_id, register_confirmation_template,
-          register_nickname_use_font, register_auto_complete, auto_register_confirmation_template,
+          register_nickname_use_font, register_nickname_emoji, register_auto_complete, auto_register_confirmation_template,
           apollo_event_channel_id, event_voice_channel_id
    FROM settings WHERE id = 1`,
 );
@@ -84,6 +86,7 @@ const updateStmt = db.prepare<{
   roleSelectionChannelId: string | null;
   registerConfirmationTemplate: string;
   registerNicknameUseFont: 0 | 1;
+  registerNicknameEmoji: string;
   registerAutoComplete: 0 | 1;
   autoRegisterConfirmationTemplate: string;
   apolloEventChannelId: string | null;
@@ -108,6 +111,7 @@ const updateStmt = db.prepare<{
      role_selection_channel_id = @roleSelectionChannelId,
      register_confirmation_template = @registerConfirmationTemplate,
      register_nickname_use_font = @registerNicknameUseFont,
+     register_nickname_emoji = @registerNicknameEmoji,
      register_auto_complete = @registerAutoComplete,
      auto_register_confirmation_template = @autoRegisterConfirmationTemplate,
      apollo_event_channel_id = @apolloEventChannelId,
@@ -165,6 +169,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     roleSelectionChannelId: next.roleSelectionChannelId,
     registerConfirmationTemplate: next.registerConfirmationTemplate,
     registerNicknameUseFont: next.registerNicknameUseFont ? 1 : 0,
+    registerNicknameEmoji: next.registerNicknameEmoji,
     registerAutoComplete: next.registerAutoComplete ? 1 : 0,
     autoRegisterConfirmationTemplate: next.autoRegisterConfirmationTemplate,
     apolloEventChannelId: next.apolloEventChannelId,
