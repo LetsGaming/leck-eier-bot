@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
@@ -25,6 +26,12 @@ function relativeDay(days: number): string {
 
 function entryLabel(entry: { name: string | null; mention: string }): string {
   return entry.name ?? entry.mention;
+}
+
+/** Links to the member overview when a Discord account is linked (`userId` non-null) — list-entered, name-only entries have none. */
+function EntryLabelLink({ entry }: { entry: { userId: string | null; name: string | null; mention: string } }) {
+  const label = entryLabel(entry);
+  return entry.userId ? <Link to={`/members/${entry.userId}`}>{label}</Link> : <>{label}</>;
 }
 
 interface EntryDraft {
@@ -176,7 +183,14 @@ export default function Birthdays() {
                   <div className="value fs-18">
                     {b.dateKey}
                   </div>
-                  <div className="muted">{b.entries.map(entryLabel).join(", ")}</div>
+                  <div className="muted">
+                    {b.entries.map((entry, i) => (
+                      <Fragment key={entry.id}>
+                        {i > 0 && ", "}
+                        <EntryLabelLink entry={entry} />
+                      </Fragment>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -265,7 +279,9 @@ export default function Birthdays() {
                       b.entries.map((entry) => (
                         <tr key={entry.id}>
                           <td data-label="Datum">{b.dateKey}</td>
-                          <td data-label="Person">{entryLabel(entry)}</td>
+                          <td data-label="Person">
+                            <EntryLabelLink entry={entry} />
+                          </td>
                           <td data-label="Quelle">
                             <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
                               {entry.source === "self" ? "selbst registriert" : "Liste"}

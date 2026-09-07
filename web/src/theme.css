@@ -1588,3 +1588,19 @@ th {
   align-items: flex-start;
   gap: 0.25rem;
 }
+
+/* MemberOverview.tsx's profile header — avatar beside identity text, both
+   vertically centered (unlike `.row`, which end-aligns for form layouts). */
+.member-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.member-header h2 {
+  margin-bottom: 4px;
+}
+
+.member-header p {
+  margin: 0;
+}

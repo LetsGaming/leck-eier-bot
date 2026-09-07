@@ -4,6 +4,15 @@ import type { PermissionGate } from "../../contracts/permissionGate";
 import type { MemberAuditEntry } from "../../contracts/memberAudit";
 import type { RegistrationEntry } from "../../contracts/registrations";
 import type {
+  Status as StatusContract,
+  CommunitySnapshot,
+  CommunitySnapshotBirthday,
+  CommunitySnapshotEvent,
+  CommunitySnapshotActivity,
+  BotOwnerStats,
+} from "../../contracts/status";
+import type { MemberOverview, MemberOverviewEventEntry } from "../../contracts/memberOverview";
+import type {
   EventAttendanceMonthsResponse,
   EventSignupEntry,
   EventAttendanceEntry,
@@ -19,6 +28,13 @@ export type {
   EventAttendanceSummary,
   EventAttendanceListResponse,
   EventSignupCounts,
+  CommunitySnapshot,
+  CommunitySnapshotBirthday,
+  CommunitySnapshotEvent,
+  CommunitySnapshotActivity,
+  BotOwnerStats,
+  MemberOverview,
+  MemberOverviewEventEntry,
 };
 
 export type SelectionType = "reactions" | "buttons" | "dropdown";
@@ -33,16 +49,12 @@ export interface Me {
   timezone: string;
 }
 
-export interface Status {
-  botTag: string | null;
-  uptimeMs: number;
-  guildName: string | null;
-  guildMemberCount: number | null;
-  cachedMemberCount: number;
-  reactionRolePanelCount: number;
-  pendingRegistrationCount: number;
-  unmatchedSignupCount: number;
-}
+/**
+ * Canonical shape lives at `contracts/status.ts` as `Status`. Kept under this
+ * local name since it's the name every dashboard consumer already imports —
+ * same convention as `Registration`/`EventSignup`/`EventAttendance` below.
+ */
+export type Status = StatusContract;
 
 export interface Channel {
   id: string;

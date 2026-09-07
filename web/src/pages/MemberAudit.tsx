@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
@@ -105,7 +106,9 @@ function RegistrationsCard({ query }: { query: string }) {
                   <td className="stack-plain">
                     <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
                   </td>
-                  <td data-label="Anzeigename">{entry.displayName}</td>
+                  <td data-label="Anzeigename">
+                    <Link to={`/members/${entry.userId}`}>{entry.displayName}</Link>
+                  </td>
                   <td className="muted" data-label="Nickname">
                     {entry.nickname ?? "—"}
                   </td>
@@ -179,7 +182,9 @@ function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boo
       <td className="stack-plain">
         <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
       </td>
-      <td data-label="Name">{entry.displayName}</td>
+      <td data-label="Name">
+        <Link to={`/members/${entry.userId}`}>{entry.displayName}</Link>
+      </td>
       <td className="muted" data-label="Benutzername">
         {entry.tag}
       </td>

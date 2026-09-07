@@ -11,6 +11,7 @@ import ReactionRoles from "./pages/ReactionRoles";
 import Birthdays from "./pages/Birthdays";
 import Commands from "./pages/Commands";
 import MemberAudit from "./pages/MemberAudit";
+import MemberOverview from "./pages/MemberOverview";
 import EventAttendance from "./pages/EventAttendance";
 import EventAttendanceDetail from "./pages/EventAttendanceDetail";
 import Settings from "./pages/Settings";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/birthdays" element={<Birthdays />} />
           <Route path="/commands" element={<Commands />} />
           <Route path="/members" element={<MemberAudit />} />
+          <Route path="/members/:userId" element={<MemberOverview />} />
           <Route path="/events" element={<EventAttendance />} />
           <Route path="/events/:eventId" element={<EventAttendanceDetail />} />
           <Route path="/settings" element={<Settings me={me} />} />

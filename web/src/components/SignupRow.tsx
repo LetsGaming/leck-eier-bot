@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import SearchableSelect from "./SearchableSelect";
 import { formatAbsolute } from "../dateFormat";
 import type { EventAttendance, EventSignup } from "../types";
@@ -40,7 +41,7 @@ export default function SignupRow({
       <td data-label="Mitglied">
         {signup.displayName ? (
           <>
-            {signup.displayName}
+            {signup.userId ? <Link to={`/members/${signup.userId}`}>{signup.displayName}</Link> : signup.displayName}
             {signup.displayName !== signup.rawName && <div className="muted small">{signup.rawName}</div>}
           </>
         ) : (

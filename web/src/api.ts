@@ -15,6 +15,7 @@ import type {
   MappingInput,
   Me,
   MemberAuditResponse,
+  MemberOverview,
   PermissionGate,
   Registration,
   UpcomingBirthday,
@@ -85,6 +86,7 @@ export const api = {
     if (opts.offset !== undefined) search.set("offset", String(opts.offset));
     return request<Registration[]>(`/members/registrations?${search.toString()}`);
   },
+  memberOverview: (userId: string) => request<MemberOverview>(`/members/${userId}`),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
   approveRegistration: (userId: string) =>
     request<void>(`/members/registrations/${userId}/approve`, { method: "POST" }),
