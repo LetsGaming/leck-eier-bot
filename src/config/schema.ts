@@ -62,6 +62,13 @@ export const EnvSchema = z.object({
    * rejections logs — see src/utils/logger.ts). Defaults to `../logs`
    * relative to the process cwd if unset; created on startup if missing.
    */
+  /**
+   * Overrides where the SQLite database file lives (default: `data/` at
+   * the project root — see src/db/index.ts). Only meant for
+   * scripts/dev-up.mjs, so each isolated dev session gets its own DB file
+   * instead of colliding on the shared one. Leave unset in production.
+   */
+  DATA_DIR: z.string().min(1).describe("./data").optional(),
   LOG_DIR: z.string().min(1).describe("../logs").optional(),
   /**
    * winston log level (e.g. "error", "warn", "info", "debug") controlling

@@ -22,8 +22,24 @@ You'll need a real (or disposable test) Discord application/bot token to actuall
 | `npm start` | Run the compiled bot (`node dist/index.js`) — requires `npm run build` first |
 | `npm run typecheck` | Type-check only, no output (`tsc --noEmit`) — fast, useful in CI or before committing. Bot-only; run `npm --prefix web run build` to type-check the dashboard. |
 | `npm run env:example` | Regenerate `.env.example` from `src/config/schema.ts` |
+| `npm run dev:up -- --id <name>` | Start an isolated mock backend + dashboard, seeded with realistic data — see [Isolated dev sessions & mock data](#isolated-dev-sessions--mock-data) |
+| `npm run dev:down -- --id <name>` | Stop that session and wipe its database/logs |
 
 There is currently no automated test suite. Verify changes with `npm run typecheck`, `npm run build`, and manual testing against a test bot/server.
+
+## Isolated dev sessions & mock data
+
+For UI/dashboard work you don't need a real Discord application at all: `scripts/dev-up.mjs` starts a backend + Vite dashboard pair under `DEV_MOCK_DISCORD=true` (see [CONFIGURATION.md](CONFIGURATION.md)), each on its own automatically-picked free port, backed by its own disposable SQLite database under `data/agent-<id>/`, and seeds that database with realistic mock data (`scripts/seed-mock-data.ts`) — birthdays, in-guild and former members, a pending registration, a draft reaction-role panel, a completed event with tracked signups — so every dashboard page shows real content instead of an empty state.
+
+```bash
+node scripts/dev-up.mjs --id my-session     # prints the dashboard URL, dev-login URL, and log paths
+# ...do your work against that dashboard URL...
+node scripts/dev-down.mjs --id my-session   # stops exactly those two processes, deletes its data + logs
+```
+
+`--id` defaults to `"default"` if omitted, but **always pass a unique `--id`** when more than one person/agent might be working in this checkout at the same time — each id gets its own port pair and database file, so two sessions never collide or clobber each other's data. Always pair a `dev-up` with a matching `dev-down`: `dev-up` defensively wipes any stale state under the same id first, but a session left running holds its ports and log files open indefinitely otherwise. See `CLAUDE.md` at the repo root for the agent-facing version of this convention.
+
+Do not use this for anything resembling production data — `DEV_MOCK_DISCORD` refuses to start when `NODE_ENV=production`, and `seed-mock-data.ts` refuses to run without it set.
 
 ## Dashboard frontend
 

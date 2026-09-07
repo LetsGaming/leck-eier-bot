@@ -63,6 +63,11 @@ const lines: string[] = [
   "# this in production.",
   `DEV_MOCK_DISCORD=${example("DEV_MOCK_DISCORD", shape.DEV_MOCK_DISCORD)}`,
   "",
+  "# Dev-only — overrides where the SQLite database file lives (default:",
+  "# data/ at the project root). Only meant to be set by scripts/dev-up.mjs,",
+  "# so each isolated dev session gets its own database. Leave unset.",
+  `DATA_DIR=${example("DATA_DIR", shape.DATA_DIR)}`,
+  "",
 ];
 
 const outPath = path.resolve(__dirname, "..", ".env.example");

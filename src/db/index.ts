@@ -16,8 +16,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // data/ always lives at the project root, one level above whichever of
-// src (dev) or dist (prod) is currently executing.
-export const DATA_DIR = path.resolve(__dirname, "..", "..", "data");
+// src (dev) or dist (prod) is currently executing — unless DATA_DIR
+// overrides it, which is how scripts/dev-up.mjs gives each concurrent dev
+// session (and its seeded mock data) its own isolated SQLite file instead
+// of colliding on the shared one.
+export const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(__dirname, "..", "..", "data");
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }

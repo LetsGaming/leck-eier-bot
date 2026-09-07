@@ -1,5 +1,55 @@
 import { ChannelType, Collection, PermissionsBitField } from "discord.js";
 import type { Config, BotClient } from "../types.js";
+import type { GuildMember } from "discord.js";
+
+/** One synthetic guild member — enough surface for every dashboard route that reads a cached `GuildMember` (username/avatar/joinedAt/roles/displayName). */
+interface MockMemberSpec {
+  id: string;
+  username: string;
+  globalName: string | null;
+  nickname: string | null;
+  daysAgoJoined: number;
+  roleIds: string[];
+  avatarIndex: number;
+}
+
+const MOCK_MEMBER_SPECS: MockMemberSpec[] = [
+  { id: "100000000000000001", username: "arasaka_yuki", globalName: "Yuki", nickname: null, daysAgoJoined: 420, roleIds: ["mock-role-admin", "mock-role-member"], avatarIndex: 0 },
+  { id: "100000000000000002", username: "moon.lark", globalName: "Lark", nickname: "🌙Lark", daysAgoJoined: 210, roleIds: ["mock-role-mod", "mock-role-member"], avatarIndex: 1 },
+  { id: "100000000000000003", username: "ghostwire", globalName: "Ghost", nickname: null, daysAgoJoined: 95, roleIds: ["mock-role-member"], avatarIndex: 2 },
+  { id: "100000000000000004", username: "sable_fox", globalName: "Sable", nickname: null, daysAgoJoined: 30, roleIds: ["mock-role-member"], avatarIndex: 3 },
+  { id: "100000000000000005", username: "night.owl99", globalName: null, nickname: null, daysAgoJoined: 3, roleIds: [], avatarIndex: 4 },
+];
+
+function makeMockMember(spec: MockMemberSpec, roles: Collection<string, unknown>): GuildMember {
+  const roleCache = new Collection<string, unknown>();
+  for (const roleId of spec.roleIds) {
+    const role = roles.get(roleId);
+    if (role) roleCache.set(roleId, role);
+  }
+
+  const joinedAt = new Date(Date.now() - spec.daysAgoJoined * 24 * 60 * 60 * 1000);
+  const avatarUrl = `https://cdn.discordapp.com/embed/avatars/${spec.avatarIndex % 6}.png`;
+
+  const member = {
+    id: spec.id,
+    user: {
+      id: spec.id,
+      username: spec.username,
+      globalName: spec.globalName,
+      avatar: null,
+      discriminator: "0",
+      bot: false,
+    },
+    nickname: spec.nickname,
+    displayName: spec.nickname ?? spec.globalName ?? spec.username,
+    joinedAt,
+    roles: { cache: roleCache },
+    displayAvatarURL: () => avatarUrl,
+  };
+
+  return member as unknown as GuildMember;
+}
 
 /**
  * A synthetic stand-in for the real discord.js `Client`, used only when
@@ -79,15 +129,30 @@ export function createMockClient(config: Config): BotClient {
     roles: { highest: { position: 99 } },
   };
 
+  const membersCache = new Collection<string, GuildMember>();
+  for (const spec of MOCK_MEMBER_SPECS) {
+    membersCache.set(spec.id, makeMockMember(spec, roles));
+  }
+
   const guild = {
     id: guildId,
     name: "Mock-Server (DEV_MOCK_DISCORD)",
     ownerId: config.botOwnerId,
-    memberCount: 3,
+    memberCount: membersCache.size,
     roles: { cache: roles, everyone: everyoneRole },
     channels: { cache: channels },
     emojis: { cache: new Collection() },
-    members: { me: botMember, cache: new Collection(), fetch: async () => new Collection() },
+    members: {
+      me: botMember,
+      cache: membersCache,
+      // Mirrors real discord.js: fetch() with no args resolves the (already-populated) cache; with a userId, resolves that one member or rejects like a real 404.
+      fetch: async (userId?: string) => {
+        if (userId === undefined) return membersCache;
+        const member = membersCache.get(userId);
+        if (!member) throw new Error(`Unknown Member: ${userId}`);
+        return member;
+      },
+    },
   };
 
   const guilds = new Collection();

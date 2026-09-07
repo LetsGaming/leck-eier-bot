@@ -95,6 +95,16 @@ process.env.TZ = config.timezone;
 // mock mode.
 if (config.devMockDiscord) {
   const mockClient = createMockClient(config);
+  const mockGuild = mockClient.guilds.cache.get(config.guildId);
+  if (mockGuild) {
+    // Mirrors the real bot's clientReady handler below: populates the
+    // dashboard's live member-cache-backed routes (Mitgliederprüfung,
+    // Übersicht's CommunitySnapshot) from the mock guild's synthetic
+    // members instead of leaving them permanently empty/503ing.
+    initMemberCache(mockGuild)
+      .then(() => seedMemberRecordsFromCache(getCachedMembers()))
+      .catch((err) => logger.error(`❌ Mock member cache init failed: ${errorMessage(err)}`));
+  }
   startWebServer(mockClient, config).catch((err) => {
     logger.error(`❌ Mock dashboard failed to start: ${errorMessage(err)}`);
     process.exit(1);

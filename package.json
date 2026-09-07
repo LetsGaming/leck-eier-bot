@@ -10,7 +10,9 @@
         "dev:web": "npm --prefix web run dev",
         "typecheck": "tsc --noEmit",
         "test": "tsx --test tests/bot/**/*.test.ts tests/db/**/*.test.ts tests/seam/**/*.test.ts",
-        "env:example": "tsx scripts/generateEnvExample.ts"
+        "env:example": "tsx scripts/generateEnvExample.ts",
+        "dev:up": "node scripts/dev-up.mjs",
+        "dev:down": "node scripts/dev-down.mjs"
     },
     "dependencies": {
         "@fastify/cookie": "^11.1.2",
