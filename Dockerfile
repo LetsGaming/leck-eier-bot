@@ -8,6 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY tsconfig.json ./
+COPY contracts ./contracts
 COPY src ./src
 RUN npx tsc
 
