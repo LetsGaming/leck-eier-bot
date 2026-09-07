@@ -4,6 +4,7 @@ import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
+import { useConfirm } from "../components/ConfirmContext";
 import { useToast } from "../components/ToastContext";
 import { useBirthdaySettings } from "../hooks/useBirthdaySettings";
 import { useChannels } from "../hooks/useChannels";
@@ -17,6 +18,23 @@ import type { BirthdayEntry } from "../types";
 const PREVIEW_CONTEXT = { userMention: "@Beispielperson", everyoneMention: "@everyone", userNick: "Beispielperson" };
 const PREVIEW_MONTH = "März";
 const PREVIEW_ENTRIES = "📅 05.03: @Beispielperson";
+
+/** Matches the "minute hour * * *" shape produced by the time-of-day picker below — anything else (step values, weekday lists, …) is treated as a custom schedule and edited as raw cron. */
+const DAILY_CRON_PATTERN = /^(\d{1,2}) (\d{1,2}) \* \* \*$/;
+
+function cronToTimeInput(cron: string): string | null {
+  const match = DAILY_CRON_PATTERN.exec(cron.trim());
+  if (!match) return null;
+  const minute = Number(match[1]);
+  const hour = Number(match[2]);
+  if (minute > 59 || hour > 23) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function timeInputToCron(time: string): string {
+  const [hour, minute] = time.split(":");
+  return `${Number(minute)} ${Number(hour)} * * *`;
+}
 
 function relativeDay(days: number): string {
   if (days === 0) return "heute";
@@ -56,6 +74,7 @@ export default function Birthdays() {
   const [template, setTemplate] = useState("");
   const [channelId, setChannelId] = useState("");
   const [cronExpr, setCronExpr] = useState("");
+  const [advancedCron, setAdvancedCron] = useState(false);
   const [modChannelId, setModChannelId] = useState("");
   const [anchorTemplate, setAnchorTemplate] = useState("");
   const [anchorIntro, setAnchorIntro] = useState("");
@@ -68,6 +87,7 @@ export default function Birthdays() {
   const [draft, setDraft] = useState<EntryDraft>(EMPTY_DRAFT);
   const [savingEntry, setSavingEntry] = useState(false);
   const { showError, showSuccess } = useToast();
+  const confirmDialog = useConfirm();
 
   // Seeds the local editable form fields once `useBirthdaySettings()`
   // resolves — mirrors the pre-migration `loadAll()`'s destructuring of `s`,
@@ -79,6 +99,7 @@ export default function Birthdays() {
     setTemplate(s.template);
     setChannelId(s.channelId ?? "");
     setCronExpr(s.cron);
+    setAdvancedCron(cronToTimeInput(s.cron) === null);
     setModChannelId(s.modChannelId ?? "");
     setAnchorTemplate(s.anchorTemplate);
     setAnchorIntro(s.anchorIntro ?? "");
@@ -154,9 +175,15 @@ export default function Birthdays() {
     }
   }
 
-  async function handleDeleteEntry(id: number) {
+  async function handleDeleteEntry(entry: { id: number; name: string | null; mention: string }) {
+    const ok = await confirmDialog({
+      title: "Geburtstag entfernen",
+      message: `Der Eintrag für ${entryLabel(entry)} wird unwiderruflich entfernt und verschwindet auch aus der Ankernachricht.`,
+      confirmLabel: "Entfernen",
+    });
+    if (!ok) return;
     try {
-      await api.deleteBirthday(id);
+      await api.deleteBirthday(entry.id);
       upcomingRes.reload();
       showSuccess("Entfernt.");
     } catch (err) {
@@ -292,7 +319,7 @@ export default function Birthdays() {
                           <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
                           <td className="stack-plain">
                             <button onClick={() => startEdit(entry, b.dateKey)}>Bearbeiten</button>{" "}
-                            <button className="danger" onClick={() => handleDeleteEntry(entry.id)}>
+                            <button className="danger" onClick={() => handleDeleteEntry(entry)}>
                               Löschen
                             </button>
                           </td>
@@ -389,11 +416,36 @@ export default function Birthdays() {
                 </div>
               </div>
               <div className="field">
-                <label htmlFor="cron">Zeitplan der täglichen Aufgabe (Cron)</label>
-                <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
-                <div className="hint">
-                  Standard: <code>0 0 * * *</code> (Mitternacht, Serverzeit)
-                </div>
+                <label htmlFor="cron">Uhrzeit der täglichen Aufgabe</label>
+                {advancedCron ? (
+                  <>
+                    <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
+                    <div className="hint">
+                      Cron-Ausdruck (Serverzeit), z. B. <code>0 0 * * *</code> für Mitternacht.{" "}
+                      <button type="button" className="link-button" onClick={() => setAdvancedCron(false)}>
+                        Zurück zur Uhrzeit-Auswahl
+                      </button>{" "}
+                      (nur möglich, wenn der Ausdruck einer festen Uhrzeit entspricht).
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      id="cron"
+                      type="time"
+                      value={cronToTimeInput(cronExpr) ?? "00:00"}
+                      onChange={(e) => setCronExpr(timeInputToCron(e.target.value))}
+                    />
+                    <div className="hint">
+                      Der Bot postet die tägliche Ankündigung um diese Uhrzeit (Serverzeit). Für Wochentags- oder
+                      Intervall-Zeitpläne:{" "}
+                      <button type="button" className="link-button" onClick={() => setAdvancedCron(true)}>
+                        Cron-Ausdruck manuell bearbeiten
+                      </button>
+                      .
+                    </div>
+                  </>
+                )}
               </div>
               <button className="primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Wird gespeichert…" : "Speichern"}

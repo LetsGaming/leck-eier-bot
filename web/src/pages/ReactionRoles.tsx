@@ -320,7 +320,11 @@ export default function ReactionRoles() {
                         Mit Discord synchronisieren
                       </button>
                     ) : (
-                      <button className="primary" onClick={handleSend} disabled={busy || selected.mappings.length === 0}>
+                      <button
+                        className="primary"
+                        onClick={() => handleSend(channels.find((c) => c.id === selected.channelId)?.name ?? selected.channelId)}
+                        disabled={busy || selected.mappings.length === 0}
+                      >
                         Nachricht senden
                       </button>
                     )}

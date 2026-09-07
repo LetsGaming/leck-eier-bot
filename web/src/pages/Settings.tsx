@@ -30,7 +30,11 @@ const DISCORD_NICKNAME_MAX_LENGTH = 32;
  * real form submission, so this card's "Nickname-Format" preview always
  * matches what the bot would actually set.
  */
-function previewRegisterNickname(emoji: string, fontMap: string | null, useFont: boolean): string {
+function previewRegisterNickname(
+  emoji: string,
+  fontMap: string | null,
+  useFont: boolean,
+): string {
   const styledFirstName = useFont
     ? applyFont(PREVIEW_NICKNAME_FIRST_NAME.toUpperCase(), fontMap)
     : PREVIEW_NICKNAME_FIRST_NAME.toUpperCase();
@@ -64,7 +68,14 @@ interface AllgemeinSectionProps {
   savingFont: boolean;
 }
 
-function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFont, savingFont }: AllgemeinSectionProps) {
+function AllgemeinSection({
+  settings,
+  update,
+  fontMap,
+  setFontMap,
+  handleSaveFont,
+  savingFont,
+}: AllgemeinSectionProps) {
   return (
     <div className="card-grid">
       <div className="card">
@@ -76,9 +87,12 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
             <input
               type="checkbox"
               checked={settings.leaveNotificationsEnabled}
-              onChange={(e) => update({ leaveNotificationsEnabled: e.target.checked })}
+              onChange={(e) =>
+                update({ leaveNotificationsEnabled: e.target.checked })
+              }
             />
-            Server-Besitzer per DM benachrichtigen, wenn ein Mitglied freiwillig den Server verlässt
+            Server-Besitzer per DM benachrichtigen, wenn ein Mitglied freiwillig
+            den Server verlässt
           </label>
         )}
       </div>
@@ -86,8 +100,9 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
       <div className="card">
         <h2>Schrift</h2>
         <p className="muted small">
-          Eine "Fancy-Text"-Schrift, einmal festgelegt und dann pro Funktion einzeln aktivierbar (Geburtstage,
-          Reaktionsrollen, Registrierung). Leer lassen, um nichts zu formatieren.
+          Eine "Fancy-Text"-Schrift, einmal festgelegt und dann pro Funktion
+          einzeln aktivierbar (Geburtstage, Reaktionsrollen, Registrierung).
+          Leer lassen, um nichts zu formatieren.
         </p>
         <div className="field">
           <label htmlFor="fontMap">Schrift</label>
@@ -99,8 +114,17 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
             placeholder={FONT_REFERENCE}
           />
           <div className="hint">
-            Füge ein stilisiertes Alphabet ein, das <code>{FONT_REFERENCE}</code> Zeichen für Zeichen entspricht
-            (insgesamt 52) — aus einem beliebigen "Fancy-Text"-Generator.
+            Füge ein stilisiertes Alphabet ein, das{" "}
+            <code>{FONT_REFERENCE}</code> Zeichen für Zeichen entspricht
+            (insgesamt 52) — z. B. erzeugt mit einem{" "}
+            <a
+              href="https://lingojam.com/FancyTextGenerator"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Fancy-Text-Generator
+            </a>
+            .
           </div>
           {fontMap &&
             ([...fontMap].length === FONT_REFERENCE.length ? (
@@ -109,11 +133,17 @@ function AllgemeinSection({ settings, update, fontMap, setFontMap, handleSaveFon
               </div>
             ) : (
               <div className="preview-box mt-8">
-                <span className="muted">Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).</span>
+                <span className="muted">
+                  Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).
+                </span>
               </div>
             ))}
         </div>
-        <button className="primary" onClick={handleSaveFont} disabled={savingFont}>
+        <button
+          className="primary"
+          onClick={handleSaveFont}
+          disabled={savingFont}
+        >
           {savingFont ? "Wird gespeichert…" : "Speichern"}
         </button>
       </div>
@@ -159,166 +189,222 @@ function RegistrierungSection({
   savingAutoConfirmationTemplate,
 }: RegistrierungSectionProps) {
   return (
-    <div className="card-grid">
-      <div className="card">
-        <h2>Registrierung</h2>
-        <p className="muted small">
-          Entfernt die Registrierungssperre-Rolle automatisch, sobald ein Mitglied die Registrierungsrolle erhält
-          — so verschwindet z. B. #register nach der Registrierung. Lasse ein Feld leer, um dies zu deaktivieren.
-        </p>
-        {!settings ? (
-          <div className="loading">Wird geladen…</div>
-        ) : (
-          <>
-            <div className="field">
-              <label htmlFor="register-gate-role">Registrierungssperre-Rolle</label>
-              <SearchableSelect
-                id="register-gate-role"
-                value={settings.registerGateRoleId ?? ""}
-                onChange={(v) => update({ registerGateRoleId: v || null })}
-                placeholder="Rollen durchsuchen…"
-                emptyLabel="— keine —"
-                options={toRoleOptions(roles)}
-              />
-              <div className="hint">Die Rolle, die einem noch nicht registrierten Mitglied #register anzeigt.</div>
-            </div>
-            <div className="field">
-              <label htmlFor="registration-tier-role">Registrierungsrolle (niedrigste Stufe)</label>
-              <SearchableSelect
-                id="registration-tier-role"
-                value={settings.registrationTierRoleId ?? ""}
-                onChange={(v) => update({ registrationTierRoleId: v || null })}
-                placeholder="Rollen durchsuchen…"
-                emptyLabel="— keine —"
-                options={toRoleOptions(roles)}
-              />
-              <div className="hint">
-                Die niedrigste Mitgliedschaftsstufe, die einmalig bei der manuellen Registrierung vergeben wird —
-                keine höhere Stufe, da spätere Beförderungen dies nicht erneut auslösen dürfen.
-              </div>
-            </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={settings.rulesAcceptedUseDiscordScreening}
-                onChange={(e) => update({ rulesAcceptedUseDiscordScreening: e.target.checked })}
-              />
-              "Regeln akzeptiert" über Discords Mitgliedschafts-Screening statt der Registrierungssperre-Rolle
-              erkennen
-            </label>
-            <div className="hint">
-              Aus (Standard): erkannt am Erhalt der Registrierungssperre-Rolle oben. Ein: erkannt an Discords
-              eigenem "pending"-Flag. Betrifft nur die Spalte "Regeln akzeptiert" in der{" "}
-              <a href="/members">Mitgliederprüfung</a>.
-            </div>
-          </>
-        )}
+    <>
+      <div className="alert neutral mb-16">
+        <strong>Ablauf:</strong> Mitglied postet das Formular im Kanal unten →
+        Bot setzt den Nickname und öffnet einen privaten Thread → ein
+        Team-Mitglied vergibt die Registrierungsrolle (oder automatisch, siehe
+        "Abschluss" unten) → der Bot bestätigt im Thread und entfernt die
+        Sperre-Rolle oben.
       </div>
+      <div className="card-grid">
+        <div className="card">
+          <h2>Registrierung</h2>
+          <p className="muted small">
+            Entfernt die Registrierungssperre-Rolle automatisch, sobald ein
+            Mitglied die Registrierungsrolle erhält — so verschwindet z. B.
+            #register nach der Registrierung. Lasse ein Feld leer, um dies zu
+            deaktivieren.
+          </p>
+          {!settings ? (
+            <div className="loading">Wird geladen…</div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="register-gate-role">
+                  Registrierungssperre-Rolle
+                </label>
+                <SearchableSelect
+                  id="register-gate-role"
+                  value={settings.registerGateRoleId ?? ""}
+                  onChange={(v) => update({ registerGateRoleId: v || null })}
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— keine —"
+                  options={toRoleOptions(roles)}
+                />
+                <div className="hint">
+                  Die Rolle, die ein neues Mitglied bekommt, bevor es sich
+                  registriert hat — sie schaltet den Registrierungs-Kanal (z. B.
+                  #register) für dieses Mitglied frei und wird automatisch
+                  wieder entzogen, sobald die Registrierung abgeschlossen ist.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="registration-tier-role">
+                  Registrierungsrolle (niedrigste Stufe)
+                </label>
+                <SearchableSelect
+                  id="registration-tier-role"
+                  value={settings.registrationTierRoleId ?? ""}
+                  onChange={(v) =>
+                    update({ registrationTierRoleId: v || null })
+                  }
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— keine —"
+                  options={toRoleOptions(roles)}
+                />
+                <div className="hint">
+                  Die niedrigste Mitgliedschaftsstufe, die einmalig bei der
+                  manuellen Registrierung vergeben wird — keine höhere Stufe, da
+                  spätere Beförderungen dies nicht erneut auslösen dürfen.
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.rulesAcceptedUseDiscordScreening}
+                  onChange={(e) =>
+                    update({
+                      rulesAcceptedUseDiscordScreening: e.target.checked,
+                    })
+                  }
+                />
+                "Regeln akzeptiert" über Discords Mitgliedschafts-Screening
+                statt der Registrierungssperre-Rolle erkennen
+              </label>
+              <div className="hint">
+                Discord bietet ein eigenes "Mitgliedschafts-Screening" an
+                (Server-Einstellungen → Sicherheit), bei dem neue Mitglieder
+                Regeln zustimmen müssen, bevor sie den Server sehen. Nutzt euer
+                Server das? Dann schalte diesen Regler ein, damit die Spalte
+                "Regeln akzeptiert" in der{" "}
+                <a href="/members">Mitgliederprüfung</a> Discords eigenen Status
+                statt der Sperre-Rolle oben anzeigt. Falls unsicher: aus lassen
+                (Standard).
+              </div>
+            </>
+          )}
+        </div>
 
-      <div className="card">
-        <h2>Registrierungsformular</h2>
-        <p className="muted small">
-          Erkennt eine "name:"/"sso name:"-Nachricht im Kanal unten (z. B. das Anmeldeformular) und eröffnet einen
-          privaten Bestätigungs-Thread. Lasse den Kanal leer, um das Formular zu deaktivieren.
-        </p>
-        {!settings ? (
-          <div className="loading">Wird geladen…</div>
-        ) : (
+        <div className="card">
+          <h2>Registrierungsformular</h2>
+          <p className="muted small">
+            Erkennt eine "name:"/"sso name:"-Nachricht im Kanal unten (z. B. das
+            Anmeldeformular) und eröffnet einen privaten Bestätigungs-Thread.
+            Lasse den Kanal leer, um das Formular zu deaktivieren.
+          </p>
+          {!settings ? (
+            <div className="loading">Wird geladen…</div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="register-channel">Registrierungs-Kanal</label>
+                <SearchableSelect
+                  id="register-channel"
+                  value={settings.registerChannelId ?? ""}
+                  onChange={(v) => update({ registerChannelId: v || null })}
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={toChannelOptions(channels)}
+                />
+                <div className="hint">
+                  Der Kanal, in dem der Bot auf Formular-Einreichungen achtet.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="role-selection-channel">Rollen-Kanal</label>
+                <SearchableSelect
+                  id="role-selection-channel"
+                  value={settings.roleSelectionChannelId ?? ""}
+                  onChange={(v) =>
+                    update({ roleSelectionChannelId: v || null })
+                  }
+                  placeholder="Kanäle durchsuchen…"
+                  emptyLabel="— keiner —"
+                  options={toChannelOptions(channels)}
+                />
+                <div className="hint">
+                  Wird im Bestätigungstext als <code>{"{roleChannel}"}</code>{" "}
+                  eingesetzt.
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {settings && (
           <>
-            <div className="field">
-              <label htmlFor="register-channel">Registrierungs-Kanal</label>
-              <SearchableSelect
-                id="register-channel"
-                value={settings.registerChannelId ?? ""}
-                onChange={(v) => update({ registerChannelId: v || null })}
-                placeholder="Kanäle durchsuchen…"
-                emptyLabel="— keiner —"
-                options={toChannelOptions(channels)}
-              />
-              <div className="hint">Der Kanal, in dem der Bot auf Formular-Einreichungen achtet.</div>
-            </div>
-            <div className="field">
-              <label htmlFor="role-selection-channel">Rollen-Kanal</label>
-              <SearchableSelect
-                id="role-selection-channel"
-                value={settings.roleSelectionChannelId ?? ""}
-                onChange={(v) => update({ roleSelectionChannelId: v || null })}
-                placeholder="Kanäle durchsuchen…"
-                emptyLabel="— keiner —"
-                options={toChannelOptions(channels)}
-              />
-              <div className="hint">
-                Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
+            <div className="card">
+              <h2>Nickname-Format</h2>
+              <p className="muted small">
+                Der Vorname aus der "name:"-Zeile in Großbuchstaben, der
+                Nachname aus dem sso-Namen klein und immer ohne Schrift.
+              </p>
+              <div className="field">
+                <label htmlFor="register-nickname-emoji">Emoji</label>
+                <input
+                  id="register-nickname-emoji"
+                  type="text"
+                  value={nicknameEmoji}
+                  onChange={(e) => setNicknameEmoji(e.target.value)}
+                />
+                <div className="hint">
+                  Vorangestellt an jeden generierten Nickname.
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {settings && (
-        <>
-          <div className="card">
-            <h2>Nickname-Format</h2>
-            <p className="muted small">
-              Der Vorname aus der "name:"-Zeile in Großbuchstaben, der Nachname aus dem sso-Namen klein und immer
-              ohne Schrift.
-            </p>
-            <div className="field">
-              <label htmlFor="register-nickname-emoji">Emoji</label>
-              <input
-                id="register-nickname-emoji"
-                type="text"
-                value={nicknameEmoji}
-                onChange={(e) => setNicknameEmoji(e.target.value)}
-              />
-              <div className="hint">Vorangestellt an jeden generierten Nickname.</div>
-            </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={settings.registerNicknameUseFont}
-                onChange={(e) => update({ registerNicknameUseFont: e.target.checked })}
-              />
-              Vornamen über die globale Schrift (siehe "Schrift" oben) stylen
-            </label>
-            <div className="preview-box mt-8 mb-12">
-              {previewRegisterNickname(nicknameEmoji, settings.fontMap, settings.registerNicknameUseFont)}
-            </div>
-            <button className="primary" onClick={handleSaveNicknameEmoji} disabled={savingNicknameEmoji}>
-              {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
-            </button>
-          </div>
-
-          <div className="card">
-            <h2>Bestätigungstext</h2>
-            <p className="muted small">Gepostet in den privaten Thread, sobald das Formular eingereicht wird.</p>
-            <div className="field">
-              <label htmlFor="register-confirmation-template">Text</label>
-              <TemplateEditor
-                id="register-confirmation-template"
-                value={confirmationTemplate}
-                onChange={setConfirmationTemplate}
-                channels={channels}
-              />
-              <div className="hint">
-                Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile) und <code>{"{roleChannel}"}</code> (der
-                oben festgelegte Rollen-Kanal) — oder tippe <code>#</code>, um direkt einen beliebigen Kanal
-                einzufügen.
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.registerNicknameUseFont}
+                  onChange={(e) =>
+                    update({ registerNicknameUseFont: e.target.checked })
+                  }
+                />
+                Vornamen über die globale Schrift (siehe "Schrift" oben) stylen
+              </label>
+              <div className="preview-box mt-8 mb-12">
+                {previewRegisterNickname(
+                  nicknameEmoji,
+                  settings.fontMap,
+                  settings.registerNicknameUseFont,
+                )}
               </div>
+              <button
+                className="primary"
+                onClick={handleSaveNicknameEmoji}
+                disabled={savingNicknameEmoji}
+              >
+                {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
+              </button>
             </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={settings.registerConfirmationUseFont}
-                onChange={(e) => update({ registerConfirmationUseFont: e.target.checked })}
-              />
-              Text über die globale Schrift stylen
-            </label>
-            <div className="hint">
-              Platzhalter (<code>{"{name}"}</code>, <code>{"{roleChannel}"}</code>) bleiben immer unformatiert.
-            </div>
-            <div className="preview-box mt-8 mb-12">
-              {/*
+
+            <div className="card">
+              <h2>Bestätigungstext</h2>
+              <p className="muted small">
+                Gepostet in den privaten Thread, sobald das Formular eingereicht
+                wird.
+              </p>
+              <div className="field">
+                <label htmlFor="register-confirmation-template">Text</label>
+                <TemplateEditor
+                  id="register-confirmation-template"
+                  value={confirmationTemplate}
+                  onChange={setConfirmationTemplate}
+                  channels={channels}
+                />
+                <div className="hint">
+                  Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile)
+                  und <code>{"{roleChannel}"}</code> (der oben festgelegte
+                  Rollen-Kanal) — oder tippe <code>#</code>, um direkt einen
+                  beliebigen Kanal einzufügen.
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.registerConfirmationUseFont}
+                  onChange={(e) =>
+                    update({ registerConfirmationUseFont: e.target.checked })
+                  }
+                />
+                Text über die globale Schrift stylen
+              </label>
+              <div className="hint">
+                Platzhalter (<code>{"{name}"}</code>,{" "}
+                <code>{"{roleChannel}"}</code>) bleiben immer unformatiert.
+              </div>
+              <div className="preview-box mt-8 mb-12">
+                {/*
                 Mirrors renderConfirmation() in src/services/registration.ts:
                 {name} is `raw` (never font-mapped, regardless of useFont —
                 same as every other substituted value elsewhere in the app),
@@ -328,86 +414,122 @@ function RegistrierungSection({
                 "#name" mockup instead of a real <#id> mention) — otherwise
                 it's left for the `raw` bucket's identical fallback text.
               */}
-              <TemplatePreview
-                template={
-                  settings.roleSelectionChannelId
-                    ? confirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
-                    : confirmationTemplate
-                }
-                context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
-                channels={channels}
-                useFont={settings.registerConfirmationUseFont}
-                fontMap={settings.fontMap}
-              />
-            </div>
-            <button className="primary" onClick={handleSaveConfirmationTemplate} disabled={savingConfirmationTemplate}>
-              {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
-            </button>
-          </div>
-
-          <div className="card">
-            <h2>Abschluss</h2>
-            <p className="muted small">
-              Reguläre Registrierung: der Thread bleibt offen, bis ein Team-Mitglied die Registrierungsrolle (siehe
-              oben) manuell vergibt — der Bot postet dann den Text unten in den Thread und schließt ihn eine Stunde
-              später automatisch.
-            </p>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={settings.registerAutoComplete}
-                onChange={(e) => update({ registerAutoComplete: e.target.checked })}
-              />
-              Stattdessen sofort automatisch abschließen (ohne manuelle Prüfung)
-            </label>
-            <div className="hint">
-              Vergibt die Registrierungsrolle sofort bei Formular-Einreichung und postet den Text unten direkt.
-              Ohne gesetzte Registrierungsrolle (siehe oben) hat dieser Schalter keine Wirkung.
-            </div>
-            <div className="field">
-              <label htmlFor="auto-register-confirmation-template">Text (Registrierung abgeschlossen)</label>
-              <TemplateEditor
-                id="auto-register-confirmation-template"
-                value={autoConfirmationTemplate}
-                onChange={setAutoConfirmationTemplate}
-                channels={channels}
-              />
-              <div className="hint">
-                Gleiche Platzhalter wie oben: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code>.
+                <TemplatePreview
+                  template={
+                    settings.roleSelectionChannelId
+                      ? confirmationTemplate.replace(
+                          /\{roleChannel\}/g,
+                          `{channel:${settings.roleSelectionChannelId}}`,
+                        )
+                      : confirmationTemplate
+                  }
+                  context={{
+                    raw: {
+                      name: PREVIEW_REGISTER_NAME,
+                      roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK,
+                    },
+                  }}
+                  channels={channels}
+                  useFont={settings.registerConfirmationUseFont}
+                  fontMap={settings.fontMap}
+                />
               </div>
+              <button
+                className="primary"
+                onClick={handleSaveConfirmationTemplate}
+                disabled={savingConfirmationTemplate}
+              >
+                {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+              </button>
             </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={settings.autoRegisterConfirmationUseFont}
-                onChange={(e) => update({ autoRegisterConfirmationUseFont: e.target.checked })}
-              />
-              Text über die globale Schrift stylen
-            </label>
-            <div className="preview-box mt-8 mb-12">
-              <TemplatePreview
-                template={
-                  settings.roleSelectionChannelId
-                    ? autoConfirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
-                    : autoConfirmationTemplate
-                }
-                context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
-                channels={channels}
-                useFont={settings.autoRegisterConfirmationUseFont}
-                fontMap={settings.fontMap}
-              />
+
+            <div className="card">
+              <h2>Abschluss</h2>
+              <p className="muted small">
+                Reguläre Registrierung: der Thread bleibt offen, bis ein
+                Team-Mitglied die Registrierungsrolle (siehe oben) manuell
+                vergibt — der Bot postet dann den Text unten in den Thread und
+                schließt ihn eine Stunde später automatisch.
+              </p>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.registerAutoComplete}
+                  onChange={(e) =>
+                    update({ registerAutoComplete: e.target.checked })
+                  }
+                />
+                Stattdessen sofort automatisch abschließen (ohne manuelle
+                Prüfung)
+              </label>
+              <div className="hint">
+                Vergibt die Registrierungsrolle sofort bei Formular-Einreichung
+                und postet den Text unten direkt. Ohne gesetzte
+                Registrierungsrolle (siehe oben) hat dieser Schalter keine
+                Wirkung.
+              </div>
+              <div className="field">
+                <label htmlFor="auto-register-confirmation-template">
+                  Text (Registrierung abgeschlossen)
+                </label>
+                <TemplateEditor
+                  id="auto-register-confirmation-template"
+                  value={autoConfirmationTemplate}
+                  onChange={setAutoConfirmationTemplate}
+                  channels={channels}
+                />
+                <div className="hint">
+                  Gleiche Platzhalter wie oben: <code>{"{name}"}</code> und{" "}
+                  <code>{"{roleChannel}"}</code>.
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={settings.autoRegisterConfirmationUseFont}
+                  onChange={(e) =>
+                    update({
+                      autoRegisterConfirmationUseFont: e.target.checked,
+                    })
+                  }
+                />
+                Text über die globale Schrift stylen
+              </label>
+              <div className="preview-box mt-8 mb-12">
+                <TemplatePreview
+                  template={
+                    settings.roleSelectionChannelId
+                      ? autoConfirmationTemplate.replace(
+                          /\{roleChannel\}/g,
+                          `{channel:${settings.roleSelectionChannelId}}`,
+                        )
+                      : autoConfirmationTemplate
+                  }
+                  context={{
+                    raw: {
+                      name: PREVIEW_REGISTER_NAME,
+                      roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK,
+                    },
+                  }}
+                  channels={channels}
+                  useFont={settings.autoRegisterConfirmationUseFont}
+                  fontMap={settings.fontMap}
+                />
+              </div>
+              <button
+                className="primary"
+                onClick={handleSaveAutoConfirmationTemplate}
+                disabled={savingAutoConfirmationTemplate}
+              >
+                {savingAutoConfirmationTemplate
+                  ? "Wird gespeichert…"
+                  : "Speichern"}
+              </button>
             </div>
-            <button
-              className="primary"
-              onClick={handleSaveAutoConfirmationTemplate}
-              disabled={savingAutoConfirmationTemplate}
-            >
-              {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -418,14 +540,20 @@ interface EventsSectionProps {
   voiceChannels: Channel[];
 }
 
-function EventsSection({ settings, update, channels, voiceChannels }: EventsSectionProps) {
+function EventsSection({
+  settings,
+  update,
+  channels,
+  voiceChannels,
+}: EventsSectionProps) {
   return (
     <div className="card">
       <h2>Event-Anwesenheit (Apollo)</h2>
       <p className="muted small">
-        Erkennt Apollo-Events im Kanal unten und prüft anhand des Sprachkanals, wer teilgenommen hat (inkl.
-        Verspätung/vorzeitigem Verlassen). Ergebnis unter <a href="/events">Event-Anwesenheit</a>. Lasse einen
-        Kanal leer, um dies zu deaktivieren.
+        Erkennt Apollo-Events im Kanal unten und prüft anhand des Sprachkanals,
+        wer teilgenommen hat (inkl. Verspätung/vorzeitigem Verlassen). Ergebnis
+        unter <a href="/events">Event-Anwesenheit</a>. Lasse einen Kanal leer,
+        um dies zu deaktivieren.
       </p>
       {!settings ? (
         <div className="loading">Wird geladen…</div>
@@ -441,7 +569,9 @@ function EventsSection({ settings, update, channels, voiceChannels }: EventsSect
               emptyLabel="— keiner —"
               options={toChannelOptions(channels)}
             />
-            <div className="hint">Der Kanal, in dem Apollo seine Event-Nachrichten postet.</div>
+            <div className="hint">
+              Der Kanal, in dem Apollo seine Event-Nachrichten postet.
+            </div>
           </div>
           <div className="field">
             <label htmlFor="event-voice-channel">Event-Sprachkanal</label>
@@ -453,7 +583,10 @@ function EventsSection({ settings, update, channels, voiceChannels }: EventsSect
               emptyLabel="— keiner —"
               options={toChannelOptions(voiceChannels, "🔊 ")}
             />
-            <div className="hint">Der eine Sprachkanal, in dem alle Events stattfinden. Der Bot muss ihn sehen können.</div>
+            <div className="hint">
+              Der eine Sprachkanal, in dem alle Events stattfinden. Der Bot muss
+              ihn sehen können.
+            </div>
           </div>
         </>
       )}
@@ -488,14 +621,18 @@ export default function Settings({ me }: { me: Me }) {
   const [nicknameEmoji, setNicknameEmoji] = useState("");
   const [savingNicknameEmoji, setSavingNicknameEmoji] = useState(false);
   const [confirmationTemplate, setConfirmationTemplate] = useState("");
-  const [savingConfirmationTemplate, setSavingConfirmationTemplate] = useState(false);
+  const [savingConfirmationTemplate, setSavingConfirmationTemplate] =
+    useState(false);
   const [autoConfirmationTemplate, setAutoConfirmationTemplate] = useState("");
-  const [savingAutoConfirmationTemplate, setSavingAutoConfirmationTemplate] = useState(false);
+  const [savingAutoConfirmationTemplate, setSavingAutoConfirmationTemplate] =
+    useState(false);
   const { showError, showSuccess } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rawSection = searchParams.get("section");
-  const activeSection = SECTIONS.some((s) => s.id === rawSection) ? (rawSection as string) : DEFAULT_SECTION;
+  const activeSection = SECTIONS.some((s) => s.id === rawSection)
+    ? (rawSection as string)
+    : DEFAULT_SECTION;
 
   function setActiveSection(id: string) {
     setSearchParams((prev) => {
@@ -530,7 +667,9 @@ export default function Settings({ me }: { me: Me }) {
   async function handleSaveFont() {
     setSavingFont(true);
     try {
-      const updated = await api.updateGeneralSettings({ fontMap: fontMap || null });
+      const updated = await api.updateGeneralSettings({
+        fontMap: fontMap || null,
+      });
       settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
@@ -543,7 +682,9 @@ export default function Settings({ me }: { me: Me }) {
   async function handleSaveNicknameEmoji() {
     setSavingNicknameEmoji(true);
     try {
-      const updated = await api.updateGeneralSettings({ registerNicknameEmoji: nicknameEmoji });
+      const updated = await api.updateGeneralSettings({
+        registerNicknameEmoji: nicknameEmoji,
+      });
       settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
@@ -556,7 +697,9 @@ export default function Settings({ me }: { me: Me }) {
   async function handleSaveConfirmationTemplate() {
     setSavingConfirmationTemplate(true);
     try {
-      const updated = await api.updateGeneralSettings({ registerConfirmationTemplate: confirmationTemplate });
+      const updated = await api.updateGeneralSettings({
+        registerConfirmationTemplate: confirmationTemplate,
+      });
       settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
@@ -569,7 +712,9 @@ export default function Settings({ me }: { me: Me }) {
   async function handleSaveAutoConfirmationTemplate() {
     setSavingAutoConfirmationTemplate(true);
     try {
-      const updated = await api.updateGeneralSettings({ autoRegisterConfirmationTemplate: autoConfirmationTemplate });
+      const updated = await api.updateGeneralSettings({
+        autoRegisterConfirmationTemplate: autoConfirmationTemplate,
+      });
       settingsRes.setData(updated);
       showSuccess("Gespeichert.");
     } catch (err) {
@@ -583,9 +728,17 @@ export default function Settings({ me }: { me: Me }) {
     <div>
       <h2>Einstellungen</h2>
 
-      <Tabs tabs={SECTIONS} active={activeSection} onChange={setActiveSection} />
+      <Tabs
+        tabs={SECTIONS}
+        active={activeSection}
+        onChange={setActiveSection}
+      />
 
-      <div role="tabpanel" id={`tabpanel-${activeSection}`} aria-labelledby={`tab-${activeSection}`}>
+      <div
+        role="tabpanel"
+        id={`tabpanel-${activeSection}`}
+        aria-labelledby={`tab-${activeSection}`}
+      >
         {activeSection === "allgemein" && (
           <AllgemeinSection
             settings={settings}
@@ -612,12 +765,19 @@ export default function Settings({ me }: { me: Me }) {
             savingConfirmationTemplate={savingConfirmationTemplate}
             autoConfirmationTemplate={autoConfirmationTemplate}
             setAutoConfirmationTemplate={setAutoConfirmationTemplate}
-            handleSaveAutoConfirmationTemplate={handleSaveAutoConfirmationTemplate}
+            handleSaveAutoConfirmationTemplate={
+              handleSaveAutoConfirmationTemplate
+            }
             savingAutoConfirmationTemplate={savingAutoConfirmationTemplate}
           />
         )}
         {activeSection === "events" && (
-          <EventsSection settings={settings} update={update} channels={channels} voiceChannels={voiceChannels} />
+          <EventsSection
+            settings={settings}
+            update={update}
+            channels={channels}
+            voiceChannels={voiceChannels}
+          />
         )}
         {activeSection === "sitzung" && <SitzungSection me={me} />}
       </div>

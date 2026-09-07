@@ -1334,6 +1334,22 @@ th {
   color: var(--accent-hover);
 }
 
+/* Inline text-styled button — for actions embedded in a sentence (e.g. a hint) that shouldn't look like a form button. */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--accent-hover);
+}
+
 /* ---------------------------------------------------------------------- */
 /* Responsive layout                                                      */
 /* ---------------------------------------------------------------------- */

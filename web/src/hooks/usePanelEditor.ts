@@ -196,8 +196,14 @@ export function usePanelEditor() {
     }
   }
 
-  async function handleSend() {
+  async function handleSend(channelName: string) {
     if (typeof selectedId !== "number") return;
+    const ok = await confirmDialog({
+      title: "Nachricht senden",
+      message: `Der Bot postet diese Nachricht jetzt live in #${channelName} — alle Mitglieder mit Zugriff auf den Kanal sehen sie sofort.`,
+      confirmLabel: "Senden",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const saved = await api.sendPanel(selectedId);
