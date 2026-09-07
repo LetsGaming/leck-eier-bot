@@ -727,6 +727,22 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
     // values, they must be bound as parameters instead, never interpolated.
     d.exec(`ALTER TABLE settings ADD COLUMN register_nickname_emoji TEXT NOT NULL DEFAULT '${REGISTER_NICKNAME_EMOJI}';`);
   },
+  // v35: the two registration confirmation-thread templates could never be
+  // font-styled — renderConfirmation() (services/registration.ts) hardcoded
+  // useFont: false, unlike every other templated text in the app (birthday
+  // templates, reaction-role panels, the registration nickname), which all
+  // have their own *_use_font toggle. These two follow the same convention
+  // now, one flag per template since an admin may want one styled and not
+  // the other (e.g. the friendly auto-complete welcome, but not the
+  // functional "you'll be reviewed shortly" text). Default off, matching
+  // the previous hardcoded behavior exactly, so existing installs see no
+  // change until explicitly turned on.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN register_confirmation_use_font INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN auto_register_confirmation_use_font INTEGER NOT NULL DEFAULT 0;
+    `);
+  },
 ];
 
 /**

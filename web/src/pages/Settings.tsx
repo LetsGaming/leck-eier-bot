@@ -218,9 +218,8 @@ function RegistrierungSection({
       <div className="card">
         <h2>Registrierungsformular</h2>
         <p className="muted small">
-          Erkennt eine "name:"/"sso name:"-Nachricht im Kanal unten (z. B. das Anmeldeformular), setzt daraufhin
-          den Nickname (Format siehe unten) und eröffnet einen privaten Bestätigungs-Thread. Lasse den Kanal leer,
-          um das Formular zu deaktivieren.
+          Erkennt eine "name:"/"sso name:"-Nachricht im Kanal unten (z. B. das Anmeldeformular) und eröffnet einen
+          privaten Bestätigungs-Thread. Lasse den Kanal leer, um das Formular zu deaktivieren.
         </p>
         {!settings ? (
           <div className="loading">Wird geladen…</div>
@@ -252,10 +251,14 @@ function RegistrierungSection({
                 Wird im Bestätigungstext als <code>{"{roleChannel}"}</code> eingesetzt.
               </div>
             </div>
+          </>
+        )}
+      </div>
 
-            <hr className="divider" />
-
-            <h3>Nickname-Format</h3>
+      {settings && (
+        <>
+          <div className="card">
+            <h2>Nickname-Format</h2>
             <p className="muted small">
               Der Vorname aus der "name:"-Zeile in Großbuchstaben, der Nachname aus dem sso-Namen klein und immer
               ohne Schrift.
@@ -279,19 +282,15 @@ function RegistrierungSection({
               Vornamen über die globale Schrift (siehe "Schrift" oben) stylen
             </label>
             <div className="preview-box mt-8 mb-12">
-              {previewRegisterNickname(
-                nicknameEmoji,
-                settings.fontMap,
-                settings.registerNicknameUseFont,
-              )}
+              {previewRegisterNickname(nicknameEmoji, settings.fontMap, settings.registerNicknameUseFont)}
             </div>
             <button className="primary" onClick={handleSaveNicknameEmoji} disabled={savingNicknameEmoji}>
               {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
             </button>
+          </div>
 
-            <hr className="divider" />
-
-            <h3>Bestätigungstext</h3>
+          <div className="card">
+            <h2>Bestätigungstext</h2>
             <p className="muted small">Gepostet in den privaten Thread, sobald das Formular eingereicht wird.</p>
             <div className="field">
               <label htmlFor="register-confirmation-template">Text</label>
@@ -307,12 +306,23 @@ function RegistrierungSection({
                 einzufügen.
               </div>
             </div>
-            <div className="preview-box mb-12">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={settings.registerConfirmationUseFont}
+                onChange={(e) => update({ registerConfirmationUseFont: e.target.checked })}
+              />
+              Text über die globale Schrift stylen
+            </label>
+            <div className="hint">
+              Platzhalter (<code>{"{name}"}</code>, <code>{"{roleChannel}"}</code>) bleiben immer unformatiert.
+            </div>
+            <div className="preview-box mt-8 mb-12">
               {/*
-                Mirrors renderConfirmation() in src/events/registerWatcher.ts
-                exactly: {name} is `raw` (never font-mapped, matching the
-                real function — it never applies applyFont at all), and
-                {roleChannel} is rewritten to {channel:<id>} before
+                Mirrors renderConfirmation() in src/services/registration.ts:
+                {name} is `raw` (never font-mapped, regardless of useFont —
+                same as every other substituted value elsewhere in the app),
+                and {roleChannel} is rewritten to {channel:<id>} before
                 rendering when a role-selection channel is configured, so it
                 resolves through the core `channel` resolver (here, to a
                 "#name" mockup instead of a real <#id> mention) — otherwise
@@ -320,23 +330,23 @@ function RegistrierungSection({
               */}
               <TemplatePreview
                 template={
-                  settings?.roleSelectionChannelId
+                  settings.roleSelectionChannelId
                     ? confirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
                     : confirmationTemplate
                 }
                 context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
                 channels={channels}
-                useFont={false}
-                fontMap={null}
+                useFont={settings.registerConfirmationUseFont}
+                fontMap={settings.fontMap}
               />
             </div>
             <button className="primary" onClick={handleSaveConfirmationTemplate} disabled={savingConfirmationTemplate}>
               {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
             </button>
+          </div>
 
-            <hr className="divider" />
-
-            <h3>Abschluss</h3>
+          <div className="card">
+            <h2>Abschluss</h2>
             <p className="muted small">
               Reguläre Registrierung: der Thread bleibt offen, bis ein Team-Mitglied die Registrierungsrolle (siehe
               oben) manuell vergibt — der Bot postet dann den Text unten in den Thread und schließt ihn eine Stunde
@@ -366,17 +376,25 @@ function RegistrierungSection({
                 Gleiche Platzhalter wie oben: <code>{"{name}"}</code> und <code>{"{roleChannel}"}</code>.
               </div>
             </div>
-            <div className="preview-box mb-12">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={settings.autoRegisterConfirmationUseFont}
+                onChange={(e) => update({ autoRegisterConfirmationUseFont: e.target.checked })}
+              />
+              Text über die globale Schrift stylen
+            </label>
+            <div className="preview-box mt-8 mb-12">
               <TemplatePreview
                 template={
-                  settings?.roleSelectionChannelId
+                  settings.roleSelectionChannelId
                     ? autoConfirmationTemplate.replace(/\{roleChannel\}/g, `{channel:${settings.roleSelectionChannelId}}`)
                     : autoConfirmationTemplate
                 }
                 context={{ raw: { name: PREVIEW_REGISTER_NAME, roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK } }}
                 channels={channels}
-                useFont={false}
-                fontMap={null}
+                useFont={settings.autoRegisterConfirmationUseFont}
+                fontMap={settings.fontMap}
               />
             </div>
             <button
@@ -386,9 +404,9 @@ function RegistrierungSection({
             >
               {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
             </button>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -231,14 +231,18 @@ export interface GeneralSettings {
   roleSelectionChannelId: string | null;
   /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders. */
   registerConfirmationTemplate: string;
+  /** Whether `registerConfirmationTemplate`'s literal text renders through the global font set above — `{name}`/`{roleChannel}` are never styled either way. Off by default. */
+  registerConfirmationUseFont: boolean;
   /** Whether the generated nickname's first-name half renders through the global font set above. Defaults on. */
   registerNicknameUseFont: boolean;
   /** Prefixed onto every registration-form-generated nickname, e.g. "💙VORNAME — nachname". */
   registerNicknameEmoji: string;
   /** Off by default. When on, a valid registration-form submission immediately grants the registration-tier role instead of waiting for staff. The private thread still opens (with `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after an hour. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
-  /** Posted in the private thread instead of `registerConfirmationTemplate` when `registerAutoComplete` successfully grants the tier role. Same `{name}`/`{roleChannel}` placeholders. */
+  /** Posted in the private thread when registration is finalized, whether instantly (`registerAutoComplete`) or later once staff manually grant the role. Same `{name}`/`{roleChannel}` placeholders. */
   autoRegisterConfirmationTemplate: string;
+  /** Same as `registerConfirmationUseFont`, for `autoRegisterConfirmationTemplate`. Independent toggle. */
+  autoRegisterConfirmationUseFont: boolean;
   /** Channel the Apollo bot posts event RSVP embeds in. Null = event attendance tracking is disabled. */
   apolloEventChannelId: string | null;
   /** The one voice channel every tracked event happens in. Null = tracking never activates even if an event is parsed. */

@@ -121,7 +121,8 @@ export default function registerRegisterWatcher(client: BotClient): void {
       // Deliberately doesn't reference or link back to the register channel
       // or the original message — the thread stands on its own.
       const template = autoCompleted ? settings.autoRegisterConfirmationTemplate : settings.registerConfirmationTemplate;
-      const note = renderConfirmation(template, fields.name, settings.roleSelectionChannelId);
+      const useFont = autoCompleted ? settings.autoRegisterConfirmationUseFont : settings.registerConfirmationUseFont;
+      const note = renderConfirmation(template, fields.name, settings.roleSelectionChannelId, useFont, settings.fontMap);
       await thread.send({ content: note });
     } catch (err) {
       logger.warn(
@@ -240,6 +241,8 @@ export async function completeRegistration(client: BotClient, userId: string): P
     settings.autoRegisterConfirmationTemplate,
     record.registerSubmittedName ?? "",
     settings.roleSelectionChannelId,
+    settings.autoRegisterConfirmationUseFont,
+    settings.fontMap,
   );
   await sendToThread(client, record.registerThreadId, note);
   completeRegistrationKeepThread(userId, new Date(Date.now() + REGISTER_AUTO_THREAD_LIFETIME_MS).toISOString());

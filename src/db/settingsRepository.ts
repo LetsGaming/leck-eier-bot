@@ -20,10 +20,12 @@ interface SettingsRow {
   register_channel_id: string | null;
   role_selection_channel_id: string | null;
   register_confirmation_template: string;
+  register_confirmation_use_font: 0 | 1;
   register_nickname_use_font: 0 | 1;
   register_nickname_emoji: string;
   register_auto_complete: 0 | 1;
   auto_register_confirmation_template: string;
+  auto_register_confirmation_use_font: 0 | 1;
   apollo_event_channel_id: string | null;
   event_voice_channel_id: string | null;
 }
@@ -47,10 +49,12 @@ function rowToSettings(row: SettingsRow): Settings {
     registerChannelId: row.register_channel_id,
     roleSelectionChannelId: row.role_selection_channel_id,
     registerConfirmationTemplate: row.register_confirmation_template,
+    registerConfirmationUseFont: row.register_confirmation_use_font === 1,
     registerNicknameUseFont: row.register_nickname_use_font === 1,
     registerNicknameEmoji: row.register_nickname_emoji,
     registerAutoComplete: row.register_auto_complete === 1,
     autoRegisterConfirmationTemplate: row.auto_register_confirmation_template,
+    autoRegisterConfirmationUseFont: row.auto_register_confirmation_use_font === 1,
     apolloEventChannelId: row.apollo_event_channel_id,
     eventVoiceChannelId: row.event_voice_channel_id,
   };
@@ -63,7 +67,9 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_announcement_use_font, leave_notifications_enabled,
           register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening,
           register_channel_id, role_selection_channel_id, register_confirmation_template,
+          register_confirmation_use_font,
           register_nickname_use_font, register_nickname_emoji, register_auto_complete, auto_register_confirmation_template,
+          auto_register_confirmation_use_font,
           apollo_event_channel_id, event_voice_channel_id
    FROM settings WHERE id = 1`,
 );
@@ -85,10 +91,12 @@ const updateStmt = db.prepare<{
   registerChannelId: string | null;
   roleSelectionChannelId: string | null;
   registerConfirmationTemplate: string;
+  registerConfirmationUseFont: 0 | 1;
   registerNicknameUseFont: 0 | 1;
   registerNicknameEmoji: string;
   registerAutoComplete: 0 | 1;
   autoRegisterConfirmationTemplate: string;
+  autoRegisterConfirmationUseFont: 0 | 1;
   apolloEventChannelId: string | null;
   eventVoiceChannelId: string | null;
 }>(
@@ -110,10 +118,12 @@ const updateStmt = db.prepare<{
      register_channel_id = @registerChannelId,
      role_selection_channel_id = @roleSelectionChannelId,
      register_confirmation_template = @registerConfirmationTemplate,
+     register_confirmation_use_font = @registerConfirmationUseFont,
      register_nickname_use_font = @registerNicknameUseFont,
      register_nickname_emoji = @registerNicknameEmoji,
      register_auto_complete = @registerAutoComplete,
      auto_register_confirmation_template = @autoRegisterConfirmationTemplate,
+     auto_register_confirmation_use_font = @autoRegisterConfirmationUseFont,
      apollo_event_channel_id = @apolloEventChannelId,
      event_voice_channel_id = @eventVoiceChannelId
    WHERE id = 1`,
@@ -168,10 +178,12 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     registerChannelId: next.registerChannelId,
     roleSelectionChannelId: next.roleSelectionChannelId,
     registerConfirmationTemplate: next.registerConfirmationTemplate,
+    registerConfirmationUseFont: next.registerConfirmationUseFont ? 1 : 0,
     registerNicknameUseFont: next.registerNicknameUseFont ? 1 : 0,
     registerNicknameEmoji: next.registerNicknameEmoji,
     registerAutoComplete: next.registerAutoComplete ? 1 : 0,
     autoRegisterConfirmationTemplate: next.autoRegisterConfirmationTemplate,
+    autoRegisterConfirmationUseFont: next.autoRegisterConfirmationUseFont ? 1 : 0,
     apolloEventChannelId: next.apolloEventChannelId,
     eventVoiceChannelId: next.eventVoiceChannelId,
   });

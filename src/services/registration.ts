@@ -64,16 +64,26 @@ export function buildRegisterNickname(
 }
 
 /**
- * `{name}` is substituted via `renderTemplate()`'s `raw` bucket (unstyled —
- * `renderConfirmation` never applied `applyFont`, before or after this
- * migration). `{roleChannel}` is rewritten to the core `{channel:<id>}`
- * token before rendering when `roleSelectionChannelId` is configured, so it
- * resolves through the core `channel` resolver to `<#id>` — matching the
- * old pre-formatted `<#id>` string exactly. When no channel is configured,
+ * `{name}` is substituted via `renderTemplate()`'s `raw` bucket — always
+ * unstyled regardless of `useFont`, same as `{roleChannel}` and every other
+ * substituted value elsewhere in the app (birthday mentions, reaction-role
+ * tokens): only the template's own literal text is ever font-mapped.
+ * `{roleChannel}` is rewritten to the core `{channel:<id>}` token before
+ * rendering when `roleSelectionChannelId` is configured, so it resolves
+ * through the core `channel` resolver to `<#id>` — matching the old
+ * pre-formatted `<#id>` string exactly. When no channel is configured,
  * `{roleChannel}` is left as-is and resolved via the `raw` bucket instead,
- * to the same "dem Rollen-Kanal" fallback text as before.
+ * to the same "dem Rollen-Kanal" fallback text as before. `useFont`/`fontMap`
+ * are `settings.registerConfirmationUseFont`/`autoRegisterConfirmationUseFont`
+ * (per-template — see caller) and `settings.fontMap`.
  */
-export function renderConfirmation(template: string, name: string, roleSelectionChannelId: string | null): string {
+export function renderConfirmation(
+  template: string,
+  name: string,
+  roleSelectionChannelId: string | null,
+  useFont: boolean,
+  fontMap: string | null,
+): string {
   const effectiveTemplate = roleSelectionChannelId
     ? template.replace(/{roleChannel}/g, `{channel:${roleSelectionChannelId}}`)
     : template;
@@ -81,7 +91,7 @@ export function renderConfirmation(template: string, name: string, roleSelection
     effectiveTemplate,
     { raw: { name, roleChannel: "dem Rollen-Kanal" } },
     { channel: (id) => `<#${id}>` },
-    { useFont: false, fontMap: null },
+    { useFont, fontMap },
   );
 }
 
