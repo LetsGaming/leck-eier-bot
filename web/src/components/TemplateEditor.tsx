@@ -143,6 +143,7 @@ export default function TemplateEditor({ value, onChange, channels, placeholder,
       <textarea
         id={id}
         ref={textareaRef}
+        className="mono-input"
         value={value}
         placeholder={placeholder}
         onChange={(e) => {

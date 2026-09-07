@@ -419,7 +419,13 @@ export default function Birthdays() {
                 <label htmlFor="cron">Uhrzeit der täglichen Aufgabe</label>
                 {advancedCron ? (
                   <>
-                    <input id="cron" type="text" value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
+                    <input
+                      id="cron"
+                      type="text"
+                      className="mono-input"
+                      value={cronExpr}
+                      onChange={(e) => setCronExpr(e.target.value)}
+                    />
                     <div className="hint">
                       Cron-Ausdruck (Serverzeit), z. B. <code>0 0 * * *</code> für Mitternacht.{" "}
                       <button type="button" className="link-button" onClick={() => setAdvancedCron(false)}>
