@@ -167,6 +167,12 @@ h3 {
   padding: 32px 40px 48px;
 }
 
+/* Page title — set explicitly instead of relying on the browser's UA h2 size, so it stays a clear, consistent step above `.card h2` (16px) across browsers. */
+.main-inner > h2 {
+  font-size: 22px;
+  margin-bottom: 24px;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -1086,7 +1092,9 @@ th {
 
 .muted.small {
   font-size: 12px;
+  line-height: 1.5;
   margin-top: 4px;
+  max-width: 60ch;
 }
 
 /* Small spacing-utility scale — added for the Task 16 inline-style sweep.
