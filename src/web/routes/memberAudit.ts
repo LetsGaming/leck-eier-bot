@@ -4,7 +4,7 @@ import { getMemberRecord, getMemberRecordsByIds, listFormerMembers } from "../..
 import { getBirthdayForUser } from "../../db/birthdaysRepository.js";
 import { listSignupsForUser } from "../../db/eventAttendanceRepository.js";
 import { matchesSearch, scoreMatch } from "../../services/memberSearch.js";
-import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT } from "../../constants.js";
+import { FIND_USER_LIST_LIMIT, MEMBER_AUDIT_LEFT_LIMIT, MEMBER_RESOLVE_LIMIT } from "../../constants.js";
 import type { ZodFastifyInstance } from "../utils.js";
 import type { MemberAuditEntry } from "../../../contracts/memberAudit.js";
 import type { MemberOverview } from "../../../contracts/memberOverview.js";
@@ -42,6 +42,8 @@ const AuditQuerySchema = z.object({
 
 const UserIdParamsSchema = z.object({ userId: z.string() });
 
+const ResolveQuerySchema = z.object({ ids: z.string().min(1) });
+
 export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
   app.get("/members/audit", { schema: { querystring: AuditQuerySchema } }, async (request, reply) => {
     const { q, limit, offset, inGuildOnly } = request.query;
@@ -78,6 +80,7 @@ export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
         nickname: member.nickname,
         avatarUrl: member.displayAvatarURL({ size: 64 }),
         inGuild: true,
+        isBot: member.user.bot,
         // The live member cache is the fresher source for a current
         // member — DB-recorded joinedAt is only the fallback in case
         // seeding somehow hasn't run yet for them.
@@ -103,12 +106,48 @@ export function registerMemberAuditRoutes(app: ZodFastifyInstance): void {
       nickname: null,
       avatarUrl: buildAvatarUrl(r.userId, r.avatar),
       inGuild: false,
+      // No live cache entry left to read `.user.bot` from once someone's
+      // gone — see MemberAuditEntry.isBot's doc comment.
+      isBot: false,
       joinedAt: r.joinedAt,
       rulesAcceptedAt: r.rulesAcceptedAt,
       leftAt: r.leftAt,
     }));
 
     return { inGuild, left };
+  });
+
+  /**
+   * Bulk display-name lookup for pages that only need "what do we call this
+   * userId" rather than a full audit row — e.g. Birthdays.tsx resolving an
+   * admin-entered Discord-user-ID entry (which has no `name` on file, only
+   * the raw `<@id>` mention) to the same name Member Audit already shows for
+   * that person. Checks the live member cache first (current members),
+   * falling back to the `member_records` DB row (covers former members too)
+   * — same two-source pattern as the `inGuild`/`left` branches above. Ids
+   * with no match anywhere (never seen by the bot) are simply omitted from
+   * the response; the caller decides the fallback copy.
+   */
+  app.get("/members/resolve", { schema: { querystring: ResolveQuerySchema } }, async (request) => {
+    const userIds = [...new Set(request.query.ids.split(",").map((id) => id.trim()).filter(Boolean))].slice(
+      0,
+      MEMBER_RESOLVE_LIMIT,
+    );
+    const cache = getCachedMembers();
+    const uncached = userIds.filter((id) => !cache.has(id));
+    const records = getMemberRecordsByIds(uncached);
+
+    const names: Record<string, string> = {};
+    for (const id of userIds) {
+      const cached = cache.get(id);
+      if (cached) {
+        names[id] = cached.displayName;
+        continue;
+      }
+      const record = records.get(id);
+      if (record) names[id] = record.displayName;
+    }
+    return { names };
   });
 
   /**

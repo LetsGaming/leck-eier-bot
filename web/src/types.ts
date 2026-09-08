@@ -215,6 +215,21 @@ export function defaultGateFor(permission?: CommandPermission): PermissionGate {
   }
 }
 
+/**
+ * Display label for a {@link WebRole} — the dashboard's own permission
+ * tier, always called "Berechtigungsstufe" in the UI and never "Rolle"
+ * (that word is reserved for an actual Discord role; see the explainer on
+ * /commands, the tier concept's first-encountered surface). Single source
+ * of truth for Commands.tsx's tier picker and Settings.tsx's Konto tab,
+ * which previously kept two separately hand-maintained label maps that had
+ * drifted apart (one cumulative — "Bot- oder Server-Besitzer" — one not).
+ */
+export const WEB_ROLE_LABELS: Record<WebRole, string> = {
+  "bot-owner": "Bot-Besitzer",
+  "guild-owner": "Server-Besitzer",
+  admin: "Admin",
+};
+
 export interface GeneralSettings {
   leaveNotificationsEnabled: boolean;
   /** Pasted 52-character stylized alphabet (AaBbCc...XxYyZz, one for one), set once and reused by any feature with its own "use font" toggle — see Birthdays and Reaction Roles. Null = no font configured. */

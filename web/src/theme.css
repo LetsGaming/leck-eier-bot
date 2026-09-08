@@ -20,12 +20,20 @@
      across pages instead of each accumulating its own one-off px number.
      --fs-meta and --fs-small sit close together deliberately (both read as
      "smaller than body"); the jobs they do are told apart by weight/case/
-     color (see th/.badge vs. label/.hint), not by size alone. */
+     color (see th/.badge vs. label/.hint), not by size alone. --fs-display*
+     is the deliberate outlier at the top: the one role allowed to jump the
+     scale rather than step through it, reserved for the single number a
+     stat tile exists to show — everything else earns its size from a
+     neighboring step, not a one-off value (previously ~20 rules didn't:
+     the live detector flagged the resulting cluster as a flat, ~1.9:1
+     hierarchy on every route). */
   --fs-meta: 11px; /* badges, uppercase table headers, timestamps — decorative/meta, never prose */
   --fs-small: 12px; /* hints, field labels, secondary notes — supporting text, not the primary read */
   --fs-body: 14px; /* the default reading size: prose, inputs, table cells, alerts, toasts, previews */
   --fs-heading-sm: 16px; /* card/section headings */
   --fs-heading-lg: 22px; /* page titles */
+  --fs-display-sm: 24px; /* a stat-tile value too long to read comfortably at --fs-display (e.g. a date) */
+  --fs-display: 32px; /* the one number a stat tile exists to show — Overview/Birthdays' hero values */
 
   /* Shell metrics. */
   --sidebar-w: 220px;
@@ -112,7 +120,7 @@ code {
 }
 
 .sidebar h1 {
-  font-size: 15px;
+  font-size: var(--fs-heading-sm);
   padding: 0 8px 16px;
   color: var(--text);
 }
@@ -160,7 +168,7 @@ code {
 
 .sidebar .user {
   padding: 8px;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
   border-top: 1px solid var(--border);
   margin-top: 8px;
@@ -202,8 +210,17 @@ code {
    browsers. Weight 700 (vs. every other heading's shared 600) is a second,
    independent signal that this is the page's apex — size alone doesn't have
    room to do that job on its own without colliding with .stat-tile .value's
-   24px, which sits on the same page for several routes. */
-.main-inner > h2 {
+   32px, which sits on the same page for several routes.
+   Descendant selector, not `.main-inner > h2`: every page wraps its own
+   content in a bare outer <div> (see e.g. Settings.tsx/Birthdays.tsx), so
+   the title is always a grandchild of `.main-inner`, never a direct child —
+   the `>` combinator never matched, and every page title silently fell
+   back to the browser's UA h2 size (a ~1px difference from the intended
+   22px, easy to miss) instead of this rule. `.card h2` has identical
+   specificity to this rule (one class + one element each) but is defined
+   later in this file, so it still correctly wins the tie for card
+   headings — reorder with care if this ever moves. */
+.main-inner h2 {
   font-size: var(--fs-heading-lg);
   font-weight: 700;
   margin-bottom: 24px;
@@ -214,6 +231,23 @@ code {
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 20px;
   margin-bottom: 20px;
+}
+
+/* Settings → Registrierung specifically: its 5 cards carry the app's
+   densest hint prose (up to 9 lines), and the default 340px floor let 4 of
+   them share one row on a normal desktop viewport, squeezing that prose to
+   a ~35-character measure — well under the 45–75ch comfortable range —
+   right on the screen where careful reading matters most. A higher floor
+   caps it at 2 columns instead. */
+.card-grid-registration {
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  /* Grid's default stretch makes a short card (e.g. "Registrierungsformular",
+     one field) fill its row up to its tallest neighbor's height — reads as a
+     broken, mostly-empty bordered box on this section's most content-uneven
+     row pairings. Top-aligning instead lets each card hug its own content;
+     any leftover row height becomes plain page whitespace beside it, not an
+     empty shape inside a border. */
+  align-items: start;
 }
 
 .card-grid .card {
@@ -229,7 +263,14 @@ code {
 }
 
 .card h2 {
-  font-size: 16px;
+  font-size: var(--fs-heading-sm);
+  /* Explicit, not inherited from the shared h1/h2/h3 rule: now that
+     `.main-inner h2` (a descendant, not direct-child, selector — see its
+     own comment) actually matches every h2 including these nested ones,
+     its weight:700 would otherwise win here too on equal specificity by
+     simply being the later, more powerful rule for `font-weight` with
+     nothing at this selector to override it back down. */
+  font-weight: 600;
 }
 
 .attention-card {
@@ -252,7 +293,7 @@ code {
 .card > summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 16px;
+  font-size: var(--fs-heading-sm);
   list-style: none;
 }
 
@@ -285,13 +326,13 @@ code {
 
 .stat-tile .label {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-small);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .stat-tile .value {
-  font-size: 24px;
+  font-size: var(--fs-display);
   font-weight: 600;
   margin-top: 4px;
   overflow-wrap: break-word;
@@ -301,14 +342,14 @@ code {
 /* A `.stat-tile .value` shrunk down for a date-shaped value (Birthdays'
    "next up" tile) instead of the default large number size. */
 .stat-tile .value.fs-18 {
-  font-size: 18px;
+  font-size: var(--fs-display-sm);
 }
 
 label {
   display: block;
   font-weight: 500;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
 }
 
@@ -324,7 +365,7 @@ textarea {
   color: var(--text);
   padding: 8px 10px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--fs-body);
 }
 
 /* Matches SearchableSelect's own trigger arrow (▾, var(--text-muted), 11px)
@@ -359,7 +400,7 @@ textarea:focus {
 
 .field .hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin-top: 4px;
 }
 
@@ -383,7 +424,7 @@ textarea:focus {
 
 button {
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--fs-body);
   font-weight: 500;
   border: none;
   border-radius: var(--radius);
@@ -447,14 +488,14 @@ td {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 th {
   color: var(--text-muted);
   font-weight: 500;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
@@ -467,7 +508,7 @@ th p {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   font-weight: 600;
 }
 
@@ -518,7 +559,7 @@ th p {
 }
 
 .role-checkbox-pill {
-  font-size: 13px;
+  font-size: var(--fs-body);
   background: var(--bg-elevated);
   padding: 2px 8px;
   border-radius: 999px;
@@ -560,7 +601,7 @@ th p {
 }
 
 .emoji-picker-trigger .muted {
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 
 .emoji-picker-thumb {
@@ -592,7 +633,7 @@ th p {
 
 .emoji-picker-section {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 6px 2px 4px;
@@ -663,11 +704,12 @@ th p {
 }
 
 .searchable-select-popover {
-  position: absolute;
+  /* position/top/left/width are set inline per-instance (SearchableSelect.tsx)
+     against the viewport, not this rule — a plain `position: absolute` here
+     got clipped by any scroll-clipping ancestor (e.g. `.table-scroll`,
+     present on 6 pages), which is what made Event-Anwesenheit's "Mitglied
+     zuordnen…" picker unusable. */
   z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
   min-width: 220px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -711,12 +753,17 @@ th p {
   display: block;
 }
 
+/* This block's own child sizes below (bot-tag, embed-desc, reaction, button:
+   10/13/13/13px) are deliberately NOT part of this app's --fs-* scale —
+   they mirror Discord's actual client type sizes so the preview stays
+   pixel-accurate to what a member will really see, which is the whole
+   point of rendering a live mockup instead of a template dump. */
 .message-preview {
   background: #313338;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  font-size: 14px;
+  font-size: var(--fs-body);
   color: #dbdee1;
   max-width: 640px;
 }
@@ -758,7 +805,7 @@ th p {
 
 .message-preview-timestamp {
   margin-left: 6px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 
 .message-preview-text {
@@ -904,7 +951,7 @@ th p {
   padding: 10px 14px;
   border-radius: var(--radius);
   margin-bottom: 16px;
-  font-size: 13px;
+  font-size: var(--fs-small);
 }
 
 .alert.error {
@@ -966,7 +1013,7 @@ th p {
   gap: 10px;
   padding: 12px 14px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-small);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
   animation: toast-in 0.15s ease-out;
@@ -1021,7 +1068,7 @@ th p {
   border-radius: var(--radius);
   padding: 12px;
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: var(--fs-small);
 }
 
 .template-editor {
@@ -1050,7 +1097,7 @@ th p {
   border: 1px solid var(--border);
   background: var(--bg-inset);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 500;
 }
 
@@ -1076,7 +1123,7 @@ th p {
   border-radius: var(--radius);
   background: var(--bg-inset);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -1170,7 +1217,7 @@ th p {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
   margin-bottom: 16px;
 }
@@ -1201,7 +1248,7 @@ th p {
 }
 
 .muted.small {
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   margin-top: 4px;
   max-width: 60ch;
@@ -1249,6 +1296,15 @@ th p {
 
 .field-auto {
   flex: 0 0 auto;
+}
+
+/* A Speichern button paired with its dirty-state indicator (see
+   Settings.tsx/Birthdays.tsx) — unlike `.row`, children keep their natural
+   width instead of stretching to fill equally. */
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* A plain <hr> styled to match the rest of the app's border color instead
@@ -1308,7 +1364,7 @@ th p {
 .month-nav-label {
   background: transparent;
   padding: 8px 4px;
-  font-size: 20px;
+  font-size: var(--fs-heading-sm);
   font-weight: 700;
 }
 
@@ -1380,7 +1436,7 @@ th p {
   border-radius: 999px;
   background: var(--accent);
   color: white;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   line-height: 18px;
 }
@@ -1412,18 +1468,42 @@ th p {
   margin-bottom: 12px;
 }
 
+/* A real grid, not flex-wrap: each `.tally-item` (label above value) is its
+   own track, so wrapped rows stay column-aligned instead of the ragged
+   left-to-right flow flex-wrap produced — a value in row 2 lines up under
+   the value directly above it in row 1. */
 .tally-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, max-content));
+  gap: 16px 24px;
   margin-bottom: 20px;
 }
 
-/* Forces a "davon ... leicht verspätet"-style footnote onto its own line
-   within a `.tally-grid` (which otherwise flows its label/value pairs
-   inline) and drops the <p>/`.muted.small` default margins. */
+.tally-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The RSVP summary row (Zugesagt/Vielleicht/Abgesagt/…) sits directly above
+   the attendance-status grid below it with no other content between them —
+   the shared `.tally-grid` bottom margin and `.muted.small`'s default top
+   margin both just add unwanted gap here, unlike every other `.tally-grid`/
+   `.muted.small` use elsewhere. */
+.tally-grid-rsvp {
+  margin-bottom: 0;
+}
+
+.tally-grid-rsvp .muted.small {
+  margin-top: 0;
+}
+
+/* Forces a "davon ... leicht verspätet"-style footnote onto its own full-width
+   row within a `.tally-grid` — `grid-column: 1 / -1` spans every track
+   instead of `width: 100%`, which on a grid item only fills its own
+   auto-placed column — and drops the <p>/`.muted.small` default margins. */
 .tally-note {
-  width: 100%;
+  grid-column: 1 / -1;
   margin: 0;
 }
 
@@ -1490,7 +1570,7 @@ th p {
     background: var(--bg-inset);
     border-bottom: 1px solid var(--border);
     font-weight: 600;
-    font-size: 14px;
+    font-size: var(--fs-body);
   }
 
   .menu-toggle {
@@ -1692,7 +1772,7 @@ th p {
     content: attr(data-label);
     flex-shrink: 0;
     font-weight: 500;
-    font-size: 11px;
+    font-size: var(--fs-meta);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);

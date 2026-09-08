@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-08T12:16:00Z",
+  "title": "Design System: leck-eier-bot Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "discord-blurple": { "role": "primary", "displayName": "Discord Blurple", "canonical": "#5865f2", "tonalRamp": ["#060b47", "#0a1584", "#0f1dbd", "#1c2eed", "#5562f2", "#848ef5", "#b3b9f9", "#e7e9fd"] },
+      "discord-blurple-hover": { "role": "primary-hover", "displayName": "Discord Blurple Hover", "canonical": "#4752c4" },
+      "client-chrome-base": { "role": "neutral", "displayName": "Client Chrome Base", "canonical": "#313338", "tonalRamp": ["#242529", "#43454c", "#5f636d", "#7c818d", "#9da1a9", "#b8bbc1", "#d3d5d9", "#f1f2f3"] },
+      "client-chrome-elevated": { "role": "neutral", "displayName": "Client Chrome Elevated", "canonical": "#2b2d31" },
+      "client-chrome-inset": { "role": "neutral", "displayName": "Client Chrome Inset", "canonical": "#1e1f22" },
+      "border-subtle": { "role": "neutral", "displayName": "Border Subtle", "canonical": "#3f4147" },
+      "text-primary": { "role": "neutral", "displayName": "Text Primary", "canonical": "#f2f3f5" },
+      "text-muted": { "role": "neutral", "displayName": "Text Muted", "canonical": "#949ba4" },
+      "success": { "role": "status", "displayName": "Success", "canonical": "#23a55a", "tonalRamp": ["#0d3f22", "#197640", "#24a85c", "#35d478", "#68df9a", "#92e8b6", "#bcf1d2", "#eafbf1"] },
+      "success-tint-text": { "role": "status-on-tint", "displayName": "Success Tint Text", "canonical": "#7ee2a8" },
+      "success-tint-bg": { "role": "status-on-tint", "displayName": "Success Tint Background", "canonical": "#12271c" },
+      "danger": { "role": "status", "displayName": "Danger", "canonical": "#f23f42", "tonalRamp": ["#480506", "#86090b", "#bf0d10", "#ef1a1d", "#f35356", "#f78385", "#fab3b4", "#fde7e7"] },
+      "danger-deep": { "role": "status-hover", "displayName": "Danger Deep", "canonical": "#da373c" },
+      "danger-severe": { "role": "status-severity", "displayName": "Danger Severe", "canonical": "#a12226" },
+      "danger-tint-text": { "role": "status-on-tint", "displayName": "Danger Tint Text", "canonical": "#ff8a8d" },
+      "danger-tint-bg": { "role": "status-on-tint", "displayName": "Danger Tint Background", "canonical": "#2b1416" },
+      "warning": { "role": "status", "displayName": "Warning", "canonical": "#f0b232", "tonalRamp": ["#473205", "#855d0a", "#be850e", "#eea91b", "#f2bf54", "#f6d183", "#f9e2b3", "#fdf6e7"] },
+      "warning-deep": { "role": "status-severity", "displayName": "Warning Deep", "canonical": "#e8730c" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The single hero number a stat tile exists to show. Never reused elsewhere." },
+      "headline": { "displayName": "Headline", "purpose": "Page titles only, one per page." },
+      "title": { "displayName": "Title", "purpose": "Card and section headings." },
+      "body": { "displayName": "Body", "purpose": "Default reading size: prose, inputs, table cells, alerts, toasts, template previews." },
+      "label": { "displayName": "Label", "purpose": "Field labels, hints, secondary notes." },
+      "meta": { "displayName": "Meta", "purpose": "Badges, table headers, timestamps — uppercase, tracked, never prose." },
+      "code": { "displayName": "Code", "purpose": "Inline syntax/data: template tokens, cron expressions, Discord snowflake IDs." }
+    },
+    "shadows": [
+      { "name": "popover", "value": "0 8px 24px rgba(0,0,0,0.4)", "purpose": "SearchableSelect's popover, the emoji picker, the month-calendar picker." },
+      { "name": "modal", "value": "0 16px 48px rgba(0,0,0,0.45)", "purpose": "The confirm dialog — the single heaviest shadow, reserved for the one surface that blocks the whole page." },
+      { "name": "toast", "value": "0 8px 24px rgba(0,0,0,0.35)", "purpose": "Transient success/error notifications, bottom-right." }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "0.15s ease", "purpose": "Default transition for switch toggles and hover color changes." },
+      { "name": "drawer-slide", "value": "0.2s ease", "purpose": "Mobile sidebar drawer slide-in/out transform, below the 860px shell breakpoint." },
+      { "name": "toast-enter", "value": "0.15s ease-out", "purpose": "Toast entrance: fade in + translateY(8px -> 0)." }
+    ],
+    "breakpoints": [
+      { "name": "content", "value": "700px" },
+      { "name": "shell", "value": "860px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one call-to-action color in the system — save/confirm actions, used sparingly.",
+      "html": "<button class=\"ds-btn-primary\">Änderungen speichern</button>",
+      "css": ".ds-btn-primary { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; background: #5865f2; color: #ffffff; transition: background 0.15s ease; } .ds-btn-primary:hover { background: #4752c4; } .ds-btn-primary:focus-visible { outline: 2px solid #5865f2; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "A deliberately two-stage warning: quiet outline at rest, fills solid only when hovered right before commit.",
+      "html": "<button class=\"ds-btn-danger\">Löschen</button>",
+      "css": ".ds-btn-danger { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; border-radius: 8px; padding: 8px 16px; cursor: pointer; background: transparent; color: #f23f42; border: 1px solid #f23f42; transition: background 0.15s ease, color 0.15s ease; } .ds-btn-danger:hover { background: #f23f42; color: #ffffff; } .ds-btn-danger:focus-visible { outline: 2px solid #f23f42; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The fallback for every button that isn't primary or destructive.",
+      "html": "<button class=\"ds-btn-ghost\">Abbrechen</button>",
+      "css": ".ds-btn-ghost { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; background: #1e1f22; color: #f2f3f5; } .ds-btn-ghost:hover { background: #26282c; } .ds-btn-ghost:focus-visible { outline: 2px solid #5865f2; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Client Chrome Inset background reads as a recessed 'where you type' well, matching Discord's own input fields.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-example\">Kanal</label><input id=\"ds-example\" class=\"ds-input\" type=\"text\" placeholder=\"Kanäle durchsuchen…\" /></div>",
+      "css": ".ds-field label { display: block; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-weight: 500; margin-bottom: 6px; font-size: 12px; color: #949ba4; } .ds-input { width: 100%; box-sizing: border-box; background: #1e1f22; border: 1px solid #3f4147; border-radius: 8px; color: #f2f3f5; padding: 8px 10px; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; } .ds-input:focus { outline: 2px solid #5865f2; outline-offset: -1px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat at rest, no shadow — depth comes only from sitting one step up the Client Chrome tonal ladder.",
+      "html": "<div class=\"ds-card\"><h2 class=\"ds-card-title\">Nachrichtenvorlage</h2><p class=\"ds-card-text\">Legt fest, wie die Nachricht aussieht.</p></div>",
+      "css": ".ds-card { background: #2b2d31; border: 1px solid #3f4147; border-radius: 8px; padding: 20px; } .ds-card-title { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; margin: 0 0 12px; color: #f2f3f5; } .ds-card-text { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #949ba4; margin: 0; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-ok",
+      "description": "Full-round pill, a tinted fill over its own solid text color — 'ok' shown here, 'warn'/'error'/'moderate'/'severe' swap success for warning/danger.",
+      "html": "<span class=\"ds-badge ds-badge-ok\">selbst registriert</span>",
+      "css": ".ds-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; } .ds-badge-ok { background: rgba(35,165,90,0.15); color: #23a55a; }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "input",
+      "refersTo": "switch",
+      "description": "A checkbox re-skinned as a pill toggle — appearance:none drops the native control so the thumb is drawn via ::after.",
+      "html": "<label class=\"ds-switch\"><input type=\"checkbox\" checked /> Schrift verwenden</label>",
+      "css": ".ds-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #f2f3f5; } .ds-switch input { appearance: none; -webkit-appearance: none; position: relative; width: 36px; height: 20px; margin: 0; border-radius: 999px; background: #1e1f22; border: 1px solid #3f4147; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; } .ds-switch input::after { content: \"\"; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #949ba4; transition: transform 0.15s ease, background-color 0.15s ease; } .ds-switch input:checked { background: #5865f2; border-color: #5865f2; } .ds-switch input:checked::after { transform: translateX(16px); background: #fff; } .ds-switch input:focus-visible { outline: 2px solid #5865f2; outline-offset: 2px; }"
+    },
+    {
+      "name": "Discord Message Preview",
+      "kind": "custom",
+      "refersTo": "message-preview",
+      "description": "Signature component — a pixel-accurate mockup of how a composed message will actually render on Discord, shown before an admin sends anything live. Uses Discord's own client sizes for its inner text, not this app's own type scale.",
+      "html": "<div class=\"ds-message-preview\"><div class=\"ds-mp-header\"><div class=\"ds-mp-avatar\">🤖</div><div><span class=\"ds-mp-author\">leck-eier-bot <span class=\"ds-mp-bot-tag\">BOT</span></span><span class=\"ds-mp-timestamp\">Heute um 12:00</span></div></div><div class=\"ds-mp-text\">Reagiere, um eine Rolle zu erhalten!</div><div class=\"ds-mp-reactions\"><span class=\"ds-mp-reaction\">🎮 <span class=\"ds-mp-count\">1</span></span><span class=\"ds-mp-reaction\">🎨 <span class=\"ds-mp-count\">1</span></span></div></div>",
+      "css": ".ds-message-preview { background: #313338; border: 1px solid #3f4147; border-radius: 8px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #dbdee1; max-width: 640px; } .ds-mp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; } .ds-mp-avatar { width: 36px; height: 36px; border-radius: 50%; background: #5865f2; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; } .ds-mp-author { font-weight: 600; color: #f2f3f5; } .ds-mp-bot-tag { background: #5865f2; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; vertical-align: middle; margin-left: 2px; } .ds-mp-timestamp { margin-left: 6px; font-size: 11px; color: #949ba4; } .ds-mp-text { white-space: pre-wrap; margin-left: 48px; } .ds-mp-reactions { margin-left: 48px; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; } .ds-mp-reaction { display: inline-flex; align-items: center; gap: 4px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 999px; padding: 2px 8px; font-size: 13px; } .ds-mp-count { color: #949ba4; }"
+    },
+    {
+      "name": "SearchableSelect",
+      "kind": "custom",
+      "refersTo": "searchable-select",
+      "description": "Signature component — the one combobox pattern reused for every role/channel/member picker: type-to-filter, portal-positioned popover, full keyboard nav. Shown here in its open state.",
+      "html": "<div class=\"ds-searchable-select\"><button class=\"ds-ss-trigger\">#allgemein <span class=\"ds-ss-arrow\">▾</span></button><div class=\"ds-ss-popover\"><input class=\"ds-ss-search\" type=\"text\" placeholder=\"Kanäle durchsuchen…\" /><div class=\"ds-ss-list\"><button class=\"ds-ss-option ds-ss-highlighted\">#allgemein</button><button class=\"ds-ss-option\">#mod-only</button></div></div></div>",
+      "css": ".ds-searchable-select { position: relative; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; } .ds-ss-trigger { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; background: #1e1f22; border: 1px solid #3f4147; border-radius: 8px; color: #f2f3f5; padding: 8px 10px; cursor: pointer; } .ds-ss-arrow { color: #949ba4; font-size: 11px; } .ds-ss-popover { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 220px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); padding: 8px; box-sizing: border-box; } .ds-ss-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; background: #1e1f22; border: 1px solid #3f4147; border-radius: 8px; color: #f2f3f5; padding: 8px 10px; } .ds-ss-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; } .ds-ss-option { display: block; width: 100%; text-align: left; background: transparent; border: none; color: #f2f3f5; padding: 6px 8px; border-radius: 6px; cursor: pointer; } .ds-ss-option:hover, .ds-ss-highlighted { background: #1e1f22; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Same Client, Different Door",
+    "overview": "This dashboard doesn't approximate a dark theme — its background, elevation, border, text, and accent colors are Discord's own actual client values, byte-for-byte: #313338, #2b2d31, #1e1f22, and Discord's brand Blurple #5865f2 all appear here exactly as they do in Discord itself. The premise is that an admin who moderates this server all day should never feel like they've left Discord to configure it; they've just walked through a different door into the same building. Nothing about the visual language is invented or 'inspired by' — it's borrowed, deliberately and completely, in service of a single primary user who is fluent in Discord and nothing else about bot-admin tooling.\n\nThat borrowing extends to restraint, not just color: components are quiet and utilitarian by design. Flat cards, an 8px radius everywhere, minimal chrome — the interface recedes so a moderator's actual task stays the visual subject, not the app around it. This is a data-forward, Operate-mode tool built for one specific community's returning admins, not a first-impression surface for strangers.\n\nTwo confirmed rejections bound the system on both sides: it must never drift toward a generic glossy SaaS admin panel, and — despite the bot's own informal, irreverent name — it must never read as playful or cartoonish. The tone is a serious moderation tool wearing Discord's own clothes, not a whimsical companion app.",
+    "keyCharacteristics": [
+      "Every core color is Discord's own value, not an approximation or a 'matching' palette.",
+      "Flat at rest everywhere; shadow exists only on content that floats above the page (popovers, the confirm dialog, toasts).",
+      "Type scale is named by role, not authored per page, so the same role is pixel-identical everywhere.",
+      "No component library, no state-management library — every control is hand-built from plain CSS custom properties.",
+      "Dense, data-forward layouts tuned for a returning admin working through a real task, not a stranger's first five minutes."
+    ],
+    "rules": [
+      { "name": "The Borrowed, Not Inspired Rule", "body": "Every core color is Discord's own actual value, not a palette 'inspired by' or 'matching' Discord. A new color proposed for this system must be justified against a real Discord client color it borrows from — never invented from taste alone.", "section": "colors" },
+      { "name": "The Named-Role Rule", "body": "Every text size is a named role (display/headline/title/body/label/meta), never a one-off pixel value authored per page. A repeated role must stay pixel-identical everywhere it appears; a genuinely new size needs a new named role, not a local exception.", "section": "typography" },
+      { "name": "The Flat-at-Rest Rule", "body": "Cards, stat tiles, and every other resting surface never carry a shadow — depth there comes only from the Client Chrome tonal ladder. Shadow appears exclusively on content that floats above the page: popovers, the confirm dialog, and toasts.", "section": "elevation" },
+      { "name": "The Signal Border Rule", "body": "A colored (non-border-subtle) border always means something specific: warning on an attention-needed card, accent on the current month-calendar cell or an event-card's hover/focus state. A neutral card's border is always border-subtle — reach for a colored border only to signal state, never for visual variety.", "section": "typography" }
+    ],
+    "dos": [
+      "Do pull any new color directly from Discord's own client or brand palette — never invent or approximate one.",
+      "Do keep every resting surface flat; reserve shadow strictly for popovers, modals, and toasts.",
+      "Do give a repeated text role the same pixel size everywhere; add a new named role rather than a one-off size.",
+      "Do pair every nav icon with a text label — never icon-only navigation.",
+      "Do use a colored border only to signal state (attention, current, hover/focus) — otherwise border-subtle."
+    ],
+    "donts": [
+      "Don't introduce gradients, marketing-site polish, or 'enterprise SaaS dashboard' visual clichés.",
+      "Don't let the interface read as playful or cartoonish, despite the bot's own informal name.",
+      "Don't add a light-mode variant without a deliberate product decision.",
+      "Don't introduce a component library or state-management library.",
+      "Don't nest a .card inside another .card."
+    ]
+  }
+}

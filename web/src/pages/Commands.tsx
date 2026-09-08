@@ -3,21 +3,15 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
 import { useCommands } from "../hooks/useCommands";
-import { defaultGateFor } from "../types";
+import { defaultGateFor, WEB_ROLE_LABELS } from "../types";
 import type { CommandDef, PermissionGate, RoleOption, WebRole } from "../types";
 
 type GateMode = PermissionGate["mode"];
 
-const TIER_LABELS: Record<WebRole, string> = {
-  "bot-owner": "Bot-Besitzer",
-  "guild-owner": "Bot- oder Server-Besitzer",
-  admin: "Bot-Besitzer, Server-Besitzer oder Admin",
-};
-
 const MODE_LABELS: Record<GateMode, string> = {
   everyone: "Jeder",
   role: "Bestimmte Rolle",
-  tier: "Mindestrang",
+  tier: "Mindest-Berechtigungsstufe",
 };
 
 function gateLabel(gate: PermissionGate, roles: RoleOption[]): string {
@@ -25,7 +19,7 @@ function gateLabel(gate: PermissionGate, roles: RoleOption[]): string {
     case "everyone":
       return "Jeder";
     case "tier":
-      return TIER_LABELS[gate.tier];
+      return WEB_ROLE_LABELS[gate.tier];
     case "role": {
       const role = roles.find((r) => r.id === gate.roleId);
       return role ? `Rolle: ${role.name}` : "Rolle (unbekannt)";
@@ -44,13 +38,14 @@ export default function Commands() {
   // been picked/saved — the underlying gate is still "everyone"/"tier" at
   // that point, so the select's displayed mode would otherwise snap back.
   const [pendingMode, setPendingMode] = useState<Record<string, GateMode>>({});
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
 
   async function toggle(name: string, field: "enabled" | "guildOnly", value: boolean) {
     setPending(name);
     try {
       const updated = await api.updateCommand(name, { [field]: value });
       setCommands((prev) => prev?.map((c) => (c.name === name ? updated : c)) ?? null);
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -63,6 +58,7 @@ export default function Commands() {
     try {
       const updated = await api.updateCommand(name, { permissionGate: gate });
       setCommands((prev) => prev?.map((c) => (c.name === name ? updated : c)) ?? null);
+      showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
@@ -107,7 +103,7 @@ export default function Commands() {
   return (
     <div>
       <h2>Befehle</h2>
-      <p className="muted">
+      <p className="muted small">
         Das Deaktivieren eines Befehls entfernt ihn innerhalb einer Minute aus Discords Slash-Befehlsliste — kein Neustart nötig.
       </p>
       <div className="card">
@@ -123,9 +119,10 @@ export default function Commands() {
                   <th>
                     Berechtigung
                     <p className="muted small">
-                      "Bestimmte Rolle" erlaubt eine einzelne Discord-Rolle;
-                      "Mindestrang" erlaubt ab einem bestimmten Bot-Team-Rang
-                      (z. B. nur Admins) unabhängig von Discord-Rollen.
+                      "Bestimmte Rolle" erlaubt genau einer Discord-Rolle deines Servers, den Befehl zu nutzen.
+                      "Mindest-Berechtigungsstufe" ist davon unabhängig — eine eigene, dreistufige Rangfolge dieses
+                      Bots (Bot-Besitzer &gt; Server-Besitzer &gt; Admin), losgelöst von Discord-Rollen: Wer die
+                      gewählte Stufe oder eine höhere hat, darf den Befehl nutzen.
                     </p>
                   </th>
                   <th>Aktiviert</th>
@@ -160,14 +157,14 @@ export default function Commands() {
                         </select>
                         {mode === "tier" && (
                           <select
-                            aria-label={`/${c.name} Mindestrang`}
+                            aria-label={`/${c.name} Mindest-Berechtigungsstufe`}
                             value={eff.mode === "tier" ? eff.tier : "admin"}
                             disabled={pending === c.name}
                             onChange={(e) => handleTierChange(c, e.target.value as WebRole)}
                           >
-                            <option value="bot-owner">{TIER_LABELS["bot-owner"]}</option>
-                            <option value="guild-owner">{TIER_LABELS["guild-owner"]}</option>
-                            <option value="admin">{TIER_LABELS.admin}</option>
+                            <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
+                            <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
+                            <option value="admin">{WEB_ROLE_LABELS.admin}</option>
                           </select>
                         )}
                         {mode === "role" && (

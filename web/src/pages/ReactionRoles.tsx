@@ -3,6 +3,7 @@ import RoleCheckboxList from "../components/RoleCheckboxList";
 import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
+import { useUnsavedChanges } from "../components/UnsavedChangesContext";
 import { useChannels } from "../hooks/useChannels";
 import { useEmojis } from "../hooks/useEmojis";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
@@ -85,6 +86,7 @@ export default function ReactionRoles() {
     selected,
     form,
     setForm,
+    formDirty,
     selectionType,
     setSelectionType,
     attachMode,
@@ -111,6 +113,7 @@ export default function ReactionRoles() {
     optionCap,
     atOptionCap,
     usedRoleIds,
+    mappingsDirty,
     handleAddMapping,
     handleRemoveMapping,
     handleStartEditMapping,
@@ -118,6 +121,12 @@ export default function ReactionRoles() {
     handleSaveEditMapping,
     handleMove,
   } = useMappingEditor(selected, effectiveSelectionType, panelsRes, busy, setBusy);
+
+  // Closes the exact gap the last critique flagged: this page has the same
+  // manual-save-button shape as Settings/Birthdays, so an admin has every
+  // reason to expect the same "don't lose my edit" protection those pages
+  // already have.
+  useUnsavedChanges(formDirty || mappingsDirty);
 
   function roleName(roleId: string): string {
     return roles.find((r) => r.id === roleId)?.name ?? roleId;
@@ -310,9 +319,16 @@ export default function ReactionRoles() {
                   </>
                 )}
 
-                <button className="primary" onClick={handleSavePanel} disabled={busy}>
-                  {selectedId === "new" ? "Entwurfspanel erstellen" : "Änderungen speichern"}
-                </button>
+                <div className="save-row">
+                  <button
+                    className="primary"
+                    onClick={handleSavePanel}
+                    disabled={busy || (selectedId !== "new" && !formDirty)}
+                  >
+                    {selectedId === "new" ? "Entwurfspanel erstellen" : "Änderungen speichern"}
+                  </button>
+                  {formDirty && !busy && <span className="muted small">Ungespeicherte Änderungen</span>}
+                </div>
                 {typeof selectedId === "number" && selected && (
                   <>
                     {selected.sent ? (

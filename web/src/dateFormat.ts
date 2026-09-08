@@ -42,7 +42,11 @@ function addUtcMonthsClamped(date: Date, months: number): Date {
  * few weeks old still reads at a glance. Computed entirely via UTC getters —
  * elapsed calendar time doesn't depend on any display timezone, and using
  * UTC throughout avoids DST/day-length edge cases the viewer's own local
- * timezone could otherwise introduce.
+ * timezone could otherwise introduce. Zero-value units are dropped from the
+ * joined string (Discord's own relative timestamps never show one either) —
+ * "vor 1T", not "vor 0M, 1T und 0Std" — collapsing to "vor unter 1 Std" only
+ * when every unit is zero, since this never adds a minutes-level unit of its
+ * own.
  */
 export function formatRelative(iso: string | null): string {
   if (!iso) return "—";
@@ -67,5 +71,13 @@ export function formatRelative(iso: string | null): string {
   const days = Math.floor(remainingMs / 86_400_000);
   const hours = Math.floor((remainingMs % 86_400_000) / 3_600_000);
 
-  return `vor ${months}M, ${days}T und ${hours}Std`;
+  const units = [
+    months > 0 ? `${months}M` : null,
+    days > 0 ? `${days}T` : null,
+    hours > 0 ? `${hours}Std` : null,
+  ].filter((unit): unit is string => unit !== null);
+
+  if (units.length === 0) return "vor unter 1 Std";
+  if (units.length === 1) return `vor ${units[0]}`;
+  return `vor ${units.slice(0, -1).join(", ")} und ${units[units.length - 1]}`;
 }

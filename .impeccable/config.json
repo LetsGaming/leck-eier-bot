@@ -11,6 +11,66 @@
         ],
         "createdAt": "2026-09-02T23:19:12.491Z",
         "reason": "Deliberate Discord-embed mimicry in .message-preview-embed — Discord's own embeds genuinely have a colored left-border accent; confirmed false positive across two prior /impeccable critique runs (2026-09-02)"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#54575e",
+        "createdAt": "2026-09-08T12:45:30.455Z",
+        "reason": "theme.css:79 — scrollbar-thumb:hover shade, a browser-chrome pseudo-element skin, not a themed app surface"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "3px",
+        "createdAt": "2026-09-08T12:45:30.530Z",
+        "reason": "theme.css:801 — message-preview-bot-tag mirrors Discord's own BOT-tag shape exactly, per DESIGN.md's documented message-preview signature-component exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#dbdee1",
+        "createdAt": "2026-09-08T12:45:30.614Z",
+        "reason": "theme.css:767 — message-preview body text color, Discord's own message-text color mirrored exactly per DESIGN.md's message-preview signature-component exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#4e5058",
+        "createdAt": "2026-09-08T12:45:30.690Z",
+        "reason": "theme.css:867 — message-preview-button background, Discord's own button-gray mirrored exactly per DESIGN.md's message-preview signature-component exception"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "18px",
+        "createdAt": "2026-09-08T12:45:30.763Z",
+        "reason": "theme.css:598/666/786 — emoji/avatar glyph rendering size (emoji-picker-trigger, emoji-grid button, message-preview-avatar), not app reading-text type scale"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "10px",
+        "createdAt": "2026-09-08T12:45:30.865Z",
+        "reason": "theme.css:798 — message-preview-bot-tag, Discord's own BOT-tag text size mirrored exactly per DESIGN.md's message-preview signature-component exception"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "13px",
+        "createdAt": "2026-09-08T12:45:30.958Z",
+        "reason": "theme.css:833/852/870 — message-preview embed-desc/reaction/button text, Discord's own client sizes mirrored exactly per DESIGN.md's message-preview signature-component exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, 0.55)",
+        "createdAt": "2026-09-08T12:45:31.041Z",
+        "reason": "theme.css:972 — confirm-dialog backdrop scrim, a near-universal literal black-with-opacity overlay, not a themed palette color"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, 0.5)",
+        "createdAt": "2026-09-08T12:45:31.115Z",
+        "reason": "theme.css:1608 — mobile nav-backdrop scrim, same literal black-with-opacity overlay category as the confirm-dialog backdrop"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fff",
+        "createdAt": "2026-09-08T12:45:31.197Z",
+        "reason": "theme.css:937 — switch toggle thumb foreground in its checked state, a near-universal literal-white icon/thumb-foreground exception"
       }
     ]
   }

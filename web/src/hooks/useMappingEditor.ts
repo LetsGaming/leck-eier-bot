@@ -49,6 +49,23 @@ export function useMappingEditor(
   const optionCap = effectiveSelectionType === "reactions" ? null : MAX_OPTIONS;
   const atOptionCap = optionCap !== null && (panel?.mappings.length ?? 0) >= optionCap;
 
+  // Unlike the panel form (usePanelEditor.ts), add/edit here have no
+  // separate "Speichern" step of their own — MappingForm's submit *is* the
+  // save — so the only silently-losable state is a draft that hasn't been
+  // submitted yet: an in-progress "add" row, or an "edit" row whose fields
+  // no longer match the mapping it was seeded from.
+  const mappingDraftDirty =
+    mappingDraft.roleIds.length > 0 || mappingDraft.emojiName !== "" || mappingDraft.emojiId !== null || mappingDraft.label !== "";
+  const editingMapping = editingMappingId !== null ? (panel?.mappings.find((m) => m.id === editingMappingId) ?? null) : null;
+  const editDraftDirty = editingMapping
+    ? editDraft.emojiName !== (editingMapping.emojiName ?? "") ||
+      editDraft.emojiId !== editingMapping.emojiId ||
+      editDraft.label !== (editingMapping.label ?? "") ||
+      editDraft.roleIds.length !== editingMapping.roleIds.length ||
+      editDraft.roleIds.some((id, i) => id !== editingMapping.roleIds[i])
+    : false;
+  const mappingsDirty = mappingDraftDirty || editDraftDirty;
+
   // A role can only grant one outcome per panel — once it's mapped to an
   // option, picking it again for a second option (even as part of a
   // different multi-role Reactions option) would just be ambiguous.
@@ -185,6 +202,7 @@ export function useMappingEditor(
     optionCap,
     atOptionCap,
     usedRoleIds,
+    mappingsDirty,
     handleAddMapping,
     handleRemoveMapping,
     handleStartEditMapping,

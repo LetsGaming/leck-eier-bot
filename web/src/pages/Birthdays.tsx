@@ -6,9 +6,11 @@ import TemplateEditor, { type TemplatePlaceholder } from "../components/Template
 import TemplatePreview from "../components/TemplatePreview";
 import { useConfirm } from "../components/ConfirmContext";
 import { useToast } from "../components/ToastContext";
+import { useUnsavedChanges } from "../components/UnsavedChangesContext";
 import { useBirthdaySettings } from "../hooks/useBirthdaySettings";
 import { useChannels } from "../hooks/useChannels";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
+import { useMemberNames } from "../hooks/useMemberNames";
 import { useUpcomingBirthdays } from "../hooks/useUpcomingBirthdays";
 import { applyFont } from "../utils/font";
 import { toChannelOptions } from "../utils/selectOptions";
@@ -54,13 +56,30 @@ function relativeDay(days: number): string {
   return `in ${days} Tagen`;
 }
 
-function entryLabel(entry: { name: string | null; mention: string }): string {
-  return entry.name ?? entry.mention;
+/**
+ * Never falls back to `entry.mention`'s raw `<@id>` markup — an admin-added
+ * entry with only a Discord-user-ID (no `name`) would otherwise show that
+ * literal, unrendered mention text everywhere, including inside the delete
+ * confirmation's "this is permanent" moment. `names` (from `useMemberNames`)
+ * resolves it to the same display name Member Audit already shows for that
+ * person; a genuinely unknown id (never seen by the bot) falls back to a
+ * plain-language placeholder instead of exposing the raw id format.
+ */
+function entryLabel(entry: { userId: string | null; name: string | null; mention: string }, names: Record<string, string>): string {
+  if (entry.name) return entry.name;
+  if (entry.userId) return names[entry.userId] ?? `Unbekanntes Mitglied (${entry.userId})`;
+  return entry.mention;
 }
 
 /** Links to the member overview when a Discord account is linked (`userId` non-null) — list-entered, name-only entries have none. */
-function EntryLabelLink({ entry }: { entry: { userId: string | null; name: string | null; mention: string } }) {
-  const label = entryLabel(entry);
+function EntryLabelLink({
+  entry,
+  names,
+}: {
+  entry: { userId: string | null; name: string | null; mention: string };
+  names: Record<string, string>;
+}) {
+  const label = entryLabel(entry, names);
   return entry.userId ? <Link to={`/members/${entry.userId}`}>{label}</Link> : <>{label}</>;
 }
 
@@ -83,6 +102,17 @@ export default function Birthdays() {
   const upcoming = upcomingRes.data;
   const fontMap = generalRes.data?.fontMap ?? null;
 
+  // Only entries the app can't already name outright (admin-added by
+  // Discord-user-ID with no `name` on file) need a lookup — see
+  // entryLabel()'s doc comment.
+  const unnamedIds: string[] = [];
+  for (const group of upcoming ?? []) {
+    for (const entry of group.entries) {
+      if (entry.userId && !entry.name) unnamedIds.push(entry.userId);
+    }
+  }
+  const memberNames = useMemberNames(unnamedIds);
+
   const [template, setTemplate] = useState("");
   const [channelId, setChannelId] = useState("");
   const [cronExpr, setCronExpr] = useState("");
@@ -94,8 +124,33 @@ export default function Birthdays() {
   const [announcementUseFont, setAnnouncementUseFont] = useState(false);
   const [showAnnouncementPreview, setShowAnnouncementPreview] = useState(false);
   const [showAnchorPreview, setShowAnchorPreview] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingRegistration, setSavingRegistration] = useState(false);
   const [syncingAnchor, setSyncingAnchor] = useState(false);
+  // Mirrors of the last-*persisted* value per card — see Settings.tsx's
+  // identical convention. Each of this page's 3 cards saves independently
+  // (see handleSaveTemplate/handleSaveSchedule/handleSaveRegistration
+  // below); this is what lets each card's own "Speichern" disable itself
+  // when there's nothing left to save in *that* card specifically, instead
+  // of one button 2 cards away silently covering all three (the exact bug
+  // this pass fixes).
+  const [savedTemplate, setSavedTemplate] = useState("");
+  const [savedAnnouncementUseFont, setSavedAnnouncementUseFont] = useState(false);
+  const [savedChannelId, setSavedChannelId] = useState("");
+  const [savedCronExpr, setSavedCronExpr] = useState("");
+  const [savedModChannelId, setSavedModChannelId] = useState("");
+  const [savedAnchorIntro, setSavedAnchorIntro] = useState("");
+  const [savedAnchorTemplate, setSavedAnchorTemplate] = useState("");
+  const [savedAnchorUseFont, setSavedAnchorUseFont] = useState(false);
+  const templateDirty = template !== savedTemplate || announcementUseFont !== savedAnnouncementUseFont;
+  const scheduleDirty = channelId !== savedChannelId || cronExpr !== savedCronExpr;
+  const registrationDirty =
+    modChannelId !== savedModChannelId ||
+    anchorIntro !== savedAnchorIntro ||
+    anchorTemplate !== savedAnchorTemplate ||
+    anchorUseFont !== savedAnchorUseFont;
+  useUnsavedChanges(templateDirty || scheduleDirty || registrationDirty);
   const [draft, setDraft] = useState<EntryDraft>(EMPTY_DRAFT);
   const [savingEntry, setSavingEntry] = useState(false);
   const { showError, showSuccess } = useToast();
@@ -109,34 +164,70 @@ export default function Birthdays() {
     const s = settingsRes.data;
     if (!s) return;
     setTemplate(s.template);
+    setSavedTemplate(s.template);
     setChannelId(s.channelId ?? "");
+    setSavedChannelId(s.channelId ?? "");
     setCronExpr(s.cron);
+    setSavedCronExpr(s.cron);
     setAdvancedCron(cronToTimeInput(s.cron) === null);
     setModChannelId(s.modChannelId ?? "");
+    setSavedModChannelId(s.modChannelId ?? "");
     setAnchorTemplate(s.anchorTemplate);
+    setSavedAnchorTemplate(s.anchorTemplate);
     setAnchorIntro(s.anchorIntro ?? "");
+    setSavedAnchorIntro(s.anchorIntro ?? "");
     setAnchorUseFont(s.anchorUseFont);
+    setSavedAnchorUseFont(s.anchorUseFont);
     setAnnouncementUseFont(s.announcementUseFont);
+    setSavedAnnouncementUseFont(s.announcementUseFont);
   }, [settingsRes.data]);
 
-  async function handleSave() {
-    setSaving(true);
+  async function handleSaveTemplate() {
+    setSavingTemplate(true);
     try {
-      await api.updateBirthdaySettings({
-        template,
-        channelId: channelId || null,
-        cron: cronExpr,
-        modChannelId: modChannelId || null,
-        anchorTemplate,
-        anchorIntro: anchorIntro || null,
-        anchorUseFont,
-        announcementUseFont,
-      });
+      await api.updateBirthdaySettings({ template, announcementUseFont });
+      setSavedTemplate(template);
+      setSavedAnnouncementUseFont(announcementUseFont);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
     } finally {
-      setSaving(false);
+      setSavingTemplate(false);
+    }
+  }
+
+  async function handleSaveSchedule() {
+    setSavingSchedule(true);
+    try {
+      await api.updateBirthdaySettings({ channelId: channelId || null, cron: cronExpr });
+      setSavedChannelId(channelId);
+      setSavedCronExpr(cronExpr);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleSaveRegistration() {
+    setSavingRegistration(true);
+    try {
+      await api.updateBirthdaySettings({
+        modChannelId: modChannelId || null,
+        anchorTemplate,
+        anchorIntro: anchorIntro || null,
+        anchorUseFont,
+      });
+      setSavedModChannelId(modChannelId);
+      setSavedAnchorTemplate(anchorTemplate);
+      setSavedAnchorIntro(anchorIntro);
+      setSavedAnchorUseFont(anchorUseFont);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setSavingRegistration(false);
     }
   }
 
@@ -187,10 +278,10 @@ export default function Birthdays() {
     }
   }
 
-  async function handleDeleteEntry(entry: { id: number; name: string | null; mention: string }) {
+  async function handleDeleteEntry(entry: { id: number; userId: string | null; name: string | null; mention: string }) {
     const ok = await confirmDialog({
       title: "Geburtstag entfernen",
-      message: `Der Eintrag für ${entryLabel(entry)} wird unwiderruflich entfernt und verschwindet auch aus der Ankernachricht.`,
+      message: `Der Eintrag für ${entryLabel(entry, memberNames)} wird unwiderruflich entfernt und verschwindet auch aus der Ankernachricht.`,
       confirmLabel: "Entfernen",
     });
     if (!ok) return;
@@ -226,7 +317,7 @@ export default function Birthdays() {
                     {b.entries.map((entry, i) => (
                       <Fragment key={entry.id}>
                         {i > 0 && ", "}
-                        <EntryLabelLink entry={entry} />
+                        <EntryLabelLink entry={entry} names={memberNames} />
                       </Fragment>
                     ))}
                   </div>
@@ -321,7 +412,7 @@ export default function Birthdays() {
                         <tr key={entry.id}>
                           <td data-label="Datum">{b.dateKey}</td>
                           <td data-label="Person">
-                            <EntryLabelLink entry={entry} />
+                            <EntryLabelLink entry={entry} names={memberNames} />
                           </td>
                           <td data-label="Quelle">
                             <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
@@ -411,6 +502,16 @@ export default function Birthdays() {
                   </div>
                 </div>
               )}
+              <div className="save-row mt-12">
+                <button
+                  className="primary"
+                  onClick={handleSaveTemplate}
+                  disabled={savingTemplate || !templateDirty}
+                >
+                  {savingTemplate ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {templateDirty && !savingTemplate && <span className="muted small">Ungespeicherte Änderungen</span>}
+              </div>
             </div>
 
             <div className="card">
@@ -471,9 +572,16 @@ export default function Birthdays() {
                   </>
                 )}
               </div>
-              <button className="primary" onClick={handleSave} disabled={saving}>
-                {saving ? "Wird gespeichert…" : "Speichern"}
-              </button>
+              <div className="save-row">
+                <button
+                  className="primary"
+                  onClick={handleSaveSchedule}
+                  disabled={savingSchedule || !scheduleDirty}
+                >
+                  {savingSchedule ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {scheduleDirty && !savingSchedule && <span className="muted small">Ungespeicherte Änderungen</span>}
+              </div>
             </div>
 
             <div className="card">
@@ -573,6 +681,18 @@ export default function Birthdays() {
                   </div>
                 </div>
               )}
+              <div className="save-row mt-12">
+                <button
+                  className="primary"
+                  onClick={handleSaveRegistration}
+                  disabled={savingRegistration || !registrationDirty}
+                >
+                  {savingRegistration ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {registrationDirty && !savingRegistration && (
+                  <span className="muted small">Ungespeicherte Änderungen</span>
+                )}
+              </div>
               <button onClick={handleSyncAnchor} disabled={syncingAnchor || !channelId} className="mt-8">
                 {syncingAnchor ? "Wird neu generiert…" : "Nachricht jetzt neu generieren"}
               </button>

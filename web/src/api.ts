@@ -87,6 +87,16 @@ export const api = {
     return request<Registration[]>(`/members/registrations?${search.toString()}`);
   },
   memberOverview: (userId: string) => request<MemberOverview>(`/members/${userId}`),
+  // Bulk display-name lookup for pages that only need "what do we call this
+  // userId" (e.g. Birthdays.tsx resolving an admin-entered Discord-user-ID
+  // entry to a real name) — ids with no match anywhere are simply absent
+  // from the returned map. No-op (skips the request) for an empty list.
+  resolveMemberNames: (userIds: string[]) =>
+    userIds.length === 0
+      ? Promise.resolve({})
+      : request<{ names: Record<string, string> }>(
+          `/members/resolve?ids=${encodeURIComponent(userIds.join(","))}`,
+        ).then((res) => res.names),
   removeRegistration: (userId: string) => request<void>(`/members/registrations/${userId}`, { method: "DELETE" }),
   approveRegistration: (userId: string) =>
     request<void>(`/members/registrations/${userId}/approve`, { method: "POST" }),

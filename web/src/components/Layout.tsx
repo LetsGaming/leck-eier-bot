@@ -11,6 +11,7 @@ import {
   IconSettings,
 } from "./NavIcons";
 import { useNavBadgeCounts, type NavBadgeCounts } from "../hooks/useNavBadgeCounts";
+import { WEB_ROLE_LABELS } from "../types";
 import type { Me } from "../types";
 
 interface NavItem {
@@ -129,7 +130,7 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
         <NavLinks items={SETUP_NAV_ITEMS} counts={counts} />
         <div className="spacer" />
         <div className="user">
-          Angemeldet als <strong>{me.username}</strong> ({me.role})
+          Angemeldet als <strong>{me.username}</strong> ({WEB_ROLE_LABELS[me.role] ?? me.role})
           <div>
             <button onClick={handleLogout} className="mt-8">
               Abmelden

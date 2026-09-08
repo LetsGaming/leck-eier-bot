@@ -57,6 +57,26 @@ function parseMessageLink(link: string): { channelId: string; messageId: string 
   return { channelId: match[1]!, messageId: match[2]! };
 }
 
+function sameStringArray(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/** Mirrors Birthdays.tsx/Settings.tsx's per-card `savedX` convention — compares against the last-persisted (or last-loaded) form snapshot so `formDirty` reflects only actual, uncommitted edits. */
+function sameForm(a: PanelFormState, b: PanelFormState): boolean {
+  return (
+    a.name === b.name &&
+    a.channelId === b.channelId &&
+    a.messageType === b.messageType &&
+    a.removeReaction === b.removeReaction &&
+    a.allowMultiple === b.allowMultiple &&
+    a.removable === b.removable &&
+    a.title === b.title &&
+    a.description === b.description &&
+    a.useFont === b.useFont &&
+    sameStringArray(a.allowedRoleIds, b.allowedRoleIds)
+  );
+}
+
 /**
  * Owns the panel list resource, the currently-selected/edited panel's draft
  * form state, and the create/save/delete/send/sync handlers for it —
@@ -75,6 +95,14 @@ export function usePanelEditor() {
 
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
   const [form, setForm] = useState<PanelFormState>(emptyPanelForm());
+  // Mirror of the last-persisted (or last-loaded) form — see
+  // Birthdays.tsx/Settings.tsx's identical `savedX` convention. Reset
+  // alongside `form` itself below, so it also re-syncs after a panel save
+  // (the reset effect re-fires once `selected`'s object identity changes,
+  // which `panelsRes.setData` does on every successful save) and correctly
+  // clears `formDirty` at that point instead of leaving it permanently true.
+  const [savedForm, setSavedForm] = useState<PanelFormState>(emptyPanelForm());
+  const formDirty = !sameForm(form, savedForm);
   // Only meaningful while creating a new panel — both are fixed for the
   // panel's lifetime afterward.
   const [selectionType, setSelectionType] = useState<SelectionType>("reactions");
@@ -92,12 +120,16 @@ export function usePanelEditor() {
 
   useEffect(() => {
     if (selectedId === "new") {
-      setForm(emptyPanelForm());
+      const f = emptyPanelForm();
+      setForm(f);
+      setSavedForm(f);
       setSelectionType("reactions");
       setAttachMode("new");
       setMessageLink("");
     } else if (selected) {
-      setForm(panelToForm(selected));
+      const f = panelToForm(selected);
+      setForm(f);
+      setSavedForm(f);
     }
   }, [selectedId, selected]);
 
@@ -238,6 +270,7 @@ export function usePanelEditor() {
     selected,
     form,
     setForm,
+    formDirty,
     selectionType,
     setSelectionType,
     attachMode,

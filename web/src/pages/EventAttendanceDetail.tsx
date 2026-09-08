@@ -63,10 +63,13 @@ export default function EventAttendanceDetailPage() {
     }
   }
 
-  const memberOptions = useMemo(
-    () => members.map((m) => ({ value: m.userId, label: m.displayName, hint: `@${m.username}` })),
-    [members],
-  );
+  // A member already linked to one signup (whether auto-matched or
+  // manually linked) shouldn't be offered again for a *different* unmatched
+  // signup — that would let two rows point at the same person.
+  const memberOptions = useMemo(() => {
+    const alreadyLinked = new Set(event?.signups.filter((s) => s.userId).map((s) => s.userId) ?? []);
+    return members.filter((m) => !alreadyLinked.has(m.userId)).map((m) => ({ value: m.userId, label: m.displayName, hint: `@${m.username}` }));
+  }, [members, event]);
 
   const tallies = useMemo(() => {
     if (!event) return null;
@@ -75,6 +78,13 @@ export default function EventAttendanceDetailPage() {
     const tentative = signups.filter((s) => s.choice === "tentative").length;
     const declined = signups.filter((s) => s.choice === "declined").length;
     const unresolved = signups.filter((s) => s.matchSource === "unmatched" || s.matchSource === "ambiguous").length;
+    // Current, non-bot members with zero signup entry at all — never reacted
+    // to Apollo's embed one way or the other, not even a "declined". A
+    // signup with no `userId` (unmatched/ambiguous) can't match any real
+    // member here either, which is intentional: that person did respond,
+    // just isn't linked yet, and is already surfaced above via "unresolved".
+    const respondedIds = new Set(signups.filter((s) => s.userId).map((s) => s.userId));
+    const noResponse = members.filter((m) => !m.isBot && !respondedIds.has(m.userId)).length;
 
     const onTime = signups.filter((s) => s.attendanceStatus === "on_time").length;
     const late = signups.filter((s) => s.attendanceStatus === "late").length;
@@ -89,8 +99,21 @@ export default function EventAttendanceDetailPage() {
       (s) => (s.earlyMinutes ?? 0) > 0 && s.attendanceStatus !== "left_early",
     ).length;
 
-    return { accepted, tentative, declined, unresolved, onTime, late, noShow, leftEarly, notTracked, lateWithinGrace, earlyWithinGrace };
-  }, [event]);
+    return {
+      accepted,
+      tentative,
+      declined,
+      unresolved,
+      noResponse,
+      onTime,
+      late,
+      noShow,
+      leftEarly,
+      notTracked,
+      lateWithinGrace,
+      earlyWithinGrace,
+    };
+  }, [event, members]);
 
   const filteredSignups = useMemo(() => {
     if (!event) return [];
@@ -130,35 +153,55 @@ export default function EventAttendanceDetailPage() {
       </p>
 
       <div className="card">
-        <div className="tally-grid">
-          <span className="muted small">Zugesagt</span>
-          <strong>{tallies.accepted}</strong>
-          <span className="muted small">Vielleicht</span>
-          <strong>{tallies.tentative}</strong>
-          <span className="muted small">Abgesagt</span>
-          <strong>{tallies.declined}</strong>
+        <div className="tally-grid tally-grid-rsvp">
+          <div className="tally-item">
+            <span className="muted small">Zugesagt</span>
+            <strong>{tallies.accepted}</strong>
+          </div>
+          <div className="tally-item">
+            <span className="muted small">Vielleicht</span>
+            <strong>{tallies.tentative}</strong>
+          </div>
+          <div className="tally-item">
+            <span className="muted small">Abgesagt</span>
+            <strong>{tallies.declined}</strong>
+          </div>
+          <div className="tally-item">
+            <span className="muted small">Keine Rückmeldung</span>
+            <strong>{tallies.noResponse}</strong>
+          </div>
           {tallies.unresolved > 0 && (
-            <>
+            <div className="tally-item">
               <span className="muted small">Offene Zuordnungen</span>
               <strong>
                 <span className="badge warn">{tallies.unresolved}</span>
               </strong>
-            </>
+            </div>
           )}
         </div>
 
         {event.status !== "scheduled" && (
           <div className="tally-grid">
-            <span className="muted small">Pünktlich</span>
-            <strong>{tallies.onTime}</strong>
-            <span className="muted small">Zu spät</span>
-            <strong>{tallies.late}</strong>
-            <span className="muted small">Nicht erschienen</span>
-            <strong>{tallies.noShow}</strong>
-            <span className="muted small">Früher gegangen</span>
-            <strong>{tallies.leftEarly}</strong>
-            <span className="muted small">Nicht getrackt</span>
-            <strong>{tallies.notTracked}</strong>
+            <div className="tally-item">
+              <span className="muted small">Pünktlich</span>
+              <strong>{tallies.onTime}</strong>
+            </div>
+            <div className="tally-item">
+              <span className="muted small">Zu spät</span>
+              <strong>{tallies.late}</strong>
+            </div>
+            <div className="tally-item">
+              <span className="muted small">Nicht erschienen</span>
+              <strong>{tallies.noShow}</strong>
+            </div>
+            <div className="tally-item">
+              <span className="muted small">Früher gegangen</span>
+              <strong>{tallies.leftEarly}</strong>
+            </div>
+            <div className="tally-item">
+              <span className="muted small">Nicht getrackt</span>
+              <strong>{tallies.notTracked}</strong>
+            </div>
             {tallies.lateWithinGrace > 0 && (
               <p className="muted small tally-note">
                 davon {tallies.lateWithinGrace} leicht verspätet (unter 5 Min.)

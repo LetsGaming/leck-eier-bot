@@ -14,6 +14,8 @@ export const FIND_USER_LIST_LIMIT = 500;
 export const MEMBER_AUDIT_LEFT_LIMIT = 500;
 /** Cap on how many registration-form submissions the dashboard's Registrierungen list returns (most-recently-submitted first). */
 export const REGISTRATIONS_LIST_LIMIT = 500;
+/** Cap on how many user ids `GET /members/resolve` (Birthdays' entry-name lookup) resolves per request — well above any realistic birthday-list size, just a request-size guardrail. */
+export const MEMBER_RESOLVE_LIMIT = 200;
 /** How many days ahead `/api/status`'s `communitySnapshot.birthdaysThisWeek` looks — see `listBirthdaysInNextDays()` in `db/birthdaysRepository.ts`. */
 export const COMMUNITY_SNAPSHOT_BIRTHDAY_WINDOW_DAYS = 7;
 /** How many days ahead `/api/status`'s `communitySnapshot.upcomingEvents` looks. */

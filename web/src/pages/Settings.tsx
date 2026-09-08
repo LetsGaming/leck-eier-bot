@@ -9,9 +9,11 @@ import TemplatePreview from "../components/TemplatePreview";
 import { useChannels } from "../hooks/useChannels";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { useRoles } from "../hooks/useRoles";
+import { useUnsavedChanges } from "../components/UnsavedChangesContext";
 import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
+import { WEB_ROLE_LABELS } from "../types";
 import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
 
 /** Sample value shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` substitution exactly (see src/events/registerWatcher.ts). */
@@ -47,12 +49,6 @@ function previewRegisterNickname(
   return [...nameOnly].slice(0, DISCORD_NICKNAME_MAX_LENGTH).join("");
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  "bot-owner": "Bot-Besitzer",
-  "guild-owner": "Server-Besitzer",
-  admin: "Admin",
-};
-
 const SECTIONS = [
   { id: "allgemein", label: "Allgemein" },
   { id: "registrierung", label: "Registrierung" },
@@ -68,6 +64,7 @@ interface AllgemeinSectionProps {
   setFontMap: (v: string) => void;
   handleSaveFont: () => void;
   savingFont: boolean;
+  fontMapDirty: boolean;
 }
 
 function AllgemeinSection({
@@ -77,6 +74,7 @@ function AllgemeinSection({
   setFontMap,
   handleSaveFont,
   savingFont,
+  fontMapDirty,
 }: AllgemeinSectionProps) {
   return (
     <div className="card-grid">
@@ -136,13 +134,16 @@ function AllgemeinSection({
               </div>
             ))}
         </div>
-        <button
-          className="primary"
-          onClick={handleSaveFont}
-          disabled={savingFont}
-        >
-          {savingFont ? "Wird gespeichert…" : "Speichern"}
-        </button>
+        <div className="save-row">
+          <button
+            className="primary"
+            onClick={handleSaveFont}
+            disabled={savingFont || !fontMapDirty}
+          >
+            {savingFont ? "Wird gespeichert…" : "Speichern"}
+          </button>
+          {fontMapDirty && !savingFont && <span className="muted small">Ungespeicherte Änderungen</span>}
+        </div>
       </div>
     </div>
   );
@@ -157,14 +158,17 @@ interface RegistrierungSectionProps {
   setNicknameEmoji: (v: string) => void;
   handleSaveNicknameEmoji: () => void;
   savingNicknameEmoji: boolean;
+  nicknameEmojiDirty: boolean;
   confirmationTemplate: string;
   setConfirmationTemplate: (v: string) => void;
   handleSaveConfirmationTemplate: () => void;
   savingConfirmationTemplate: boolean;
+  confirmationTemplateDirty: boolean;
   autoConfirmationTemplate: string;
   setAutoConfirmationTemplate: (v: string) => void;
   handleSaveAutoConfirmationTemplate: () => void;
   savingAutoConfirmationTemplate: boolean;
+  autoConfirmationTemplateDirty: boolean;
 }
 
 function RegistrierungSection({
@@ -176,14 +180,17 @@ function RegistrierungSection({
   setNicknameEmoji,
   handleSaveNicknameEmoji,
   savingNicknameEmoji,
+  nicknameEmojiDirty,
   confirmationTemplate,
   setConfirmationTemplate,
   handleSaveConfirmationTemplate,
   savingConfirmationTemplate,
+  confirmationTemplateDirty,
   autoConfirmationTemplate,
   setAutoConfirmationTemplate,
   handleSaveAutoConfirmationTemplate,
   savingAutoConfirmationTemplate,
+  autoConfirmationTemplateDirty,
 }: RegistrierungSectionProps) {
   return (
     <>
@@ -194,7 +201,7 @@ function RegistrierungSection({
         automatisch, siehe "Abschluss" unten) → der Bot bestätigt im Thread und
         entfernt die Rolle vor der Registrierung.
       </div>
-      <div className="card-grid">
+      <div className="card-grid card-grid-registration">
         <div className="card">
           <h2>Rollen im Registrierungsablauf</h2>
           <p className="muted small">
@@ -340,13 +347,18 @@ function RegistrierungSection({
                   settings.registerNicknameUseFont,
                 )}
               </div>
-              <button
-                className="primary"
-                onClick={handleSaveNicknameEmoji}
-                disabled={savingNicknameEmoji}
-              >
-                {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
-              </button>
+              <div className="save-row">
+                <button
+                  className="primary"
+                  onClick={handleSaveNicknameEmoji}
+                  disabled={savingNicknameEmoji || !nicknameEmojiDirty}
+                >
+                  {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {nicknameEmojiDirty && !savingNicknameEmoji && (
+                  <span className="muted small">Ungespeicherte Änderungen</span>
+                )}
+              </div>
             </div>
 
             <div className="card">
@@ -401,13 +413,18 @@ function RegistrierungSection({
                   fontMap={settings.fontMap}
                 />
               </div>
-              <button
-                className="primary"
-                onClick={handleSaveConfirmationTemplate}
-                disabled={savingConfirmationTemplate}
-              >
-                {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
-              </button>
+              <div className="save-row">
+                <button
+                  className="primary"
+                  onClick={handleSaveConfirmationTemplate}
+                  disabled={savingConfirmationTemplate || !confirmationTemplateDirty}
+                >
+                  {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {confirmationTemplateDirty && !savingConfirmationTemplate && (
+                  <span className="muted small">Ungespeicherte Änderungen</span>
+                )}
+              </div>
             </div>
 
             <div className="card">
@@ -469,15 +486,18 @@ function RegistrierungSection({
                   fontMap={settings.fontMap}
                 />
               </div>
-              <button
-                className="primary"
-                onClick={handleSaveAutoConfirmationTemplate}
-                disabled={savingAutoConfirmationTemplate}
-              >
-                {savingAutoConfirmationTemplate
-                  ? "Wird gespeichert…"
-                  : "Speichern"}
-              </button>
+              <div className="save-row">
+                <button
+                  className="primary"
+                  onClick={handleSaveAutoConfirmationTemplate}
+                  disabled={savingAutoConfirmationTemplate || !autoConfirmationTemplateDirty}
+                >
+                  {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+                </button>
+                {autoConfirmationTemplateDirty && !savingAutoConfirmationTemplate && (
+                  <span className="muted small">Ungespeicherte Änderungen</span>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -552,8 +572,8 @@ function KontoSection({ me }: { me: Me }) {
     <div className="card">
       <h2>Konto</h2>
       <p>
-        Angemeldet als <strong>{me.username}</strong> ({me.userId}) — Rolle:{" "}
-        <strong>{ROLE_LABELS[me.role] ?? me.role}</strong>
+        Angemeldet als <strong>{me.username}</strong> ({me.userId}) — Berechtigungsstufe:{" "}
+        <strong>{WEB_ROLE_LABELS[me.role] ?? me.role}</strong>
       </p>
     </div>
   );
@@ -579,6 +599,22 @@ export default function Settings({ me }: { me: Me }) {
   const [autoConfirmationTemplate, setAutoConfirmationTemplate] = useState("");
   const [savingAutoConfirmationTemplate, setSavingAutoConfirmationTemplate] =
     useState(false);
+  // Mirrors of the last-*persisted* value for each manually-saved field
+  // (the toggles/selects elsewhere on this page autosave via `update()` and
+  // don't need this — see the module doc comment on save-row usage below).
+  // Comparing against these, not against `settingsRes.data`, is what lets
+  // "Speichern" disable itself once there's nothing left to save and lets
+  // the "Ungespeicherte Änderungen" indicator and the cross-page navigation
+  // guard (useUnsavedChanges) both know the true dirty state.
+  const [savedFontMap, setSavedFontMap] = useState("");
+  const [savedNicknameEmoji, setSavedNicknameEmoji] = useState("");
+  const [savedConfirmationTemplate, setSavedConfirmationTemplate] = useState("");
+  const [savedAutoConfirmationTemplate, setSavedAutoConfirmationTemplate] = useState("");
+  const fontMapDirty = fontMap !== savedFontMap;
+  const nicknameEmojiDirty = nicknameEmoji !== savedNicknameEmoji;
+  const confirmationTemplateDirty = confirmationTemplate !== savedConfirmationTemplate;
+  const autoConfirmationTemplateDirty = autoConfirmationTemplate !== savedAutoConfirmationTemplate;
+  useUnsavedChanges(fontMapDirty || nicknameEmojiDirty || confirmationTemplateDirty || autoConfirmationTemplateDirty);
   const { showError, showSuccess } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -602,9 +638,13 @@ export default function Settings({ me }: { me: Me }) {
     const s = settingsRes.data;
     if (!s) return;
     setFontMap(s.fontMap ?? "");
+    setSavedFontMap(s.fontMap ?? "");
     setNicknameEmoji(s.registerNicknameEmoji);
+    setSavedNicknameEmoji(s.registerNicknameEmoji);
     setConfirmationTemplate(s.registerConfirmationTemplate);
+    setSavedConfirmationTemplate(s.registerConfirmationTemplate);
     setAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
+    setSavedAutoConfirmationTemplate(s.autoRegisterConfirmationTemplate);
   }, [settingsRes.data]);
 
   async function update(patch: Partial<GeneralSettings>) {
@@ -624,6 +664,7 @@ export default function Settings({ me }: { me: Me }) {
         fontMap: fontMap || null,
       });
       settingsRes.setData(updated);
+      setSavedFontMap(fontMap);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -639,6 +680,7 @@ export default function Settings({ me }: { me: Me }) {
         registerNicknameEmoji: nicknameEmoji,
       });
       settingsRes.setData(updated);
+      setSavedNicknameEmoji(nicknameEmoji);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -654,6 +696,7 @@ export default function Settings({ me }: { me: Me }) {
         registerConfirmationTemplate: confirmationTemplate,
       });
       settingsRes.setData(updated);
+      setSavedConfirmationTemplate(confirmationTemplate);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -669,6 +712,7 @@ export default function Settings({ me }: { me: Me }) {
         autoRegisterConfirmationTemplate: autoConfirmationTemplate,
       });
       settingsRes.setData(updated);
+      setSavedAutoConfirmationTemplate(autoConfirmationTemplate);
       showSuccess("Gespeichert.");
     } catch (err) {
       showError(errorMessage(err));
@@ -700,6 +744,7 @@ export default function Settings({ me }: { me: Me }) {
             setFontMap={setFontMap}
             handleSaveFont={handleSaveFont}
             savingFont={savingFont}
+            fontMapDirty={fontMapDirty}
           />
         )}
         {activeSection === "registrierung" && (
@@ -712,16 +757,19 @@ export default function Settings({ me }: { me: Me }) {
             setNicknameEmoji={setNicknameEmoji}
             handleSaveNicknameEmoji={handleSaveNicknameEmoji}
             savingNicknameEmoji={savingNicknameEmoji}
+            nicknameEmojiDirty={nicknameEmojiDirty}
             confirmationTemplate={confirmationTemplate}
             setConfirmationTemplate={setConfirmationTemplate}
             handleSaveConfirmationTemplate={handleSaveConfirmationTemplate}
             savingConfirmationTemplate={savingConfirmationTemplate}
+            confirmationTemplateDirty={confirmationTemplateDirty}
             autoConfirmationTemplate={autoConfirmationTemplate}
             setAutoConfirmationTemplate={setAutoConfirmationTemplate}
             handleSaveAutoConfirmationTemplate={
               handleSaveAutoConfirmationTemplate
             }
             savingAutoConfirmationTemplate={savingAutoConfirmationTemplate}
+            autoConfirmationTemplateDirty={autoConfirmationTemplateDirty}
           />
         )}
         {activeSection === "events" && (

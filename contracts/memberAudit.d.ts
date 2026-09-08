@@ -19,4 +19,6 @@ export interface MemberAuditEntry {
   joinedAt: string | null;
   rulesAcceptedAt: string | null;
   leftAt: string | null;
+  /** From the live guild member cache for a current member; always `false` for a former member — bot accounts aren't meaningfully tracked as "left" by this system, so the distinction is moot for that half of the table. */
+  isBot: boolean;
 }

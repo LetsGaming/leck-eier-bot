@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { KeyboardEvent } from "react";
 
 export interface SearchableSelectOption {
@@ -48,20 +49,65 @@ export default function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number; width: number; flipped: boolean }>({
+    top: 0,
+    left: 0,
+    width: 220,
+    flipped: false,
+  });
   const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSearch("");
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+      setSearch("");
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  // Popover renders through a portal (see below) so it's positioned against
+  // the viewport instead of the nearest CSS-positioned ancestor — a
+  // trigger inside any scroll-clipping container (e.g. `.table-scroll`,
+  // present on 6 pages) would otherwise get its popover cut off, as the
+  // absolutely-positioned version did on Event-Anwesenheit's "Mitglied
+  // zuordnen…" picker. Recomputed on open and on every scroll/resize while
+  // open — `scroll` is captured (3rd arg `true`) because it doesn't bubble,
+  // so this is the only way to hear a nested `.table-scroll` div scroll,
+  // not just the window.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function reposition() {
+      const trigger = rootRef.current?.querySelector(".searchable-select-trigger");
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const width = Math.max(rect.width, 220);
+      const viewportWidth = window.innerWidth;
+      const left = Math.min(Math.max(rect.left, 8), viewportWidth - width - 8);
+      // Estimated popover height (search input + padding/border + the
+      // list's own 240px max-height) — flip above the trigger when there
+      // isn't room below, same as the space-below check any native
+      // <select>/combobox does.
+      const estimatedHeight = 296;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const flipped = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+      const top = flipped ? rect.top - 4 : rect.bottom + 4;
+      setPopoverStyle({ top, left, width, flipped });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    document.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      document.removeEventListener("scroll", reposition, true);
+    };
   }, [open]);
 
   const selected = options.find((o) => o.value === value);
@@ -169,48 +215,61 @@ export default function SearchableSelect({
         <span className="searchable-select-arrow">▾</span>
       </button>
 
-      {open && !disabled && (
-        <div className="searchable-select-popover">
-          <input
-            ref={inputRef}
-            type="text"
-            role="combobox"
-            aria-expanded="true"
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-activedescendant={rows.length > 0 ? optionId(highlighted) : undefined}
-            autoFocus
-            placeholder={placeholder}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setHighlighted(0);
+      {open &&
+        !disabled &&
+        createPortal(
+          <div
+            className="searchable-select-popover"
+            ref={popoverRef}
+            style={{
+              position: "fixed",
+              top: popoverStyle.top,
+              left: popoverStyle.left,
+              width: popoverStyle.width,
+              transform: popoverStyle.flipped ? "translateY(-100%)" : undefined,
             }}
-            onKeyDown={handleInputKeyDown}
-          />
-          <div className="searchable-select-list" role="listbox" id={listId}>
-            {rows.map((o, index) => (
-              <button
-                key={o.value || "__empty__"}
-                id={optionId(index)}
-                type="button"
-                role="option"
-                aria-selected={o.value === value}
-                className={`searchable-select-option${o.isEmptyRow ? " muted" : ""}${
-                  index === highlighted ? " highlighted" : ""
-                }`}
-                disabled={o.disabled}
-                onMouseEnter={() => setHighlighted(index)}
-                onClick={() => pick(o.value)}
-              >
-                {o.label}
-                {o.hint && <span className="muted"> {o.hint}</span>}
-              </button>
-            ))}
-            {rows.length === 0 && <span className="muted searchable-select-empty">Keine Treffer.</span>}
-          </div>
-        </div>
-      )}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              role="combobox"
+              aria-expanded="true"
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={rows.length > 0 ? optionId(highlighted) : undefined}
+              autoFocus
+              placeholder={placeholder}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setHighlighted(0);
+              }}
+              onKeyDown={handleInputKeyDown}
+            />
+            <div className="searchable-select-list" role="listbox" id={listId}>
+              {rows.map((o, index) => (
+                <button
+                  key={o.value || "__empty__"}
+                  id={optionId(index)}
+                  type="button"
+                  role="option"
+                  aria-selected={o.value === value}
+                  className={`searchable-select-option${o.isEmptyRow ? " muted" : ""}${
+                    index === highlighted ? " highlighted" : ""
+                  }`}
+                  disabled={o.disabled}
+                  onMouseEnter={() => setHighlighted(index)}
+                  onClick={() => pick(o.value)}
+                >
+                  {o.label}
+                  {o.hint && <span className="muted"> {o.hint}</span>}
+                </button>
+              ))}
+              {rows.length === 0 && <span className="muted searchable-select-empty">Keine Treffer.</span>}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
