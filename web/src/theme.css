@@ -16,6 +16,17 @@
   /* Code/data role only (template placeholders, cron syntax, IDs) — never body text. Distinguishes "this is syntax, copy it exactly" from prose at a glance. */
   --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, "Liberation Mono", monospace;
 
+  /* Type scale — named by role, not value, so repeated roles stay identical
+     across pages instead of each accumulating its own one-off px number.
+     --fs-meta and --fs-small sit close together deliberately (both read as
+     "smaller than body"); the jobs they do are told apart by weight/case/
+     color (see th/.badge vs. label/.hint), not by size alone. */
+  --fs-meta: 11px; /* badges, uppercase table headers, timestamps — decorative/meta, never prose */
+  --fs-small: 12px; /* hints, field labels, secondary notes — supporting text, not the primary read */
+  --fs-body: 14px; /* the default reading size: prose, inputs, table cells, alerts, toasts, previews */
+  --fs-heading-sm: 16px; /* card/section headings */
+  --fs-heading-lg: 22px; /* page titles */
+
   /* Shell metrics. */
   --sidebar-w: 220px;
   --content-max: 1600px;
@@ -36,7 +47,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 
@@ -186,9 +197,15 @@ code {
   padding: 32px 40px 48px;
 }
 
-/* Page title — set explicitly instead of relying on the browser's UA h2 size, so it stays a clear, consistent step above `.card h2` (16px) across browsers. */
+/* Page title — set explicitly instead of relying on the browser's UA h2 size,
+   so it stays a clear, consistent step above `.card h2` (16px) across
+   browsers. Weight 700 (vs. every other heading's shared 600) is a second,
+   independent signal that this is the page's apex — size alone doesn't have
+   room to do that job on its own without colliding with .stat-tile .value's
+   24px, which sits on the same page for several routes. */
 .main-inner > h2 {
-  font-size: 22px;
+  font-size: var(--fs-heading-lg);
+  font-weight: 700;
   margin-bottom: 24px;
 }
 
@@ -439,6 +456,11 @@ th {
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.04em;
+}
+
+th p {
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .badge {
@@ -1010,6 +1032,75 @@ th {
   top: auto;
   margin-top: 4px;
   max-width: 320px;
+}
+
+.template-editor-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.template-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.template-editor-chip:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+}
+
+.template-editor-textarea-wrap {
+  position: relative;
+}
+
+/* Sits behind the real textarea, rendering the exact same text with
+   recognized {token} substrings wrapped as pills. Box model (padding/
+   border/font) must match the textarea rule above exactly, or the visible
+   overlay text drifts out of alignment with the real (invisible) caret. */
+.template-editor-highlight {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.template-editor-textarea-wrap.has-highlight textarea {
+  position: relative;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  /* The overlay's box is static (no resize handle of its own), so letting
+     the real textarea resize independently would immediately desync the
+     two — simplest fix is disabling resize on fields with a highlight
+     overlay. These templates are short and already have a live preview
+     below, so a fixed height is an acceptable trade. */
+  resize: none;
+}
+
+.template-editor-pill {
+  background: rgba(88, 101, 242, 0.25);
+  border-radius: 4px;
+  padding: 0 2px;
 }
 
 .template-preview-text {

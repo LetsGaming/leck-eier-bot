@@ -33,7 +33,7 @@ function RegistrationsCard({ query }: { query: string }) {
   async function handleApprove(entry: Registration) {
     const ok = await confirmDialog({
       title: "Registrierung genehmigen",
-      message: `${entry.displayName} erhält die konfigurierte Registrierungsrolle und wird damit als registriert markiert. Der private Thread wird automatisch geschlossen.`,
+      message: `${entry.displayName} erhält die konfigurierte Rolle nach der Registrierung und wird damit als registriert markiert. Der private Thread wird automatisch geschlossen.`,
       confirmLabel: "Genehmigen",
     });
     if (!ok) return;

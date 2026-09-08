@@ -68,9 +68,9 @@ export const DEFAULT_BIRTHDAY_ANCHOR_TEMPLATE = "**{month}**\n{entries}";
 export const DISCORD_MESSAGE_MAX_LENGTH = 2000;
 
 // --- Self-service registration form ---
-/** `{name}` is the value pulled from the submitted form's `name:` line; `{roleChannel}` is a `#channel` mention of `roleSelectionChannelId`. See `services/registration.ts`. */
+/** `{name}` is the value pulled from the submitted form's `name:` line. See `services/registration.ts`. A channel can be referenced directly with Discord's native `#channel` mention (inserted via the dashboard's channel picker), no placeholder token needed. */
 export const DEFAULT_REGISTER_CONFIRMATION_TEMPLATE =
-  "Danke {name}! Du wirst in Kürze registriert. Bis dahin kannst du dir schon in {roleChannel} deine Rollen aussuchen.";
+  "Danke {name}! Du wirst in Kürze registriert.";
 /** Matches a `name:`-labeled line anywhere in a register-form submission (case-insensitive) — see `parseRegisterForm()` in `services/registration.ts`. */
 export const REGISTER_FORM_NAME_REGEX = /^\s*name\s*:\s*(.+)$/im;
 /** Matches an `sso name:`-labeled line (case-insensitive) — its last whitespace-separated word becomes the lowercase surname half of the generated nickname. Anchored so a plain `name:` line never matches this. See `parseRegisterForm()` in `services/registration.ts`. */
@@ -79,9 +79,9 @@ export const REGISTER_FORM_SSO_NAME_REGEX = /^\s*sso\s*name\s*:\s*(.+)$/im;
 export const REGISTER_FORM_ALTER_REGEX = /^\s*alter\s*:\s*(.+)$/im;
 /** Seed default for `settings.registerNicknameEmoji` (the emoji prefixed onto every registration-form-generated nickname — see `buildRegisterNickname()` in `services/registration.ts`) — editable per-server from the dashboard from here on, not a fixed constant. */
 export const REGISTER_NICKNAME_EMOJI = "💙";
-/** `{name}`/`{roleChannel}` — same placeholders as DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. Posted instead of the normal template when `settings.registerAutoComplete` is on and the tier role was granted successfully. */
+/** `{name}` — same placeholder as DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. Posted instead of the normal template when `settings.registerAutoComplete` is on and the tier role was granted successfully. */
 export const DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE =
-  "Willkommen {name}! Du bist jetzt vollständig registriert. Schau dir gerne schon in {roleChannel} deine Rollen an. Dieser Thread schließt sich in einer Stunde automatisch.";
+  "Willkommen {name}! Du bist jetzt vollständig registriert. Dieser Thread schließt sich in einer Stunde automatisch.";
 /** How long the private thread stays open after an auto-completed registration before being deleted — see `sweepExpiredRegisterThreads()` in `registerWatcher.ts`. Not configurable by design. */
 export const REGISTER_AUTO_THREAD_LIFETIME_MS = 60 * 60 * 1000;
 /** How often the bot checks for auto-completed registration threads past their lifetime. */

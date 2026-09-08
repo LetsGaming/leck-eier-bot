@@ -4,7 +4,7 @@ import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import SearchableSelect from "../components/SearchableSelect";
 import Tabs from "../components/Tabs";
-import TemplateEditor from "../components/TemplateEditor";
+import TemplateEditor, { type TemplatePlaceholder } from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
 import { useChannels } from "../hooks/useChannels";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
@@ -14,9 +14,11 @@ import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
 
-/** Sample values shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` and `{roleChannel}` fallback text exactly (see src/events/registerWatcher.ts). */
+/** Sample value shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` substitution exactly (see src/events/registerWatcher.ts). */
 const PREVIEW_REGISTER_NAME = "Beispielperson";
-const PREVIEW_ROLE_CHANNEL_FALLBACK = "dem Rollen-Kanal";
+
+/** Both registration confirmation templates (register-confirmation-template, auto-register-confirmation-template) carry only this one placeholder — see renderConfirmation() in src/services/registration.ts. */
+const REGISTER_TEMPLATE_PLACEHOLDERS: TemplatePlaceholder[] = [{ token: "name", label: "Name" }];
 
 /** Sample name/sso-name for the nickname-format preview below — same shape a real "name:"/"sso name:" submission produces. */
 const PREVIEW_NICKNAME_FIRST_NAME = "Areum";
@@ -54,8 +56,8 @@ const ROLE_LABELS: Record<string, string> = {
 const SECTIONS = [
   { id: "allgemein", label: "Allgemein" },
   { id: "registrierung", label: "Registrierung" },
-  { id: "events", label: "Events (Apollo)" },
-  { id: "sitzung", label: "Sitzung" },
+  { id: "events", label: "Event-Anwesenheit" },
+  { id: "konto", label: "Konto" },
 ];
 const DEFAULT_SECTION = "allgemein";
 
@@ -193,18 +195,18 @@ function RegistrierungSection({
       <div className="alert neutral mb-16">
         <strong>Ablauf:</strong> Mitglied postet das Formular im Kanal unten →
         Bot setzt den Nickname und öffnet einen privaten Thread → ein
-        Team-Mitglied vergibt die Registrierungsrolle (oder automatisch, siehe
-        "Abschluss" unten) → der Bot bestätigt im Thread und entfernt die
-        Sperre-Rolle oben.
+        Team-Mitglied vergibt die Rolle nach der Registrierung (oder
+        automatisch, siehe "Abschluss" unten) → der Bot bestätigt im Thread und
+        entfernt die Rolle vor der Registrierung.
       </div>
       <div className="card-grid">
         <div className="card">
-          <h2>Registrierung</h2>
+          <h2>Rollen im Registrierungsablauf</h2>
           <p className="muted small">
-            Entfernt die Registrierungssperre-Rolle automatisch, sobald ein
-            Mitglied die Registrierungsrolle erhält — so verschwindet z. B.
-            #register nach der Registrierung. Lasse ein Feld leer, um dies zu
-            deaktivieren.
+            Entfernt die Rolle vor der Registrierung automatisch, sobald ein
+            Mitglied die Rolle nach der Registrierung erhält — so verschwindet
+            z. B. #register nach der Registrierung. Lasse ein Feld leer, um
+            dies zu deaktivieren.
           </p>
           {!settings ? (
             <div className="loading">Wird geladen…</div>
@@ -212,7 +214,7 @@ function RegistrierungSection({
             <>
               <div className="field">
                 <label htmlFor="register-gate-role">
-                  Registrierungssperre-Rolle
+                  Rolle vor der Registrierung
                 </label>
                 <SearchableSelect
                   id="register-gate-role"
@@ -231,7 +233,7 @@ function RegistrierungSection({
               </div>
               <div className="field">
                 <label htmlFor="registration-tier-role">
-                  Registrierungsrolle (niedrigste Stufe)
+                  Rolle nach der Registrierung
                 </label>
                 <SearchableSelect
                   id="registration-tier-role"
@@ -244,9 +246,10 @@ function RegistrierungSection({
                   options={toRoleOptions(roles)}
                 />
                 <div className="hint">
-                  Die niedrigste Mitgliedschaftsstufe, die einmalig bei der
-                  manuellen Registrierung vergeben wird — keine höhere Stufe, da
-                  spätere Beförderungen dies nicht erneut auslösen dürfen.
+                  Wird einmalig vergeben, sobald die Registrierung
+                  abgeschlossen wird. Höhere Rollen, die ein Mitglied später
+                  bekommt (Beförderungen), lösen dies nicht erneut aus — diese
+                  Rolle bleibt für den Registrierungs-Abschluss reserviert.
                 </div>
               </div>
               <label className="switch">
@@ -260,7 +263,7 @@ function RegistrierungSection({
                   }
                 />
                 "Regeln akzeptiert" über Discords Mitgliedschafts-Screening
-                statt der Registrierungssperre-Rolle erkennen
+                statt der Rolle vor der Registrierung erkennen
               </label>
               <div className="hint">
                 Discord bietet ein eigenes "Mitgliedschafts-Screening" an
@@ -269,8 +272,8 @@ function RegistrierungSection({
                 Server das? Dann schalte diesen Regler ein, damit die Spalte
                 "Regeln akzeptiert" in der{" "}
                 <a href="/members">Mitgliederprüfung</a> Discords eigenen Status
-                statt der Sperre-Rolle oben anzeigt. Falls unsicher: aus lassen
-                (Standard).
+                statt der Rolle vor der Registrierung oben anzeigt. Falls
+                unsicher: aus lassen (Standard).
               </div>
             </>
           )}
@@ -299,23 +302,6 @@ function RegistrierungSection({
                 />
                 <div className="hint">
                   Der Kanal, in dem der Bot auf Formular-Einreichungen achtet.
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="role-selection-channel">Rollen-Kanal</label>
-                <SearchableSelect
-                  id="role-selection-channel"
-                  value={settings.roleSelectionChannelId ?? ""}
-                  onChange={(v) =>
-                    update({ roleSelectionChannelId: v || null })
-                  }
-                  placeholder="Kanäle durchsuchen…"
-                  emptyLabel="— keiner —"
-                  options={toChannelOptions(channels)}
-                />
-                <div className="hint">
-                  Wird im Bestätigungstext als <code>{"{roleChannel}"}</code>{" "}
-                  eingesetzt.
                 </div>
               </div>
             </>
@@ -381,12 +367,12 @@ function RegistrierungSection({
                   value={confirmationTemplate}
                   onChange={setConfirmationTemplate}
                   channels={channels}
+                  placeholders={REGISTER_TEMPLATE_PLACEHOLDERS}
                 />
                 <div className="hint">
-                  Platzhalter: <code>{"{name}"}</code> (aus der "name:"-Zeile)
-                  und <code>{"{roleChannel}"}</code> (der oben festgelegte
-                  Rollen-Kanal) — oder tippe <code>#</code>, um direkt einen
-                  beliebigen Kanal einzufügen.
+                  "Name" fügt den Vornamen aus der "name:"-Zeile ein — oder
+                  tippe <code>#</code>, um direkt einen beliebigen Kanal
+                  einzufügen.
                 </div>
               </div>
               <label className="switch">
@@ -400,35 +386,21 @@ function RegistrierungSection({
                 Text über die globale Schrift stylen
               </label>
               <div className="hint">
-                Platzhalter (<code>{"{name}"}</code>,{" "}
-                <code>{"{roleChannel}"}</code>) bleiben immer unformatiert.
+                Der Platzhalter (<code>{"{name}"}</code>) bleibt immer
+                unformatiert.
               </div>
               <div className="preview-box mt-8 mb-12">
                 {/*
                 Mirrors renderConfirmation() in src/services/registration.ts:
                 {name} is `raw` (never font-mapped, regardless of useFont —
-                same as every other substituted value elsewhere in the app),
-                and {roleChannel} is rewritten to {channel:<id>} before
-                rendering when a role-selection channel is configured, so it
-                resolves through the core `channel` resolver (here, to a
-                "#name" mockup instead of a real <#id> mention) — otherwise
-                it's left for the `raw` bucket's identical fallback text.
+                same as every other substituted value elsewhere in the app).
+                A channel mention is literal `<#id>` text already (inserted
+                via the `#`-trigger popover), so mockifyChannelMentions below
+                is what turns it into this preview's "#name" mockup.
               */}
                 <TemplatePreview
-                  template={
-                    settings.roleSelectionChannelId
-                      ? confirmationTemplate.replace(
-                          /\{roleChannel\}/g,
-                          `{channel:${settings.roleSelectionChannelId}}`,
-                        )
-                      : confirmationTemplate
-                  }
-                  context={{
-                    raw: {
-                      name: PREVIEW_REGISTER_NAME,
-                      roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK,
-                    },
-                  }}
+                  template={confirmationTemplate}
+                  context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
                   channels={channels}
                   useFont={settings.registerConfirmationUseFont}
                   fontMap={settings.fontMap}
@@ -447,9 +419,9 @@ function RegistrierungSection({
               <h2>Abschluss</h2>
               <p className="muted small">
                 Reguläre Registrierung: der Thread bleibt offen, bis ein
-                Team-Mitglied die Registrierungsrolle (siehe oben) manuell
-                vergibt — der Bot postet dann den Text unten in den Thread und
-                schließt ihn eine Stunde später automatisch.
+                Team-Mitglied die Rolle nach der Registrierung (siehe oben)
+                manuell vergibt — der Bot postet dann den Text unten in den
+                Thread und schließt ihn eine Stunde später automatisch.
               </p>
               <label className="switch">
                 <input
@@ -463,10 +435,10 @@ function RegistrierungSection({
                 Prüfung)
               </label>
               <div className="hint">
-                Vergibt die Registrierungsrolle sofort bei Formular-Einreichung
-                und postet den Text unten direkt. Ohne gesetzte
-                Registrierungsrolle (siehe oben) hat dieser Schalter keine
-                Wirkung.
+                Vergibt die Rolle nach der Registrierung sofort bei
+                Formular-Einreichung und postet den Text unten direkt. Ohne
+                gesetzte Rolle nach der Registrierung (siehe oben) hat dieser
+                Schalter keine Wirkung.
               </div>
               <div className="field">
                 <label htmlFor="auto-register-confirmation-template">
@@ -477,11 +449,9 @@ function RegistrierungSection({
                   value={autoConfirmationTemplate}
                   onChange={setAutoConfirmationTemplate}
                   channels={channels}
+                  placeholders={REGISTER_TEMPLATE_PLACEHOLDERS}
                 />
-                <div className="hint">
-                  Gleiche Platzhalter wie oben: <code>{"{name}"}</code> und{" "}
-                  <code>{"{roleChannel}"}</code>.
-                </div>
+                <div className="hint">Gleicher Platzhalter wie oben.</div>
               </div>
               <label className="switch">
                 <input
@@ -497,20 +467,8 @@ function RegistrierungSection({
               </label>
               <div className="preview-box mt-8 mb-12">
                 <TemplatePreview
-                  template={
-                    settings.roleSelectionChannelId
-                      ? autoConfirmationTemplate.replace(
-                          /\{roleChannel\}/g,
-                          `{channel:${settings.roleSelectionChannelId}}`,
-                        )
-                      : autoConfirmationTemplate
-                  }
-                  context={{
-                    raw: {
-                      name: PREVIEW_REGISTER_NAME,
-                      roleChannel: PREVIEW_ROLE_CHANNEL_FALLBACK,
-                    },
-                  }}
+                  template={autoConfirmationTemplate}
+                  context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
                   channels={channels}
                   useFont={settings.autoRegisterConfirmationUseFont}
                   fontMap={settings.fontMap}
@@ -594,10 +552,10 @@ function EventsSection({
   );
 }
 
-function SitzungSection({ me }: { me: Me }) {
+function KontoSection({ me }: { me: Me }) {
   return (
     <div className="card">
-      <h2>Sitzung</h2>
+      <h2>Konto</h2>
       <p>
         Angemeldet als <strong>{me.username}</strong> ({me.userId}) — Rolle:{" "}
         <strong>{ROLE_LABELS[me.role] ?? me.role}</strong>
@@ -779,7 +737,7 @@ export default function Settings({ me }: { me: Me }) {
             voiceChannels={voiceChannels}
           />
         )}
-        {activeSection === "sitzung" && <SitzungSection me={me} />}
+        {activeSection === "konto" && <KontoSection me={me} />}
       </div>
     </div>
   );

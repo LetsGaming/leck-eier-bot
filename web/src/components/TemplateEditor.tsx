@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { Channel } from "../types";
+
+export interface TemplatePlaceholder {
+  /** The token name between braces, e.g. `name` for `{name}`. */
+  token: string;
+  /** Human-readable button label — never the raw token itself (see chip row below). */
+  label: string;
+}
 
 export interface TemplateEditorProps {
   value: string;
@@ -8,7 +15,12 @@ export interface TemplateEditorProps {
   channels: Channel[];
   placeholder?: string;
   id?: string;
+  /** Fixed set of `{token}` placeholders valid for this field, shown as insertable chips above the textarea and highlighted as pills inside it. Omit (or pass an empty array) for a field with no placeholders (e.g. ReactionRoles' message templates) — no chip row or highlighting renders. */
+  placeholders?: TemplatePlaceholder[];
 }
+
+/** Matches one `{tokenName}` (no nested braces) — same shape as the rendering engines' own TOKEN_PATTERN, kept local here since this only needs to *recognize* a token, not resolve it. */
+const PLACEHOLDER_PATTERN = /\{([^{}]*)\}/g;
 
 interface TriggerState {
   /** Index into `value` of the trigger character itself (the `#`). */
@@ -35,11 +47,15 @@ interface TriggerState {
  * entry would just add another regex/lookup here) rather than hardcoding `#`
  * assumptions elsewhere in the component.
  */
-export default function TemplateEditor({ value, onChange, channels, placeholder, id }: TemplateEditorProps) {
+export default function TemplateEditor({ value, onChange, channels, placeholder, id, placeholders }: TemplateEditorProps) {
   const [trigger, setTrigger] = useState<TriggerState | null>(null);
   const [highlighted, setHighlighted] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  const recognizedTokens = useMemo(() => new Set((placeholders ?? []).map((p) => p.token)), [placeholders]);
+  const hasPlaceholders = (placeholders?.length ?? 0) > 0;
 
   const filtered = useMemo(() => {
     if (!trigger) return [];
@@ -104,6 +120,58 @@ export default function TemplateEditor({ value, onChange, channels, placeholder,
     });
   }
 
+  /** Inserts `{token}` at the cursor (replacing any active selection) — the click-target for a chip in the placeholder row above the textarea. Unlike `insertChannel`, this isn't gated on an open trigger popover; it's a direct, always-available insertion. */
+  function insertPlaceholder(token: string) {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? start;
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const inserted = `{${token}}`;
+    const nextValue = `${before}${inserted}${after}`;
+    onChange(nextValue);
+    requestAnimationFrame(() => {
+      const pos = before.length + inserted.length;
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  }
+
+  /** Keeps the highlight overlay's scroll position identical to the real (invisible-text) textarea's — otherwise the visible pill-rendered copy would drift out of alignment with the caret/selection on any content taller than the field. */
+  function syncHighlightScroll() {
+    if (highlightRef.current && textareaRef.current) {
+      highlightRef.current.scrollTop = textareaRef.current.scrollTop;
+      highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }
+
+  /** Splits `text` on `{token}` boundaries, wrapping only recognized tokens (from `placeholders`) in a pill span — an unrecognized `{typo}` is left as plain text so a mistake doesn't look like a valid token. */
+  function renderHighlighted(text: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    let lastIndex = 0;
+    let key = 0;
+    PLACEHOLDER_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = PLACEHOLDER_PATTERN.exec(text))) {
+      if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+      if (recognizedTokens.has(match[1]!)) {
+        nodes.push(
+          <span key={key++} className="template-editor-pill">
+            {match[0]}
+          </span>,
+        );
+      } else {
+        nodes.push(match[0]);
+      }
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+    // A trailing newline needs a trailing space to actually take up a visible
+    // line in a pre-wrap block, matching how the real textarea renders it.
+    if (text.endsWith("\n")) nodes.push(" ");
+    return nodes;
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (!trigger) return;
     switch (e.key) {
@@ -140,29 +208,54 @@ export default function TemplateEditor({ value, onChange, channels, placeholder,
 
   return (
     <div className="template-editor" ref={rootRef}>
-      <textarea
-        id={id}
-        ref={textareaRef}
-        className="mono-input"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => {
-          onChange(e.target.value);
-          // The change hasn't reflected into the DOM's selection yet on this
-          // tick in every browser, but selectionStart already matches the
-          // new caret position by the time this handler runs.
-          requestAnimationFrame(syncTriggerFromCursor);
-        }}
-        onKeyDown={handleKeyDown}
-        onKeyUp={(e) => {
-          // Arrow-key/Home/End navigation while the popover is open is
-          // handled by handleKeyDown above (and must not also move the
-          // cursor's trigger lookup here); everything else re-checks.
-          if (trigger && ["ArrowDown", "ArrowUp", "Home", "End", "Enter", "Escape"].includes(e.key)) return;
-          syncTriggerFromCursor();
-        }}
-        onClick={syncTriggerFromCursor}
-      />
+      {hasPlaceholders && (
+        <div className="template-editor-chip-row">
+          {placeholders!.map((p) => (
+            <button
+              key={p.token}
+              type="button"
+              className="template-editor-chip"
+              title={`{${p.token}}`}
+              onClick={() => insertPlaceholder(p.token)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={`template-editor-textarea-wrap${hasPlaceholders ? " has-highlight" : ""}`}>
+        {hasPlaceholders && (
+          <div className="template-editor-highlight mono-input" ref={highlightRef} aria-hidden="true">
+            {renderHighlighted(value)}
+          </div>
+        )}
+        <textarea
+          id={id}
+          ref={textareaRef}
+          className="mono-input"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => {
+            onChange(e.target.value);
+            // The change hasn't reflected into the DOM's selection yet on this
+            // tick in every browser, but selectionStart already matches the
+            // new caret position by the time this handler runs.
+            requestAnimationFrame(syncTriggerFromCursor);
+            if (hasPlaceholders) requestAnimationFrame(syncHighlightScroll);
+          }}
+          onKeyDown={handleKeyDown}
+          onKeyUp={(e) => {
+            // Arrow-key/Home/End navigation while the popover is open is
+            // handled by handleKeyDown above (and must not also move the
+            // cursor's trigger lookup here); everything else re-checks.
+            if (trigger && ["ArrowDown", "ArrowUp", "Home", "End", "Enter", "Escape"].includes(e.key)) return;
+            syncTriggerFromCursor();
+          }}
+          onClick={syncTriggerFromCursor}
+          onScroll={hasPlaceholders ? syncHighlightScroll : undefined}
+        />
+      </div>
 
       {trigger && (
         <div className="template-editor-popover searchable-select-popover">

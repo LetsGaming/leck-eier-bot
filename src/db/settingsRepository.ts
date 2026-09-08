@@ -18,7 +18,6 @@ interface SettingsRow {
   registration_tier_role_id: string | null;
   rules_accepted_use_discord_screening: 0 | 1;
   register_channel_id: string | null;
-  role_selection_channel_id: string | null;
   register_confirmation_template: string;
   register_confirmation_use_font: 0 | 1;
   register_nickname_use_font: 0 | 1;
@@ -47,7 +46,6 @@ function rowToSettings(row: SettingsRow): Settings {
     registrationTierRoleId: row.registration_tier_role_id,
     rulesAcceptedUseDiscordScreening: row.rules_accepted_use_discord_screening === 1,
     registerChannelId: row.register_channel_id,
-    roleSelectionChannelId: row.role_selection_channel_id,
     registerConfirmationTemplate: row.register_confirmation_template,
     registerConfirmationUseFont: row.register_confirmation_use_font === 1,
     registerNicknameUseFont: row.register_nickname_use_font === 1,
@@ -66,7 +64,7 @@ const selectStmt = db.prepare<[], SettingsRow>(
           birthday_anchor_template, birthday_anchor_intro, font_map, birthday_anchor_use_font,
           birthday_announcement_use_font, leave_notifications_enabled,
           register_gate_role_id, registration_tier_role_id, rules_accepted_use_discord_screening,
-          register_channel_id, role_selection_channel_id, register_confirmation_template,
+          register_channel_id, register_confirmation_template,
           register_confirmation_use_font,
           register_nickname_use_font, register_nickname_emoji, register_auto_complete, auto_register_confirmation_template,
           auto_register_confirmation_use_font,
@@ -89,7 +87,6 @@ const updateStmt = db.prepare<{
   registrationTierRoleId: string | null;
   rulesAcceptedUseDiscordScreening: 0 | 1;
   registerChannelId: string | null;
-  roleSelectionChannelId: string | null;
   registerConfirmationTemplate: string;
   registerConfirmationUseFont: 0 | 1;
   registerNicknameUseFont: 0 | 1;
@@ -116,7 +113,6 @@ const updateStmt = db.prepare<{
      registration_tier_role_id = @registrationTierRoleId,
      rules_accepted_use_discord_screening = @rulesAcceptedUseDiscordScreening,
      register_channel_id = @registerChannelId,
-     role_selection_channel_id = @roleSelectionChannelId,
      register_confirmation_template = @registerConfirmationTemplate,
      register_confirmation_use_font = @registerConfirmationUseFont,
      register_nickname_use_font = @registerNicknameUseFont,
@@ -176,7 +172,6 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     registrationTierRoleId: next.registrationTierRoleId,
     rulesAcceptedUseDiscordScreening: next.rulesAcceptedUseDiscordScreening ? 1 : 0,
     registerChannelId: next.registerChannelId,
-    roleSelectionChannelId: next.roleSelectionChannelId,
     registerConfirmationTemplate: next.registerConfirmationTemplate,
     registerConfirmationUseFont: next.registerConfirmationUseFont ? 1 : 0,
     registerNicknameUseFont: next.registerNicknameUseFont ? 1 : 0,

@@ -16,8 +16,8 @@ const TIER_LABELS: Record<WebRole, string> = {
 
 const MODE_LABELS: Record<GateMode, string> = {
   everyone: "Jeder",
-  role: "Rolle",
-  tier: "Mindest-Stufe",
+  role: "Bestimmte Rolle",
+  tier: "Mindestrang",
 };
 
 function gateLabel(gate: PermissionGate, roles: RoleOption[]): string {
@@ -120,7 +120,14 @@ export default function Commands() {
                 <tr>
                   <th>Befehl</th>
                   <th>Beschreibung</th>
-                  <th>Berechtigung</th>
+                  <th>
+                    Berechtigung
+                    <p className="muted small">
+                      "Bestimmte Rolle" erlaubt eine einzelne Discord-Rolle;
+                      "Mindestrang" erlaubt ab einem bestimmten Bot-Team-Rang
+                      (z. B. nur Admins) unabhängig von Discord-Rollen.
+                    </p>
+                  </th>
                   <th>Aktiviert</th>
                   <th>
                     Nur auf Server
@@ -153,7 +160,7 @@ export default function Commands() {
                         </select>
                         {mode === "tier" && (
                           <select
-                            aria-label={`/${c.name} Mindest-Stufe`}
+                            aria-label={`/${c.name} Mindestrang`}
                             value={eff.mode === "tier" ? eff.tier : "admin"}
                             disabled={pending === c.name}
                             onChange={(e) => handleTierChange(c, e.target.value as WebRole)}

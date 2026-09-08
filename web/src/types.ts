@@ -227,11 +227,9 @@ export interface GeneralSettings {
   rulesAcceptedUseDiscordScreening: boolean;
   /** Channel watched for self-service registration-form submissions. Null = the feature is disabled. */
   registerChannelId: string | null;
-  /** Channel mentioned (as `{roleChannel}`) in the registration confirmation note. */
-  roleSelectionChannelId: string | null;
-  /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders. */
+  /** Posted in the private thread created on a member's registration-form message. `{name}` placeholder. A channel is referenced with Discord's native `#channel` mention, inserted directly via the dashboard's channel picker. */
   registerConfirmationTemplate: string;
-  /** Whether `registerConfirmationTemplate`'s literal text renders through the global font set above — `{name}`/`{roleChannel}` are never styled either way. Off by default. */
+  /** Whether `registerConfirmationTemplate`'s literal text renders through the global font set above — `{name}` is never styled either way. Off by default. */
   registerConfirmationUseFont: boolean;
   /** Whether the generated nickname's first-name half renders through the global font set above. Defaults on. */
   registerNicknameUseFont: boolean;
@@ -239,7 +237,7 @@ export interface GeneralSettings {
   registerNicknameEmoji: string;
   /** Off by default. When on, a valid registration-form submission immediately grants the registration-tier role instead of waiting for staff. The private thread still opens (with `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after an hour. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
-  /** Posted in the private thread when registration is finalized, whether instantly (`registerAutoComplete`) or later once staff manually grant the role. Same `{name}`/`{roleChannel}` placeholders. */
+  /** Posted in the private thread when registration is finalized, whether instantly (`registerAutoComplete`) or later once staff manually grant the role. Same `{name}` placeholder. */
   autoRegisterConfirmationTemplate: string;
   /** Same as `registerConfirmationUseFont`, for `autoRegisterConfirmationTemplate`. Independent toggle. */
   autoRegisterConfirmationUseFont: boolean;

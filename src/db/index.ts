@@ -474,11 +474,15 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // v22: self-service registration — a member posts a filled-out form in
   // register_channel_id, the bot updates their nickname and confirms in a
   // private thread on that message (registerWatcher.ts). role_selection_
-  // channel_id is only ever read to render {roleChannel} in the confirmation
-  // template; it isn't otherwise enforced by the bot. member_records gets
-  // the new thread's id so it can be looked up and deleted later once staff
-  // manually grant registrationTierRoleId (memberEvents.ts) — nullable and
-  // cleared once deleted, same lifecycle as a plain "pending" flag.
+  // channel_id was originally read to render {roleChannel} in the
+  // confirmation template; that placeholder was removed in favor of inline
+  // `#channel` mentions typed directly into the template, so this column is
+  // no longer read or written anywhere — kept as an unused, harmless column
+  // since migrations here are additive-only (see MIGRATIONS' header note).
+  // member_records gets the new thread's id so it can be looked up and
+  // deleted later once staff manually grant registrationTierRoleId
+  // (memberEvents.ts) — nullable and cleared once deleted, same lifecycle
+  // as a plain "pending" flag.
   (d) => {
     // Template-string interpolation is safe here: DEFAULT_REGISTER_CONFIRMATION_TEMPLATE
     // is a hardcoded constant. If this pattern is copied for config/env/user values,

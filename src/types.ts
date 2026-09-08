@@ -99,11 +99,9 @@ export interface Settings {
   rulesAcceptedUseDiscordScreening: boolean;
   /** Channel watched for self-service registration-form submissions. Null = the feature is disabled. See `registerWatcher.ts`. */
   registerChannelId: string | null;
-  /** Channel mentioned (as `{roleChannel}`) in the registration confirmation note — where a newly-registered member can pick their roles while waiting on staff. */
-  roleSelectionChannelId: string | null;
-  /** Posted in the private thread created on a member's registration-form message. `{name}`/`{roleChannel}` placeholders — see DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. */
+  /** Posted in the private thread created on a member's registration-form message. `{name}` placeholder — see DEFAULT_REGISTER_CONFIRMATION_TEMPLATE. A channel can be referenced with Discord's native `#channel` mention, inserted directly via the dashboard's channel picker. */
   registerConfirmationTemplate: string;
-  /** Whether `registerConfirmationTemplate`'s literal text renders through the shared `fontMap` (see `renderConfirmation()` in services/registration.ts) — `{name}`/`{roleChannel}` are never styled either way. Off by default, matching the template's previous hardcoded unstyled behavior. */
+  /** Whether `registerConfirmationTemplate`'s literal text renders through the shared `fontMap` (see `renderConfirmation()` in services/registration.ts) — `{name}` is never styled either way. Off by default, matching the template's previous hardcoded unstyled behavior. */
   registerConfirmationUseFont: boolean;
   /** Whether the generated nickname's first-name half renders through the shared `fontMap` (see `buildRegisterNickname()` in services/registration.ts). Defaults on. */
   registerNicknameUseFont: boolean;
@@ -111,7 +109,7 @@ export interface Settings {
   registerNicknameEmoji: string;
   /** Off by default. When on, a valid registration-form submission immediately grants `registrationTierRoleId` instead of waiting for staff — see `registerWatcher.ts`. The private thread still opens (posting `autoRegisterConfirmationTemplate` instead of `registerConfirmationTemplate`) but auto-deletes after `REGISTER_AUTO_THREAD_LIFETIME_MS`. Has no effect if `registrationTierRoleId` isn't set. */
   registerAutoComplete: boolean;
-  /** Posted in the private thread when registration is finalized — either instantly (`registerAutoComplete` grants the tier role at submission) or later (staff manually grant it — see `completeRegistration()` in registerWatcher.ts). Same `{name}`/`{roleChannel}` placeholders — see DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE. */
+  /** Posted in the private thread when registration is finalized — either instantly (`registerAutoComplete` grants the tier role at submission) or later (staff manually grant it — see `completeRegistration()` in registerWatcher.ts). Same `{name}` placeholder — see DEFAULT_AUTO_REGISTER_CONFIRMATION_TEMPLATE. */
   autoRegisterConfirmationTemplate: string;
   /** Same as `registerConfirmationUseFont`, for `autoRegisterConfirmationTemplate`'s literal text. Independent toggle — an admin may want one template styled and not the other. */
   autoRegisterConfirmationUseFont: boolean;

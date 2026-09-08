@@ -197,27 +197,21 @@ test("reactionRoles-equivalent: renderTemplate with no context reduces to plain 
 });
 
 // --- Feature-specific coverage: registration confirmation (renderTemplate call shape) ---
-// Mirrors renderConfirmation()'s exact pre-render token rewrite +
-// renderTemplate call from src/services/registration.ts.
+// Mirrors renderConfirmation()'s exact renderTemplate call from
+// src/services/registration.ts. A channel reference is literal `<#id>` text
+// already (inserted via the `#`-trigger popover), so this needs no core
+// resolver — only the `{name}` raw substitution.
 
-function renderConfirmationEquivalent(template: string, name: string, roleSelectionChannelId: string | null): string {
-  const effectiveTemplate = roleSelectionChannelId
-    ? template.replace(/{roleChannel}/g, `{channel:${roleSelectionChannelId}}`)
-    : template;
-  return renderTemplate(
-    effectiveTemplate,
-    { raw: { name, roleChannel: "dem Rollen-Kanal" } },
-    { channel: (id) => `<#${id}>` },
-    { useFont: false, fontMap: null },
-  );
+function renderConfirmationEquivalent(template: string, name: string): string {
+  return renderTemplate(template, { raw: { name } }, {}, { useFont: false, fontMap: null });
 }
 
-test("registerWatcher-equivalent: {roleChannel} resolves through the core channel token when configured", () => {
-  const result = renderConfirmationEquivalent("Willkommen {name}! Schau in {roleChannel} vorbei.", "Alex", "555");
+test("registerWatcher-equivalent: {name} is substituted unstyled", () => {
+  const result = renderConfirmationEquivalent("Willkommen {name}! Schau in <#555> vorbei.", "Alex");
   assert.equal(result, "Willkommen Alex! Schau in <#555> vorbei.");
 });
 
-test("registerWatcher-equivalent: {roleChannel} falls back to literal text when no channel is configured", () => {
-  const result = renderConfirmationEquivalent("Willkommen {name}! Schau in {roleChannel} vorbei.", "Alex", null);
-  assert.equal(result, "Willkommen Alex! Schau in dem Rollen-Kanal vorbei.");
+test("registerWatcher-equivalent: an unrecognized token is left as literal text", () => {
+  const result = renderConfirmationEquivalent("Willkommen {name}! {unknownToken}", "Alex");
+  assert.equal(result, "Willkommen Alex! {unknownToken}");
 });

@@ -122,7 +122,7 @@ export default function registerRegisterWatcher(client: BotClient): void {
       // or the original message — the thread stands on its own.
       const template = autoCompleted ? settings.autoRegisterConfirmationTemplate : settings.registerConfirmationTemplate;
       const useFont = autoCompleted ? settings.autoRegisterConfirmationUseFont : settings.registerConfirmationUseFont;
-      const note = renderConfirmation(template, fields.name, settings.roleSelectionChannelId, useFont, settings.fontMap);
+      const note = renderConfirmation(template, fields.name, useFont, settings.fontMap);
       await thread.send({ content: note });
     } catch (err) {
       logger.warn(
@@ -240,7 +240,6 @@ export async function completeRegistration(client: BotClient, userId: string): P
   const note = renderConfirmation(
     settings.autoRegisterConfirmationTemplate,
     record.registerSubmittedName ?? "",
-    settings.roleSelectionChannelId,
     settings.autoRegisterConfirmationUseFont,
     settings.fontMap,
   );

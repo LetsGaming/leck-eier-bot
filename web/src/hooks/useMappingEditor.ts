@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { api, errorMessage } from "../api";
+import { useConfirm } from "../components/ConfirmContext";
 import { useToast } from "../components/ToastContext";
 import type { FetchedResource } from "./useFetchedResource";
 import type { Mapping, Panel, SelectionType } from "../types";
@@ -40,6 +41,7 @@ export function useMappingEditor(
   setBusy: Dispatch<SetStateAction<boolean>>,
 ) {
   const { showError } = useToast();
+  const confirmDialog = useConfirm();
   const [mappingDraft, setMappingDraft] = useState<MappingDraft>(emptyMappingDraft());
   const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<MappingDraft>(emptyMappingDraft());
@@ -94,6 +96,16 @@ export function useMappingEditor(
 
   async function handleRemoveMapping(mappingId: number) {
     if (!panel) return;
+    // Same live-vs-draft distinction handleDeletePanel (usePanelEditor.ts)
+    // already makes: a sent panel's mappings are the actual options members
+    // see and use on Discord right now, so removing one takes effect
+    // immediately (via trySync on the backend) — a draft's mappings are
+    // just local configuration nobody has seen yet.
+    const message = panel.sent
+      ? "Diese Option ist bereits live auf Discord sichtbar und wird sofort aus der Nachricht entfernt."
+      : "Diese Option wird aus dem Entwurf entfernt.";
+    const ok = await confirmDialog({ title: "Option entfernen", message, confirmLabel: "Entfernen" });
+    if (!ok) return;
     setBusy(true);
     try {
       const saved = await api.deleteMapping(panel.id, mappingId);

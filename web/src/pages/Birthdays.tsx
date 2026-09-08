@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
-import TemplateEditor from "../components/TemplateEditor";
+import TemplateEditor, { type TemplatePlaceholder } from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
 import { useConfirm } from "../components/ConfirmContext";
 import { useToast } from "../components/ToastContext";
@@ -18,6 +18,18 @@ import type { BirthdayEntry } from "../types";
 const PREVIEW_CONTEXT = { userMention: "@Beispielperson", everyoneMention: "@everyone", userNick: "Beispielperson" };
 const PREVIEW_MONTH = "März";
 const PREVIEW_ENTRIES = "📅 05.03: @Beispielperson";
+
+/** See renderBirthdayTemplate() in src/services/birthdays.ts. */
+const ANNOUNCEMENT_TEMPLATE_PLACEHOLDERS: TemplatePlaceholder[] = [
+  { token: "userMention", label: "Person (@-Erwähnung)" },
+  { token: "userNick", label: "Servername" },
+  { token: "everyoneMention", label: "@everyone" },
+];
+/** See buildAnchorParts() in src/services/birthdays.ts. */
+const ANCHOR_TEMPLATE_PLACEHOLDERS: TemplatePlaceholder[] = [
+  { token: "month", label: "Monat" },
+  { token: "entries", label: "Geburtstagsliste" },
+];
 
 /** Matches the "minute hour * * *" shape produced by the time-of-day picker below — anything else (step values, weekday lists, …) is treated as a custom schedule and edited as raw cron. */
 const DAILY_CRON_PATTERN = /^(\d{1,2}) (\d{1,2}) \* \* \*$/;
@@ -337,10 +349,16 @@ export default function Birthdays() {
               <h2>Nachrichtenvorlage</h2>
               <div className="field">
                 <label htmlFor="template">Vorlage</label>
-                <TemplateEditor id="template" value={template} onChange={setTemplate} channels={channels} />
+                <TemplateEditor
+                  id="template"
+                  value={template}
+                  onChange={setTemplate}
+                  channels={channels}
+                  placeholders={ANNOUNCEMENT_TEMPLATE_PLACEHOLDERS}
+                />
                 <div className="hint">
-                  Platzhalter: <code>{"{userMention}"}</code>, <code>{"{userNick}"}</code>,{" "}
-                  <code>{"{everyoneMention}"}</code>
+                  "Person" fügt eine @-Erwähnung ein, "Servername" den
+                  Anzeigenamen auf diesem Server.
                 </div>
               </div>
               <label className="switch">
@@ -497,11 +515,13 @@ export default function Birthdays() {
                   value={anchorTemplate}
                   onChange={setAnchorTemplate}
                   channels={channels}
+                  placeholders={ANCHOR_TEMPLATE_PLACEHOLDERS}
                 />
                 <div className="hint">
-                  Platzhalter: <code>{"{month}"}</code> (mit der Schrift unten formatiert, falls gesetzt),{" "}
-                  <code>{"{entries}"}</code> (die Daten/Erwähnungen für diesen Monat — immer unformatiert, damit sie
-                  auf Discord korrekt angezeigt werden).
+                  "Monat" wird mit der Schrift unten formatiert, falls
+                  gesetzt. "Geburtstagsliste" (die Daten/Erwähnungen für
+                  diesen Monat) bleibt immer unformatiert, damit sie auf
+                  Discord korrekt angezeigt wird.
                 </div>
               </div>
               <label className="switch">
