@@ -36,8 +36,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
           <p>
             <strong>Etwas ist schiefgelaufen.</strong>
             <br />
-            Diese Seite konnte nicht angezeigt werden. Du kannst es erneut versuchen oder über die Navigation zu
-            einer anderen Seite wechseln.
+            Diese Seite konnte nicht angezeigt werden.
           </p>
           <button onClick={this.handleReset}>Erneut versuchen</button>
         </div>

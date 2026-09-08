@@ -1,8 +1,9 @@
 import { Link, useParams } from "react-router-dom";
+import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { useMemberOverview } from "../hooks/useMemberOverview";
 import { formatAbsolute, formatRelative } from "../dateFormat";
 import { CHOICE_BADGE_CLASS, CHOICE_LABELS, ATTENDANCE_BADGE_CLASS, ATTENDANCE_LABELS } from "../eventAttendanceLabels";
-import type { RegistrationStatus } from "../types";
+import type { MemberOverviewEventEntry, RegistrationStatus } from "../types";
 
 const REGISTRATION_STATUS_LABELS: Record<RegistrationStatus, string> = {
   pending: "Ausstehend",
@@ -21,6 +22,39 @@ const REGISTRATION_STATUS_BADGE_CLASS: Record<RegistrationStatus, string> = {
 function formatBirthday(day: number, month: number): string {
   return `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.`;
 }
+
+const eventHistoryColumns: BaseTableColumn<MemberOverviewEventEntry>[] = [
+  {
+    key: "eventTitle",
+    label: "Event",
+    accessor: (e) => e.eventTitle,
+    render: (e) => <Link to={`/events/${e.eventId}`}>{e.eventTitle}</Link>,
+  },
+  {
+    key: "startsAt",
+    label: "Datum",
+    accessor: (e) => e.startsAt,
+    className: "mono small",
+    render: (e) => formatAbsolute(e.startsAt),
+  },
+  {
+    key: "choice",
+    label: "Anmeldung",
+    accessor: (e) => CHOICE_LABELS[e.choice],
+    render: (e) => <span className={`badge ${CHOICE_BADGE_CLASS[e.choice]}`}>{CHOICE_LABELS[e.choice]}</span>,
+  },
+  {
+    key: "attendanceStatus",
+    label: "Ergebnis",
+    accessor: (e) => (e.attendanceStatus ? ATTENDANCE_LABELS[e.attendanceStatus] : null),
+    render: (e) =>
+      e.attendanceStatus ? (
+        <span className={`badge ${ATTENDANCE_BADGE_CLASS[e.attendanceStatus]}`}>{ATTENDANCE_LABELS[e.attendanceStatus]}</span>
+      ) : (
+        <span className="muted">—</span>
+      ),
+  },
+];
 
 export default function MemberOverview() {
   const { userId } = useParams<{ userId: string }>();
@@ -128,46 +162,12 @@ export default function MemberOverview() {
 
       <div className="card">
         <h2>Event-Verlauf ({member.eventHistory.length})</h2>
-        {member.eventHistory.length === 0 ? (
-          <p className="muted">Keine Event-Anmeldungen.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="stack-on-mobile">
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Datum</th>
-                  <th>Anmeldung</th>
-                  <th>Ergebnis</th>
-                </tr>
-              </thead>
-              <tbody>
-                {member.eventHistory.map((entry) => (
-                  <tr key={entry.eventId}>
-                    <td data-label="Event">
-                      <Link to={`/events/${entry.eventId}`}>{entry.eventTitle}</Link>
-                    </td>
-                    <td className="mono small" data-label="Datum">
-                      {formatAbsolute(entry.startsAt)}
-                    </td>
-                    <td data-label="Anmeldung">
-                      <span className={`badge ${CHOICE_BADGE_CLASS[entry.choice]}`}>{CHOICE_LABELS[entry.choice]}</span>
-                    </td>
-                    <td data-label="Ergebnis">
-                      {entry.attendanceStatus ? (
-                        <span className={`badge ${ATTENDANCE_BADGE_CLASS[entry.attendanceStatus]}`}>
-                          {ATTENDANCE_LABELS[entry.attendanceStatus]}
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <BaseTable
+          columns={eventHistoryColumns}
+          rows={member.eventHistory}
+          rowKey={(e) => e.eventId}
+          emptyMessage={<p className="muted">Keine Event-Anmeldungen.</p>}
+        />
       </div>
     </div>
   );

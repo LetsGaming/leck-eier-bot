@@ -76,6 +76,8 @@ function AllgemeinSection({
   savingFont,
   fontMapDirty,
 }: AllgemeinSectionProps) {
+  const [showFontPreview, setShowFontPreview] = useState(false);
+
   return (
     <div className="card-grid">
       <div className="card">
@@ -121,18 +123,30 @@ function AllgemeinSection({
             </a>
             : dort <code>{FONT_REFERENCE}</code> eintippen und eine der Ausgaben hier einfügen.
           </div>
-          {fontMap &&
-            ([...fontMap].length === FONT_REFERENCE.length ? (
-              <div className="preview-box mt-8">
-                Vorschau: {applyFont("The quick brown fox", fontMap)}
+          {fontMap && [...fontMap].length !== FONT_REFERENCE.length && (
+            <div className="preview-box mt-8">
+              <span className="muted">
+                Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).
+              </span>
+            </div>
+          )}
+          {fontMap && [...fontMap].length === FONT_REFERENCE.length && (
+            <>
+              <div className="mt-8">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showFontPreview}
+                    onChange={(e) => setShowFontPreview(e.target.checked)}
+                  />
+                  Vorschau
+                </label>
               </div>
-            ) : (
-              <div className="preview-box mt-8">
-                <span className="muted">
-                  Benötigt genau 52 Zeichen (aktuell {[...fontMap].length}).
-                </span>
-              </div>
-            ))}
+              {showFontPreview && (
+                <div className="preview-box mt-8">{applyFont("The quick brown fox", fontMap)}</div>
+              )}
+            </>
+          )}
         </div>
         <div className="save-row">
           <button
@@ -192,14 +206,22 @@ function RegistrierungSection({
   savingAutoConfirmationTemplate,
   autoConfirmationTemplateDirty,
 }: RegistrierungSectionProps) {
+  const [showNicknamePreview, setShowNicknamePreview] = useState(false);
+  const [showConfirmationPreview, setShowConfirmationPreview] = useState(false);
+  const [showAutoConfirmationPreview, setShowAutoConfirmationPreview] = useState(false);
+
   return (
     <>
       <div className="alert neutral mb-16">
-        <strong>Ablauf:</strong> Mitglied postet das Formular im Kanal unten →
-        Bot setzt den Nickname und öffnet einen privaten Thread → ein
-        Team-Mitglied vergibt die Rolle nach der Registrierung (oder
-        automatisch, siehe "Abschluss" unten) → der Bot bestätigt im Thread und
-        entfernt die Rolle vor der Registrierung.
+        <strong>Ablauf:</strong>
+        <ol className="alert-steps">
+          <li>Mitglied postet das Formular im Kanal unten</li>
+          <li>Bot setzt den Nickname und öffnet einen privaten Thread</li>
+          <li>
+            Team-Mitglied vergibt die Rolle nach der Registrierung (oder automatisch, siehe "Abschluss" unten)
+          </li>
+          <li>Bot bestätigt im Thread und entfernt die Rolle vor der Registrierung</li>
+        </ol>
       </div>
       <div className="card-grid card-grid-registration">
         <div className="card">
@@ -340,13 +362,25 @@ function RegistrierungSection({
                 />
                 Vornamen über die globale Schrift (siehe "Schrift" oben) stylen
               </label>
-              <div className="preview-box mt-8 mb-12">
-                {previewRegisterNickname(
-                  nicknameEmoji,
-                  settings.fontMap,
-                  settings.registerNicknameUseFont,
-                )}
+              <div className="mt-12">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showNicknamePreview}
+                    onChange={(e) => setShowNicknamePreview(e.target.checked)}
+                  />
+                  Vorschau
+                </label>
               </div>
+              {showNicknamePreview && (
+                <div className="preview-box mt-8 mb-12">
+                  {previewRegisterNickname(
+                    nicknameEmoji,
+                    settings.fontMap,
+                    settings.registerNicknameUseFont,
+                  )}
+                </div>
+              )}
               <div className="save-row">
                 <button
                   className="primary"
@@ -396,23 +430,33 @@ function RegistrierungSection({
                 Der Platzhalter (<code>{"{name}"}</code>) bleibt immer
                 unformatiert.
               </div>
-              <div className="preview-box mt-8 mb-12">
-                {/*
-                Mirrors renderConfirmation() in src/services/registration.ts:
-                {name} is `raw` (never font-mapped, regardless of useFont —
-                same as every other substituted value elsewhere in the app).
-                A channel mention is literal `<#id>` text already (inserted
-                via the `#`-trigger popover), so mockifyChannelMentions below
-                is what turns it into this preview's "#name" mockup.
-              */}
-                <TemplatePreview
-                  template={confirmationTemplate}
-                  context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
-                  channels={channels}
-                  useFont={settings.registerConfirmationUseFont}
-                  fontMap={settings.fontMap}
+              <label className="switch mt-12">
+                <input
+                  type="checkbox"
+                  checked={showConfirmationPreview}
+                  onChange={(e) => setShowConfirmationPreview(e.target.checked)}
                 />
-              </div>
+                Vorschau
+              </label>
+              {showConfirmationPreview && (
+                <div className="preview-box mt-8 mb-12">
+                  {/*
+                  Mirrors renderConfirmation() in src/services/registration.ts:
+                  {name} is `raw` (never font-mapped, regardless of useFont —
+                  same as every other substituted value elsewhere in the app).
+                  A channel mention is literal `<#id>` text already (inserted
+                  via the `#`-trigger popover), so mockifyChannelMentions below
+                  is what turns it into this preview's "#name" mockup.
+                */}
+                  <TemplatePreview
+                    template={confirmationTemplate}
+                    context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
+                    channels={channels}
+                    useFont={settings.registerConfirmationUseFont}
+                    fontMap={settings.fontMap}
+                  />
+                </div>
+              )}
               <div className="save-row">
                 <button
                   className="primary"
@@ -477,15 +521,27 @@ function RegistrierungSection({
                 />
                 Text über die globale Schrift stylen
               </label>
-              <div className="preview-box mt-8 mb-12">
-                <TemplatePreview
-                  template={autoConfirmationTemplate}
-                  context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
-                  channels={channels}
-                  useFont={settings.autoRegisterConfirmationUseFont}
-                  fontMap={settings.fontMap}
-                />
+              <div className="mt-12">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showAutoConfirmationPreview}
+                    onChange={(e) => setShowAutoConfirmationPreview(e.target.checked)}
+                  />
+                  Vorschau
+                </label>
               </div>
+              {showAutoConfirmationPreview && (
+                <div className="preview-box mt-8 mb-12">
+                  <TemplatePreview
+                    template={autoConfirmationTemplate}
+                    context={{ raw: { name: PREVIEW_REGISTER_NAME } }}
+                    channels={channels}
+                    useFont={settings.autoRegisterConfirmationUseFont}
+                    fontMap={settings.fontMap}
+                  />
+                </div>
+              )}
               <div className="save-row">
                 <button
                   className="primary"

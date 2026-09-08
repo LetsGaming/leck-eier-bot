@@ -1,3 +1,4 @@
+import { useState } from "react";
 import MappingForm from "../components/MappingForm";
 import RoleCheckboxList from "../components/RoleCheckboxList";
 import SearchableSelect from "../components/SearchableSelect";
@@ -27,8 +28,8 @@ function selectionHint(selectionType: SelectionType): string {
 
 function multiRemovableHint(allowMultiple: boolean, removable: boolean): string {
   const multi = allowMultiple ? "gleichzeitig mehr als eine Rolle aus diesem Panel besitzen" : "gleichzeitig nur eine Rolle aus diesem Panel besitzen";
-  const remove = removable ? "eine Rolle später wieder abgeben können" : "eine Rolle nie wieder abgeben können, sobald sie sie haben (im Stil einer Regelakzeptanz)";
-  return `Mitglieder können ${multi}, und ${remove}.`;
+  const remove = removable ? "eine Rolle später wieder abgeben" : "eine Rolle nie wieder abgeben, sobald sie sie haben";
+  return `Mitglieder können ${multi} und ${remove}.`;
 }
 
 /**
@@ -77,6 +78,7 @@ export default function ReactionRoles() {
   const roles = rolesRes.data ?? [];
   const emojis = emojisRes.data ?? [];
   const fontMap = generalRes.data?.fontMap ?? null;
+  const [showPreview, setShowPreview] = useState(false);
 
   const {
     panels,
@@ -205,7 +207,7 @@ export default function ReactionRoles() {
                     </select>
                     <div className="hint">
                       {messageSource === "existing"
-                        ? "An eine Nachricht anhängen, die ein Admin bereits geschrieben hat (z. B. Serverregeln) — ihr Inhalt wird nie verändert, nur ihre Reaktionen. Nur Reaktionen."
+                        ? "An eine Nachricht anhängen, die ein Admin bereits geschrieben hat (z. B. Serverregeln) — ihr Inhalt wird nie verändert, nur ihre Reaktionen."
                         : "Der Bot postet eine Nachricht mit den unten aufgeführten Rollen und hält sie aktuell."}
                     </div>
                   </div>
@@ -355,9 +357,18 @@ export default function ReactionRoles() {
                     {channels.find((c) => c.id === selected.channelId)?.name ?? selected.channelId}
                   </p>
                 )}
+                {!isExistingMessageMode && (
+                  <div className="mt-12">
+                    <label className="switch">
+                      <input type="checkbox" checked={showPreview} onChange={(e) => setShowPreview(e.target.checked)} />
+                      Vorschau
+                    </label>
+                  </div>
+                )}
               </div>
 
-              {!isExistingMessageMode &&
+              {showPreview &&
+                !isExistingMessageMode &&
                 (() => {
                   const previewMappings = [...(selected?.mappings ?? [])].sort((a, b) => a.position - b.position);
                   const resolveRoleLabel = (m: Mapping) => m.label ?? roleNamesLabel(m.roleIds);
@@ -582,8 +593,8 @@ export default function ReactionRoles() {
                           Die Reaktion des Nutzers sofort nach der Aktion entfernen
                         </label>
                         <div className="hint">
-                          Hält die Reaktionsanzahl bei 1. Wenn aktiviert, schaltet erneutes Reagieren auf dieselbe
-                          Option die Rolle an/aus, statt dass das Entfernen der Reaktion sie entzieht.
+                          Hält die Reaktionsanzahl bei 1. Reagieren auf dieselbe Option schaltet die Rolle an/aus —
+                          das Entfernen der Reaktion allein tut das dann nicht mehr.
                         </div>
                       </div>
                     )}

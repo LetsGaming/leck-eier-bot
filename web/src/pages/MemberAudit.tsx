@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
+import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { formatAbsolute, formatRelative } from "../dateFormat";
 import { useMemberAudit } from "../hooks/useMemberAudit";
 import { useRegistrations } from "../hooks/useRegistrations";
@@ -74,153 +75,141 @@ function RegistrationsCard({ query }: { query: string }) {
 
   if (!entries) return null;
 
+  const columns: BaseTableColumn<Registration>[] = [
+    { key: "avatar", label: "", render: (e) => <img src={e.avatarUrl} alt="" width={28} height={28} className="avatar-round" />, className: "stack-plain" },
+    {
+      key: "displayName",
+      label: "Anzeigename",
+      accessor: (e) => e.displayName,
+      render: (e) => <Link to={`/members/${e.userId}`}>{e.displayName}</Link>,
+    },
+    { key: "nickname", label: "Nickname", accessor: (e) => e.nickname, className: "muted", render: (e) => e.nickname ?? "—" },
+    {
+      key: "status",
+      label: "Status",
+      accessor: (e) => STATUS_LABELS[e.status],
+      render: (e) => <span className={`badge ${STATUS_BADGE_CLASS[e.status]}`}>{STATUS_LABELS[e.status]}</span>,
+    },
+    { key: "submittedName", label: "Name (Formular)", accessor: (e) => e.submittedName, render: (e) => e.submittedName ?? "—" },
+    { key: "submittedSsoName", label: "SSO-Name", accessor: (e) => e.submittedSsoName, render: (e) => e.submittedSsoName ?? "—" },
+    { key: "submittedAge", label: "Alter", accessor: (e) => e.submittedAge, render: (e) => e.submittedAge ?? "—" },
+    {
+      key: "submittedAt",
+      label: "Eingereicht",
+      accessor: (e) => e.submittedAt,
+      className: "mono small",
+      render: (e) => (
+        <div>
+          {formatAbsolute(e.submittedAt)}
+          <div className="muted small">{formatRelative(e.submittedAt)}</div>
+        </div>
+      ),
+    },
+    {
+      key: "thread",
+      label: "Thread",
+      render: (e) =>
+        e.threadUrl ? (
+          <a href={e.threadUrl} target="_blank" rel="noreferrer">
+            Thread öffnen
+          </a>
+        ) : (
+          <span className="muted">—</span>
+        ),
+    },
+    {
+      key: "actions",
+      label: "",
+      className: "stack-plain actions-cell",
+      render: (e) =>
+        e.status === "pending" && (
+          <>
+            <button disabled={busyUserId === e.userId} onClick={() => handleApprove(e)}>
+              Genehmigen
+            </button>
+            <button className="danger" disabled={busyUserId === e.userId} onClick={() => handleRemove(e)}>
+              Entfernen
+            </button>
+          </>
+        ),
+    },
+  ];
+
   return (
     <div className="card">
       <h2>Registrierungen ({entries.length})</h2>
-      {entries.length === 0 ? (
-        <p className="muted">
-          {query
-            ? "Keine Registrierung entspricht der Suche."
-            : "Noch niemand hat das Registrierungsformular eingereicht."}
-        </p>
-      ) : (
-        <div className="table-scroll">
-          <table className="stack-on-mobile">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Anzeigename</th>
-                <th>Nickname</th>
-                <th>Status</th>
-                <th>Name (Formular)</th>
-                <th>SSO-Name</th>
-                <th>Alter</th>
-                <th>Eingereicht</th>
-                <th>Thread</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.userId}>
-                  <td className="stack-plain">
-                    <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
-                  </td>
-                  <td data-label="Anzeigename">
-                    <Link to={`/members/${entry.userId}`}>{entry.displayName}</Link>
-                  </td>
-                  <td className="muted" data-label="Nickname">
-                    {entry.nickname ?? "—"}
-                  </td>
-                  <td data-label="Status">
-                    <span className={`badge ${STATUS_BADGE_CLASS[entry.status]}`}>
-                      {STATUS_LABELS[entry.status]}
-                    </span>
-                  </td>
-                  <td data-label="Name (Formular)">{entry.submittedName ?? "—"}</td>
-                  <td data-label="SSO-Name">{entry.submittedSsoName ?? "—"}</td>
-                  <td data-label="Alter">{entry.submittedAge ?? "—"}</td>
-                  <td className="mono small" data-label="Eingereicht">
-                    <div>
-                      {formatAbsolute(entry.submittedAt)}
-                      <div className="muted small">{formatRelative(entry.submittedAt)}</div>
-                    </div>
-                  </td>
-                  <td data-label="Thread">
-                    {entry.threadUrl ? (
-                      <a href={entry.threadUrl} target="_blank" rel="noreferrer">
-                        Thread öffnen
-                      </a>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="stack-plain actions-cell">
-                    {entry.status === "pending" && (
-                      <>
-                        <button disabled={busyUserId === entry.userId} onClick={() => handleApprove(entry)}>
-                          Genehmigen
-                        </button>
-                        <button
-                          className="danger"
-                          disabled={busyUserId === entry.userId}
-                          onClick={() => handleRemove(entry)}
-                        >
-                          Entfernen
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <BaseTable
+        columns={columns}
+        rows={entries}
+        rowKey={(e) => e.userId}
+        emptyMessage={
+          <p className="muted">
+            {query ? "Keine Registrierung entspricht der Suche." : "Noch niemand hat das Registrierungsformular eingereicht."}
+          </p>
+        }
+      />
     </div>
   );
 }
 
-function DateCell({ label, iso }: { label: string; iso: string | null }) {
+function dateCell(iso: string | null) {
   return (
-    <td className="mono small" data-label={label}>
-      {/* A single wrapping element, not two loose children — the stacked
-          mobile layout flexes each <td> (label on the left, value on the
-          right), and a bare text node plus a sibling <div> would each
-          become their own flex item instead of one right-aligned block. */}
-      <div>
-        {formatAbsolute(iso)}
-        <div className="muted small">{formatRelative(iso)}</div>
-      </div>
-    </td>
-  );
-}
-
-function MemberRow({ entry, showLeft }: { entry: MemberAuditEntry; showLeft: boolean }) {
-  return (
-    <tr>
-      <td className="stack-plain">
-        <img src={entry.avatarUrl} alt="" width={28} height={28} className="avatar-round" />
-      </td>
-      <td data-label="Name">
-        <Link to={`/members/${entry.userId}`}>{entry.displayName}</Link>
-      </td>
-      <td className="muted" data-label="Benutzername">
-        {entry.tag}
-      </td>
-      <td className="muted" data-label="ID">
-        <code>{entry.userId}</code>
-      </td>
-      <DateCell label="Beigetreten" iso={entry.joinedAt} />
-      <DateCell label="Regeln akzeptiert" iso={entry.rulesAcceptedAt} />
-      {showLeft && <DateCell label="Verlassen" iso={entry.leftAt} />}
-    </tr>
+    // A single wrapping element, not two loose children — the stacked
+    // mobile layout flexes each <td> (label on the left, value on the
+    // right), and a bare text node plus a sibling <div> would each become
+    // their own flex item instead of one right-aligned block.
+    <div>
+      {formatAbsolute(iso)}
+      <div className="muted small">{formatRelative(iso)}</div>
+    </div>
   );
 }
 
 function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showLeft: boolean }) {
-  if (entries.length === 0) return <p className="muted">Niemand hier.</p>;
+  const columns: BaseTableColumn<MemberAuditEntry>[] = [
+    { key: "avatar", label: "", render: (e) => <img src={e.avatarUrl} alt="" width={28} height={28} className="avatar-round" />, className: "stack-plain" },
+    {
+      key: "displayName",
+      label: "Anzeigename",
+      accessor: (e) => e.displayName,
+      render: (e) => <Link to={`/members/${e.userId}`}>{e.displayName}</Link>,
+    },
+    { key: "tag", label: "Benutzername", accessor: (e) => e.tag, className: "muted", render: (e) => e.tag },
+    { key: "userId", label: "ID", accessor: (e) => e.userId, className: "muted", render: (e) => <code>{e.userId}</code> },
+    {
+      key: "joinedAt",
+      label: "Beigetreten",
+      accessor: (e) => e.joinedAt,
+      className: "mono small",
+      render: (e) => dateCell(e.joinedAt),
+    },
+    {
+      key: "rulesAcceptedAt",
+      label: "Regeln akzeptiert",
+      accessor: (e) => e.rulesAcceptedAt,
+      className: "mono small",
+      render: (e) => dateCell(e.rulesAcceptedAt),
+    },
+    ...(showLeft
+      ? [
+          {
+            key: "leftAt",
+            label: "Verlassen",
+            accessor: (e: MemberAuditEntry) => e.leftAt,
+            className: "mono small",
+            render: (e: MemberAuditEntry) => dateCell(e.leftAt),
+          } satisfies BaseTableColumn<MemberAuditEntry>,
+        ]
+      : []),
+  ];
+
   return (
-    <div className="table-scroll">
-      <table className="stack-on-mobile">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Anzeigename</th>
-            <th>Benutzername</th>
-            <th>ID</th>
-            <th>Beigetreten</th>
-            <th>Regeln akzeptiert</th>
-            {showLeft && <th>Verlassen</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <MemberRow key={entry.userId} entry={entry} showLeft={showLeft} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <BaseTable
+      columns={columns}
+      rows={entries}
+      rowKey={(e) => e.userId}
+      emptyMessage={<p className="muted">Niemand hier.</p>}
+    />
   );
 }
 
@@ -244,10 +233,8 @@ export default function MemberAudit() {
     <div>
       <h2>Mitgliederprüfung</h2>
       <p className="muted">
-        Jedes Mitglied, das jemals auf dem Server gesehen wurde, aktuell und ehemalig. Die Suche durchsucht alle drei
-        Listen unten — auf dem Server, den Server verlassen und Registrierungen. "Regeln akzeptiert" und "Verlassen"
-        sind nur für Ereignisse bekannt, während derer der Bot lief — <code>—</code> bedeutet nicht erfasst, nicht
-        dass es nie passiert ist. Daten werden in der konfigurierten Zeitzone angezeigt.
+        Jedes Mitglied, das jemals auf dem Server gesehen wurde. Die Suche durchsucht alle drei Listen unten — auf
+        dem Server, den Server verlassen und Registrierungen.
       </p>
 
       <div className="card">
@@ -261,6 +248,11 @@ export default function MemberAudit() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Namen eingeben…"
           />
+          <div className="hint">
+            "Regeln akzeptiert" und "Verlassen" sind nur für Ereignisse bekannt, während derer der Bot lief —{" "}
+            <code>—</code> bedeutet nicht erfasst, nicht dass es nie passiert ist. Daten werden in der konfigurierten
+            Zeitzone angezeigt.
+          </div>
         </div>
       </div>
 

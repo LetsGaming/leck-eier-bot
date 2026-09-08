@@ -3,11 +3,30 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
 import { useConfirm } from "../components/ConfirmContext";
+import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { formatAbsolute } from "../dateFormat";
-import type { AttendanceStatus } from "../types";
-import { EVENT_STATUS_BADGE_CLASS, EVENT_STATUS_LABELS } from "../eventAttendanceLabels";
+import type { AttendanceStatus, EventSignup } from "../types";
+import { ATTENDANCE_LABELS, CHOICE_LABELS, EVENT_STATUS_BADGE_CLASS, EVENT_STATUS_LABELS } from "../eventAttendanceLabels";
 import SignupRow from "../components/SignupRow";
 import { useEventAttendanceDetail, useInGuildMembers } from "../hooks/useEventAttendance";
+
+const SIGNUP_COLUMNS: BaseTableColumn<EventSignup>[] = [
+  { key: "avatar", label: "" },
+  { key: "member", label: "Mitglied", accessor: (s) => s.displayName ?? s.rawName },
+  { key: "choice", label: "Anmeldung", accessor: (s) => CHOICE_LABELS[s.choice] },
+  { key: "attendanceStatus", label: "Ergebnis", accessor: (s) => (s.attendanceStatus ? ATTENDANCE_LABELS[s.attendanceStatus] : null) },
+  {
+    key: "lateness",
+    label: "Verspätung",
+    // Whichever of the two independent minute counts is set — a row is
+    // never both late arriving and early-departing-only, so this is never
+    // ambiguous in practice.
+    accessor: (s) => s.lateMinutes ?? s.earlyMinutes,
+  },
+  { key: "firstJoinedAt", label: "Beigetreten", accessor: (s) => s.firstJoinedAt },
+  { key: "lastLeftAt", label: "Verlassen", accessor: (s) => s.lastLeftAt },
+  { key: "actions", label: "" },
+];
 
 // Same predicate as the old list page's "Nur Probleme anzeigen" filter
 // (removed from the list in Task 13, relocated here per Ruling R5) — an
@@ -233,37 +252,21 @@ export default function EventAttendanceDetailPage() {
         </label>
       </div>
 
-      {filteredSignups.length === 0 ? (
-        <p className="muted">Keine Anmeldungen entsprechen dem Filter.</p>
-      ) : (
-        <div className="table-scroll">
-          <table className="stack-on-mobile">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Mitglied</th>
-                <th>Anmeldung</th>
-                <th>Ergebnis</th>
-                <th>Verspätung</th>
-                <th>Beigetreten</th>
-                <th>Verlassen</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSignups.map((signup) => (
-                <SignupRow
-                  key={signup.id}
-                  signup={signup}
-                  event={event}
-                  memberOptions={memberOptions}
-                  onLink={(userId) => handleLink(signup.id, userId)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <BaseTable
+        columns={SIGNUP_COLUMNS}
+        rows={filteredSignups}
+        rowKey={(s) => s.id}
+        emptyMessage={<p className="muted">Keine Anmeldungen entsprechen dem Filter.</p>}
+        renderRow={(signup) => (
+          <SignupRow
+            key={signup.id}
+            signup={signup}
+            event={event}
+            memberOptions={memberOptions}
+            onLink={(userId) => handleLink(signup.id, userId)}
+          />
+        )}
+      />
     </div>
   );
 }

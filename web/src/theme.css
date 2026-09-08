@@ -504,6 +504,41 @@ th p {
   letter-spacing: normal;
 }
 
+/* The clickable label inside a SortableTh header — inherits th's own
+   uppercase/tracking/size/color instead of resetting them, so a sortable
+   column reads identically to a plain one except for the arrow. */
+.sortable-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.sortable-th:hover,
+.sortable-th:focus-visible {
+  color: var(--text);
+}
+
+.sortable-th-arrow {
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+.sortable-th:hover .sortable-th-arrow,
+.sortable-th:focus-visible .sortable-th-arrow,
+th[aria-sort="ascending"] .sortable-th-arrow,
+th[aria-sort="descending"] .sortable-th-arrow {
+  opacity: 1;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
@@ -954,6 +989,15 @@ th p {
   font-size: var(--fs-small);
 }
 
+.alert-steps {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.alert-steps li + li {
+  margin-top: 4px;
+}
+
 .alert.error {
   background: rgba(242, 63, 66, 0.12);
   color: #ff8a8d;
@@ -1151,7 +1195,118 @@ th p {
 }
 
 .template-preview-text {
+  /* Line breaks are explicit <br/> elements now (renderDiscordMarkdown
+     splits on them itself, matching Discord's own hard-break behavior) —
+     pre-wrap would additionally preserve runs of literal spaces, which
+     Discord's real client collapses in normal prose the same as any other
+     web text; only code (below) keeps them. */
+  white-space: normal;
+}
+
+/* Discord's own dark-theme values — this dashboard's --bg/--bg-elevated/
+   --bg-inset/--accent already equal Discord's real chat background, code
+   surface, deepest surface, and blurple, so these mockups aren't an
+   approximation of Discord's look, they're built from the same palette. */
+.discord-md-h1,
+.discord-md-h2,
+.discord-md-h3 {
+  font-weight: 700;
+  line-height: 1.375;
+  margin: 0;
+}
+
+.discord-md-h1 {
+  font-size: var(--fs-display-sm);
+}
+
+.discord-md-h2 {
+  font-size: 20px;
+}
+
+.discord-md-h3 {
+  font-size: var(--fs-heading-sm);
+}
+
+.discord-md-quote {
+  border-left: 4px solid var(--border);
+  padding-left: 12px;
+  margin: 4px 0;
+}
+
+.discord-md-list {
+  margin: 4px 0;
+  padding-left: 24px;
+}
+
+.discord-md-line + .discord-md-line,
+.discord-md-h1 + *,
+.discord-md-h2 + *,
+.discord-md-h3 + *,
+.discord-md-quote + *,
+.discord-md-list + * {
+  margin-top: 2px;
+}
+
+.template-preview-text code,
+.message-preview-text code {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
   white-space: pre-wrap;
+}
+
+.discord-md-codeblock {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  overflow-x: auto;
+}
+
+.discord-md-codeblock code {
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre;
+}
+
+.discord-md-codeblock-lang {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.discord-md-spoiler {
+  /* --bg-elevated, not --bg-inset: the preview box itself already sits on
+     --bg-inset (see .preview-box/.message-preview), so a same-shade spoiler
+     bar would be invisible against its own container instead of reading as
+     a distinct pill the way it does in Discord's real client. */
+  background: var(--bg-elevated);
+  color: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.discord-md-spoiler.revealed {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: text;
+}
+
+.discord-md-spoiler:not(.revealed) * {
+  /* Nested inline formatting (bold/code/etc. inside a spoiler) must stay
+     invisible along with the spoiler's own text until revealed — without
+     this, a spoiler wrapping e.g. `code` would leak that span's own
+     background/color through the spoiler's cover. Scoped to the unrevealed
+     state only, so a revealed spoiler's nested code gets its normal
+     background back instead of staying suppressed forever. */
+  color: inherit;
+  background: none;
 }
 
 .rr-layout {

@@ -28,14 +28,29 @@ function parseArgs(argv) {
   return args;
 }
 
-/** Kills exactly this one PID (and, on Windows, its child processes) — never a pattern/name-based kill, so it can't touch an unrelated process that happens to share a port or process name. */
+/**
+ * Kills exactly the process tree rooted at this one PID — never a
+ * pattern/name-based kill, so it can't touch an unrelated process that
+ * happens to share a port or process name.
+ *
+ * dev-up.mjs always spawns with `detached: true`, so on POSIX the child is
+ * its own process group leader (pgid === pid); killing the negated pid signals
+ * the whole group, taking any descendants (e.g. vite's esbuild service) down
+ * with it. On Windows, `detached` doesn't form a killable group the same way,
+ * so `taskkill /T` is used instead to walk the tree.
+ */
 function killPid(pid, label, log) {
   if (!pid) return;
   try {
     if (process.platform === "win32") {
       execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
     } else {
-      process.kill(pid, "SIGTERM");
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        // Not a process group leader (or already gone) — fall back to a direct kill.
+        process.kill(pid, "SIGTERM");
+      }
     }
     log(`stopped ${label} (pid ${pid})`);
   } catch {

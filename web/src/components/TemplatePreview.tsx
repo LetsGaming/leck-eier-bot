@@ -1,4 +1,5 @@
 import { buildCoreResolvers, mockifyChannelMentions, renderTemplate, type TemplateContext } from "../utils/messageTemplate";
+import { renderDiscordMarkdown } from "../utils/discordMarkdown";
 import type { Channel } from "../types";
 
 export interface TemplatePreviewProps {
@@ -29,5 +30,9 @@ export default function TemplatePreview({ template, context, channels, useFont, 
   const rendered = renderTemplate(template, context, buildCoreResolvers(channels), { useFont, fontMap });
   const mockified = mockifyChannelMentions(rendered, channels);
 
-  return <div className="template-preview-text">{mockified || <span className="muted">Keine Vorschau verfügbar.</span>}</div>;
+  return (
+    <div className="template-preview-text">
+      {mockified ? renderDiscordMarkdown(mockified) : <span className="muted">Keine Vorschau verfügbar.</span>}
+    </div>
+  );
 }

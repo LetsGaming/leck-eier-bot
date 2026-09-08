@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import SearchableSelect from "../components/SearchableSelect";
+import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import TemplateEditor, { type TemplatePlaceholder } from "../components/TemplateEditor";
 import TemplatePreview from "../components/TemplatePreview";
 import { useConfirm } from "../components/ConfirmContext";
@@ -14,7 +15,12 @@ import { useMemberNames } from "../hooks/useMemberNames";
 import { useUpcomingBirthdays } from "../hooks/useUpcomingBirthdays";
 import { applyFont } from "../utils/font";
 import { toChannelOptions } from "../utils/selectOptions";
-import type { BirthdayEntry } from "../types";
+import type { BirthdayEntry, UpcomingBirthday } from "../types";
+
+interface EntryRow {
+  b: UpcomingBirthday;
+  entry: BirthdayEntry;
+}
 
 /** Sample values shown in the live preview — the real message uses the actual member's mention/nick/everyone-ping at send time. */
 const PREVIEW_CONTEXT = { userMention: "@Beispielperson", everyoneMention: "@everyone", userNick: "Beispielperson" };
@@ -297,6 +303,55 @@ export default function Birthdays() {
   // Ties (multiple dates the same number of days out) all count as "next up".
   const nextUp = upcoming && upcoming.length > 0 ? upcoming.filter((b) => b.daysUntil === upcoming[0]!.daysUntil) : [];
 
+  // Flattened one row per entry (a date can hold more than one person) —
+  // BaseTable's sort engine needs a flat array, not `upcoming`'s
+  // date-grouped shape.
+  const entryRows = useMemo(
+    () => (upcoming ?? []).flatMap((b) => b.entries.map((entry) => ({ b, entry }))),
+    [upcoming],
+  );
+  const entryColumns: BaseTableColumn<EntryRow>[] = [
+    {
+      key: "date",
+      label: "Datum",
+      // `daysUntil` is already the correct chronological ordering for
+      // "Datum" (the entries API only ever returns each date's next
+      // upcoming occurrence, so it doubles as calendar order).
+      accessor: (r) => r.b.daysUntil,
+      render: (r) => r.b.dateKey,
+    },
+    {
+      key: "person",
+      label: "Person",
+      accessor: (r) => entryLabel(r.entry, memberNames),
+      render: (r) => <EntryLabelLink entry={r.entry} names={memberNames} />,
+    },
+    {
+      key: "source",
+      label: "Quelle",
+      accessor: (r) => r.entry.source,
+      render: (r) => (
+        <span className={`badge ${r.entry.source === "self" ? "ok" : "warn"}`}>
+          {r.entry.source === "self" ? "selbst registriert" : "Liste"}
+        </span>
+      ),
+    },
+    { key: "relative", label: "", className: "muted stack-plain", render: (r) => relativeDay(r.b.daysUntil) },
+    {
+      key: "actions",
+      label: "",
+      className: "stack-plain",
+      render: (r) => (
+        <>
+          <button onClick={() => startEdit(r.entry, r.b.dateKey)}>Bearbeiten</button>{" "}
+          <button className="danger" onClick={() => handleDeleteEntry(r.entry)}>
+            Löschen
+          </button>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div>
       <h2>Geburtstage</h2>
@@ -388,51 +443,18 @@ export default function Birthdays() {
               </div>
             </div>
 
-            {upcoming.length === 0 ? (
-              <p className="muted">Noch keine Geburtstage eingetragen.</p>
-            ) : (
-              <div className="table-scroll">
-                <div className="hint mb-12">
-                  Mit "selbst registriert" markierte Einträge wurden vom Mitglied selbst hinzugefügt und können hier
-                  bei Bedarf weiterhin korrigiert werden.
-                </div>
-                <table className="stack-on-mobile">
-                  <thead>
-                    <tr>
-                      <th>Datum</th>
-                      <th>Person</th>
-                      <th>Quelle</th>
-                      <th></th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {upcoming.flatMap((b) =>
-                      b.entries.map((entry) => (
-                        <tr key={entry.id}>
-                          <td data-label="Datum">{b.dateKey}</td>
-                          <td data-label="Person">
-                            <EntryLabelLink entry={entry} names={memberNames} />
-                          </td>
-                          <td data-label="Quelle">
-                            <span className={`badge ${entry.source === "self" ? "ok" : "warn"}`}>
-                              {entry.source === "self" ? "selbst registriert" : "Liste"}
-                            </span>
-                          </td>
-                          <td className="muted stack-plain">{relativeDay(b.daysUntil)}</td>
-                          <td className="stack-plain">
-                            <button onClick={() => startEdit(entry, b.dateKey)}>Bearbeiten</button>{" "}
-                            <button className="danger" onClick={() => handleDeleteEntry(entry)}>
-                              Löschen
-                            </button>
-                          </td>
-                        </tr>
-                      )),
-                    )}
-                  </tbody>
-                </table>
+            {upcoming.length > 0 && (
+              <div className="hint mb-12">
+                Mit "selbst registriert" markierte Einträge wurden vom Mitglied selbst hinzugefügt und können hier
+                bei Bedarf weiterhin korrigiert werden.
               </div>
             )}
+            <BaseTable
+              columns={entryColumns}
+              rows={entryRows}
+              rowKey={(r) => r.entry.id}
+              emptyMessage={<p className="muted">Noch keine Geburtstage eingetragen.</p>}
+            />
           </div>
 
           <div className="card-grid">
@@ -626,10 +648,8 @@ export default function Birthdays() {
                   placeholders={ANCHOR_TEMPLATE_PLACEHOLDERS}
                 />
                 <div className="hint">
-                  "Monat" wird mit der Schrift unten formatiert, falls
-                  gesetzt. "Geburtstagsliste" (die Daten/Erwähnungen für
-                  diesen Monat) bleibt immer unformatiert, damit sie auf
-                  Discord korrekt angezeigt wird.
+                  "Monat" wird mit der Schrift unten formatiert, "Geburtstagsliste" (die Daten/Erwähnungen für diesen
+                  Monat) bleibt immer unformatiert.
                 </div>
               </div>
               <label className="switch">
@@ -637,9 +657,8 @@ export default function Birthdays() {
                 Schrift für Monatsüberschriften verwenden
               </label>
               <div className="hint">
-                Formatiert <code>{"{month}"}</code> mit der auf der <a href="/settings">Einstellungsseite</a>{" "}
-                festgelegten Schrift, sofern konfiguriert. Alles andere (Daten, Erwähnungen) wird immer unformatiert
-                dargestellt.
+                Verwendet die auf der <a href="/settings">Einstellungsseite</a> festgelegte Schrift, sofern
+                konfiguriert.
               </div>
               <label className="switch mt-12">
                 <input
