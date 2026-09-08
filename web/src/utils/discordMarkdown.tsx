@@ -1,5 +1,59 @@
 import { useState, type ReactNode } from "react";
 import * as SimpleMarkdown from "simple-markdown";
+import Prism from "prismjs";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-yaml";
+// prism-typescript depends on (and registers) prism-javascript itself, so a
+// separate `prism-javascript` import isn't needed to cover both `js` and `ts`.
+
+/** Discord-recognized language tags that don't match their Prism component name 1:1. */
+const LANG_ALIASES: Record<string, string> = {
+  js: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  py: "python",
+  sh: "bash",
+  shell: "bash",
+  yml: "yaml",
+};
+
+function resolveGrammar(lang: string | undefined): { grammar: Prism.Grammar; name: string } | null {
+  if (!lang) return null;
+  const name = LANG_ALIASES[lang.toLowerCase()] ?? lang.toLowerCase();
+  const grammar = Prism.languages[name];
+  return grammar ? { grammar, name } : null;
+}
+
+/** Turns Prism's token tree into React elements directly (no `dangerouslySetInnerHTML`, matching this file's all-React rendering elsewhere) — Prism's own `.highlight()` returns an HTML string, but `.tokenize()` returns the same tree `.highlight()` would otherwise stringify, so this walks that instead. */
+function tokensToReact(tokens: (string | Prism.Token)[], keyPrefix: string): ReactNode[] {
+  return tokens.map((tok, i) => {
+    if (typeof tok === "string") return tok;
+    const key = `${keyPrefix}-${i}`;
+    const content = Array.isArray(tok.content)
+      ? tokensToReact(tok.content, key)
+      : typeof tok.content === "string"
+        ? tok.content
+        : tokensToReact([tok.content], key);
+    return (
+      <span key={key} className={`token ${tok.type}`}>
+        {content}
+      </span>
+    );
+  });
+}
+
+/** Syntax-highlights a fenced code block's content for a recognized language tag — returns the content unhighlighted (but still safely rendered as React text, never raw HTML) for an unrecognized or missing language, same as Discord's own client falling back to plain monospace. */
+function highlightCode(code: string, lang: string | undefined): ReactNode {
+  const resolved = resolveGrammar(lang);
+  if (!resolved) return code;
+  return tokensToReact(Prism.tokenize(code, resolved.grammar), "tok");
+}
 
 /**
  * Renders text through Discord's actual markdown grammar — not a generic
@@ -94,17 +148,22 @@ const BULLET_RE = /^[-*]\s+(.*)$/;
 const NUMBERED_RE = /^\d+\.\s+(.*)$/;
 const QUOTE_RE = /^>\s?(.*)$/;
 const MULTI_QUOTE_RE = /^>>>\s?(.*)$/;
+/** Discord's "subtext" line — small muted text, unrelated to a bullet list despite the leading `-` (no space between `-` and `#`, unlike `BULLET_RE`, so the two never collide). */
+const SUBTEXT_RE = /^-#\s+(.*)$/;
 const FENCE_RE = /```(\w+)?\n?([\s\S]*?)```/g;
 
 type Block =
   | { type: "code"; lang?: string; content: string }
   | { type: "quote"; lines: string[] }
   | { type: "header"; level: number; content: string }
+  | { type: "subtext"; content: string }
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "text"; lines: string[] };
 
 function isBlockStart(line: string): boolean {
-  return MULTI_QUOTE_RE.test(line) || QUOTE_RE.test(line) || HEADER_RE.test(line) || BULLET_RE.test(line) || NUMBERED_RE.test(line);
+  return (
+    MULTI_QUOTE_RE.test(line) || QUOTE_RE.test(line) || SUBTEXT_RE.test(line) || HEADER_RE.test(line) || BULLET_RE.test(line) || NUMBERED_RE.test(line)
+  );
 }
 
 /** Classifies one fence-free segment's lines into header/quote/list/text blocks, Discord's line-start-driven way (not CommonMark's blank-line-driven way — see this file's header comment). */
@@ -132,6 +191,13 @@ function classifyProse(content: string, blocks: Block[]): void {
         i++;
       }
       blocks.push({ type: "quote", lines: quoteLines });
+      continue;
+    }
+
+    const subtext = SUBTEXT_RE.exec(line);
+    if (subtext) {
+      blocks.push({ type: "subtext", content: subtext[1]! });
+      i++;
       continue;
     }
 
@@ -189,7 +255,7 @@ function renderBlock(block: Block, key: number): ReactNode {
       return (
         <pre key={key} className="discord-md-codeblock">
           {block.lang && <div className="discord-md-codeblock-lang">{block.lang}</div>}
-          <code>{block.content}</code>
+          <code>{highlightCode(block.content, block.lang)}</code>
         </pre>
       );
     case "quote":
@@ -201,6 +267,12 @@ function renderBlock(block: Block, key: number): ReactNode {
     case "header":
       return (
         <div key={key} className={`discord-md-h${block.level}`}>
+          {renderInline(block.content)}
+        </div>
+      );
+    case "subtext":
+      return (
+        <div key={key} className="discord-md-subtext">
           {renderInline(block.content)}
         </div>
       );

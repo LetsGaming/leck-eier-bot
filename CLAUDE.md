@@ -12,6 +12,8 @@ Pick `<your-session-id>` yourself — something short and specific to this task/
 
 **Never run bare `npm run dev` / `npm run dev:web` directly, and never reuse another session's server or port.** Each agent/session gets its own `--id` and therefore its own isolated server, dashboard, and database — this is what stops concurrent agents from clobbering each other's data or fighting over a port, and it holds across separate sessions too, not just within one conversation.
 
+**Never run a new dev-up before running dev-down on the old id.** Always make sure that a old dev session gets terminated and stray matter deleted, before calling up a new one. That way we don't end up with several stranded dev-sessions eating up system ressources. If for whatever reason it was not possible to terminate the old session via dev-down, note that down, the reason why you needed a new dev-session, the ID of the old session and if possible the reason why terminating the old did not work.
+
 ## After finishing that work
 
 Run:

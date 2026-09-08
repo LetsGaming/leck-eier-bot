@@ -366,6 +366,15 @@ textarea {
   padding: 8px 10px;
   font-family: inherit;
   font-size: var(--fs-body);
+  /* Form controls don't inherit body's line-height from the UA stylesheet
+     (only font-family/font-size were being overridden above), so a
+     <textarea> was rendering at the browser's own default line-height —
+     TemplateEditor's highlight overlay (theme.css, .template-editor-highlight)
+     hardcodes line-height: 1.5 to match the textarea beneath it pixel-for-
+     pixel; without this, the two drift apart by a few px per line and the
+     overlay's visible text/pills end up offset from the real (invisible)
+     text and caret by the third or fourth line. */
+  line-height: 1.5;
 }
 
 /* Matches SearchableSelect's own trigger arrow (▾, var(--text-muted), 11px)
@@ -1233,6 +1242,11 @@ th[aria-sort="descending"] .sortable-th-arrow {
   margin: 4px 0;
 }
 
+.discord-md-subtext {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
 .discord-md-list {
   margin: 4px 0;
   padding-left: 24px;
@@ -1242,6 +1256,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 .discord-md-h1 + *,
 .discord-md-h2 + *,
 .discord-md-h3 + *,
+.discord-md-subtext + *,
 .discord-md-quote + *,
 .discord-md-list + * {
   margin-top: 2px;
@@ -1278,6 +1293,64 @@ th[aria-sort="descending"] .sortable-th-arrow {
   font-size: var(--fs-meta);
   text-transform: uppercase;
   margin-bottom: 4px;
+}
+
+/* Prism token colors (utils/discordMarkdown.tsx's highlightCode()) — the
+   One Dark palette, a well-known, high-contrast set for exactly this kind
+   of dark code-block background, not an attempt at matching Discord's own
+   highlighter pixel-for-pixel (which varies by language and isn't public
+   as reusable CSS). */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #7f848e;
+}
+
+.token.punctuation {
+  color: #abb2bf;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #d19a66;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #98c379;
+}
+
+.token.operator,
+.token.entity,
+.token.url {
+  color: #56b6c2;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #c678dd;
+}
+
+.token.function,
+.token.class-name {
+  color: #61afef;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e5c07b;
 }
 
 .discord-md-spoiler {
