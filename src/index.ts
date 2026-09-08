@@ -95,12 +95,14 @@ process.env.TZ = config.timezone;
 // mock mode.
 if (config.devMockDiscord) {
   const mockClient = createMockClient(config);
+  // Mirrors startRealBot()'s clientReady handler below: without this, every
+  // live-member-cache-driven dashboard page (Member Audit's "in guild" list,
+  // Registrierungen, Event-Anwesenheit's name resolution) stays permanently
+  // empty in mock mode — isCacheReady() would never become true, since
+  // nothing else calls initMemberCache() when the real Discord gateway login
+  // (and its clientReady event) never happens.
   const mockGuild = mockClient.guilds.cache.get(config.guildId);
   if (mockGuild) {
-    // Mirrors the real bot's clientReady handler below: populates the
-    // dashboard's live member-cache-backed routes (Mitgliederprüfung,
-    // Übersicht's CommunitySnapshot) from the mock guild's synthetic
-    // members instead of leaving them permanently empty/503ing.
     initMemberCache(mockGuild)
       .then(() => seedMemberRecordsFromCache(getCachedMembers()))
       .catch((err) => logger.error(`❌ Mock member cache init failed: ${errorMessage(err)}`));

@@ -116,17 +116,12 @@ function AllgemeinSection({
             placeholder={FONT_REFERENCE}
           />
           <div className="hint">
-            Füge ein stilisiertes Alphabet ein, das{" "}
-            <code>{FONT_REFERENCE}</code> Zeichen für Zeichen entspricht
-            (insgesamt 52) — z. B. erzeugt mit einem{" "}
-            <a
-              href="https://lingojam.com/FancyTextGenerator"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Fancy-Text-Generator
+            Füge ein stilisiertes Alphabet ein, das <code>{FONT_REFERENCE}</code> Zeichen für Zeichen entspricht
+            (insgesamt 52) — z. B. von{" "}
+            <a href="https://lingojam.com/FancyTextGenerator" target="_blank" rel="noreferrer">
+              lingojam.com/FancyTextGenerator
             </a>
-            .
+            : dort <code>{FONT_REFERENCE}</code> eintippen und eine der Ausgaben hier einfügen.
           </div>
           {fontMap &&
             ([...fontMap].length === FONT_REFERENCE.length ? (
