@@ -13,12 +13,12 @@ import Database from "better-sqlite3";
 function makeEventsDb(): Database.Database {
   const db = new Database(":memory:");
   db.exec(`
-    CREATE TABLE apollo_events (
+    CREATE TABLE events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       starts_at TEXT NOT NULL
     );
-    CREATE TABLE apollo_event_signups (
+    CREATE TABLE event_signups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL,
       raw_name TEXT NOT NULL,
@@ -41,8 +41,8 @@ const SELECT_SIGNUPS_FOR_USER_SQL = `
   SELECT s.id, s.event_id, s.raw_name, s.normalized_name, s.choice, s.user_id, s.match_source, s.withdrawn_at,
          s.attendance_status, s.first_joined_at, s.last_left_at, s.late_minutes, s.early_minutes,
          e.title AS event_title, e.starts_at AS event_starts_at
-  FROM apollo_event_signups s
-  JOIN apollo_events e ON e.id = s.event_id
+  FROM event_signups s
+  JOIN events e ON e.id = s.event_id
   WHERE s.user_id = ?
   ORDER BY e.starts_at DESC
 `;
@@ -56,12 +56,12 @@ interface Row {
 }
 
 function insertEvent(db: Database.Database, title: string, startsAt: string): number {
-  return Number(db.prepare("INSERT INTO apollo_events (title, starts_at) VALUES (?, ?)").run(title, startsAt).lastInsertRowid);
+  return Number(db.prepare("INSERT INTO events (title, starts_at) VALUES (?, ?)").run(title, startsAt).lastInsertRowid);
 }
 
 function insertSignup(db: Database.Database, eventId: number, userId: string | null, choice = "accepted"): void {
   db.prepare(
-    "INSERT INTO apollo_event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source) VALUES (?, 'Name', 'name', ?, ?, 'manual')",
+    "INSERT INTO event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source) VALUES (?, 'Name', 'name', ?, ?, 'manual')",
   ).run(eventId, choice, userId);
 }
 

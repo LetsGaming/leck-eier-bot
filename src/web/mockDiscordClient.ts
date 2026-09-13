@@ -158,13 +158,25 @@ export function createMockClient(config: Config): BotClient {
   const guilds = new Collection();
   guilds.set(guildId, guild);
 
+  // A minimal stand-in for a real discord.js Message — enough for any
+  // feature's send()-then-edit() flow (e.g. events.ts's publishEvent()
+  // stamping the real DB id onto its buttons right after posting) to work
+  // against the mock the same way it does against a real channel.
+  function makeMockMessage() {
+    const message = {
+      id: "mock-message-id",
+      edit: async () => message,
+    };
+    return message;
+  }
+
   const mockTextChannel = {
     id: "mock-channel-fetched",
     name: "mock-channel",
     isTextBased: () => true,
     isDMBased: () => false,
-    send: async () => ({ id: "mock-message-id" }),
-    messages: { fetch: async () => null },
+    send: async () => makeMockMessage(),
+    messages: { fetch: async () => makeMockMessage() },
   };
 
   return {

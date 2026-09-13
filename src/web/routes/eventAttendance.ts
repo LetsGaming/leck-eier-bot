@@ -18,7 +18,7 @@ import { getCachedMembers } from "../../services/memberCache.js";
 import { deriveAttendance, recomputeAttendanceForEvent } from "../../services/eventAttendance.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { monthRangeUtc, currentMonthKey, monthKeyInTimezone } from "../../utils/timezone.js";
-import type { ApolloEvent, ApolloEventSignup, Config } from "../../types.js";
+import type { Event, EventSignup, Config } from "../../types.js";
 import type {
   EventAttendanceMonthsResponse,
   EventSignupEntry,
@@ -67,9 +67,9 @@ const ListQuerySchema = z.object({
 const EventIdParamsSchema = z.object({ id: z.string() });
 const SignupIdParamsSchema = z.object({ signupId: z.string() });
 
-/** Dashboard visibility/control over Apollo event attendance tracking — see `apolloEventWatcher.ts`/`services/eventAttendance.ts`. */
+/** Dashboard visibility/control over native event attendance tracking — see `eventWatcher.ts`/`services/eventAttendance.ts`. */
 export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: Config): void {
-  function serializeSignup(event: ApolloEvent, signup: ApolloEventSignup): EventSignupEntry {
+  function serializeSignup(event: Event, signup: EventSignup): EventSignupEntry {
     const cache = getCachedMembers();
     const cached = signup.userId ? cache.get(signup.userId) : undefined;
 
@@ -108,11 +108,11 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
     };
   }
 
-  function serializeEvent(event: ApolloEvent & { signups: ApolloEventSignup[] }): EventAttendanceEntry {
+  function serializeEvent(event: Event & { signups: EventSignup[] }): EventAttendanceEntry {
     return {
       id: event.id,
-      apolloEventId: event.apolloEventId,
       title: event.title,
+      description: event.description,
       startsAt: event.startsAt,
       endsAt: event.endsAt,
       status: event.status,
@@ -123,10 +123,9 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
     };
   }
 
-  function serializeEventSummary(event: ApolloEvent, counts: EventSignupCounts): EventAttendanceSummary {
+  function serializeEventSummary(event: Event, counts: EventSignupCounts): EventAttendanceSummary {
     return {
       id: event.id,
-      apolloEventId: event.apolloEventId,
       title: event.title,
       startsAt: event.startsAt,
       endsAt: event.endsAt,
@@ -147,7 +146,7 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
    * counts in JS from `serializeSignup()`'s live-derived per-signup values
    * instead of trusting the SQL aggregate.
    */
-  function summarizeEvents(events: ApolloEvent[]): Map<number, EventSignupCounts> {
+  function summarizeEvents(events: Event[]): Map<number, EventSignupCounts> {
     const activeEvent = events.find((event) => event.status === "active");
     const staticIds = events.filter((event) => event.id !== activeEvent?.id).map((event) => event.id);
     const result = summarizeSignupsForEvents(staticIds);
@@ -195,7 +194,7 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
     const { q, scope, problems, month } = request.query;
 
     let mode: "month" | "all" | "problems";
-    let events: ApolloEvent[];
+    let events: Event[];
     let resolvedMonth: string | null;
 
     if (problems === "1") {

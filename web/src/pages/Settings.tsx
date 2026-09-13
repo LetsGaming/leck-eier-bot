@@ -577,11 +577,11 @@ function EventsSection({
 }: EventsSectionProps) {
   return (
     <div className="card">
-      <h2>Event-Anwesenheit (Apollo)</h2>
+      <h2>Event-Anwesenheit</h2>
       <p className="muted small">
-        Erkennt Apollo-Events im Kanal unten und prüft anhand des Sprachkanals,
-        wer teilgenommen hat (inkl. Verspätung/vorzeitigem Verlassen). Ergebnis
-        unter <a href="/events">Event-Anwesenheit</a>. Lasse einen Kanal leer,
+        Prüft anhand des Sprachkanals, wer an einem Event teilgenommen hat
+        (inkl. Verspätung/vorzeitigem Verlassen). Ergebnis unter{" "}
+        <a href="/events">Event-Anwesenheit</a>. Lasse den Sprachkanal leer,
         um dies zu deaktivieren.
       </p>
       {!settings ? (
@@ -589,17 +589,17 @@ function EventsSection({
       ) : (
         <>
           <div className="field">
-            <label htmlFor="apollo-event-channel">Apollo-Event-Kanal</label>
+            <label htmlFor="default-event-channel">Standard-Event-Kanal</label>
             <SearchableSelect
-              id="apollo-event-channel"
-              value={settings.apolloEventChannelId ?? ""}
-              onChange={(v) => update({ apolloEventChannelId: v || null })}
+              id="default-event-channel"
+              value={settings.defaultEventChannelId ?? ""}
+              onChange={(v) => update({ defaultEventChannelId: v || null })}
               placeholder="Kanäle durchsuchen…"
               emptyLabel="— keiner —"
               options={toChannelOptions(channels)}
             />
             <div className="hint">
-              Der Kanal, in dem Apollo seine Event-Nachrichten postet.
+              Kanal, in dem ein neu erstelltes Event landet, wenn weder die Vorlage noch das Erstellungsformular einen eigenen Kanal festlegt.
             </div>
           </div>
           <div className="field">

@@ -750,6 +750,81 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE settings ADD COLUMN auto_register_confirmation_use_font INTEGER NOT NULL DEFAULT 0;
     `);
   },
+  // v36: replaces the Apollo-embed-scraping event pipeline with natively
+  // created events (see docs/superpowers/specs — native event system).
+  // Renames the three apollo_* tables (SQLite's RENAME TO rebinds their
+  // existing indexes automatically; the old index *names* still say
+  // "apollo" until recreated below, purely cosmetic). Drops
+  // `apollo_event_id` — nothing reads it once the parser is gone, so no
+  // replacement column. Adds `reminded_at` for the new pre-event reminder
+  // sweep, and `event_templates` for reusable {placeholder} templates (see
+  // `src/shared/messageTemplate.ts`, already used by birthdays/reaction
+  // roles/registration — this is its fourth consumer, no new engine).
+  //
+  // The old `UNIQUE(event_id, normalized_name)` constraint on
+  // event_signups is a table-level constraint and can't be dropped without
+  // a full table rebuild, so it's left in place rather than risking a
+  // rebuild migration; new button-driven signups synthesize
+  // `normalized_name` from the Discord user id, which trivially satisfies
+  // it. A *new* partial unique index enforces the real invariant we
+  // actually need going forward (one signup per user per event) — but only
+  // added when no historical data already violates it (a manually-linked
+  // ambiguous name could in principle collide with another row's user_id);
+  // if violations exist, the index is skipped with a warning rather than
+  // failing the whole boot.
+  (d) => {
+    d.exec(`
+      ALTER TABLE apollo_events RENAME TO events;
+      ALTER TABLE apollo_event_signups RENAME TO event_signups;
+      ALTER TABLE apollo_event_voice_log RENAME TO event_voice_log;
+
+      DROP INDEX IF EXISTS idx_apollo_events_apollo_id;
+    `);
+    d.exec(`ALTER TABLE events DROP COLUMN apollo_event_id;`);
+    d.exec(`
+      ALTER TABLE events ADD COLUMN reminded_at TEXT;
+      ALTER TABLE events ADD COLUMN description TEXT NOT NULL DEFAULT '';
+
+      DROP INDEX IF EXISTS idx_apollo_events_status_starts;
+      CREATE INDEX idx_events_status_starts ON events(status, starts_at);
+      DROP INDEX IF EXISTS idx_apollo_events_starts_at;
+      CREATE INDEX idx_events_starts_at ON events(starts_at);
+      DROP INDEX IF EXISTS idx_apollo_signups_event;
+      CREATE INDEX idx_event_signups_event ON event_signups(event_id);
+      DROP INDEX IF EXISTS idx_apollo_signups_user;
+      CREATE INDEX idx_event_signups_user ON event_signups(user_id);
+      DROP INDEX IF EXISTS idx_apollo_voice_log_event;
+      CREATE INDEX idx_event_voice_log_event ON event_voice_log(event_id, user_id, at);
+    `);
+
+    const duplicateUsers = d
+      .prepare(
+        `SELECT event_id, user_id FROM event_signups WHERE user_id IS NOT NULL GROUP BY event_id, user_id HAVING COUNT(*) > 1`,
+      )
+      .all() as unknown[];
+    if (duplicateUsers.length === 0) {
+      d.exec(`CREATE UNIQUE INDEX idx_event_signups_user_unique ON event_signups(event_id, user_id) WHERE user_id IS NOT NULL;`);
+    } else {
+      console.warn(
+        `[db migration v36] Skipping idx_event_signups_user_unique — ${duplicateUsers.length} existing (event_id, user_id) pair(s) already have more than one signup row. The new button-based RSVP path still dedupes correctly for new signups via application logic; only the extra DB-level safety net is missing for this install.`,
+      );
+    }
+
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS event_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        title_template TEXT NOT NULL,
+        description_template TEXT NOT NULL DEFAULT '',
+        default_channel_id TEXT,
+        default_mention_role_id TEXT,
+        default_voice_channel_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_event_templates_name ON event_templates(name);
+    `);
+  },
 ];
 
 /**

@@ -25,7 +25,7 @@ import {
   upsertJoin,
 } from "../src/db/memberRecordsRepository.js";
 import { createPanel, upsertMapping } from "../src/db/reactionRolesRepository.js";
-import { upsertApolloEvent, setEventActive, setEventCompleted, replaceEventSignups, setSignupAttendance, listSignups } from "../src/db/eventAttendanceRepository.js";
+import { createEvent, setEventActive, setEventCompleted, upsertSignupByUser, setSignupAttendance, listSignups } from "../src/db/eventAttendanceRepository.js";
 import { SelectionType, PanelMessageType } from "../src/constants.js";
 
 if (process.env.DEV_MOCK_DISCORD !== "true") {
@@ -95,26 +95,19 @@ const panel = createPanel({
 upsertMapping({ panelId: panel.id, emojiName: "🎮", emojiId: null, roleIds: ["mock-role-member"], label: "Gaming", position: 0 });
 upsertMapping({ panelId: panel.id, emojiName: "🎨", emojiId: null, roleIds: ["mock-role-member"], label: "Kreativ", position: 1 });
 
-// --- Apollo events: one completed with tracked signups -------------------
-const event = upsertApolloEvent({
-  apolloEventId: "mock-apollo-1",
+// --- Native events: one completed with tracked signups --------------------
+const event = createEvent({
   messageId: "mock-message-event-1",
   channelId: "mock-channel-general",
   title: "Wöchentlicher Raid-Abend",
+  description: "Kommt pünktlich, wir starten mit dem Tank-Briefing.",
   startsAt: daysAgo(7),
   endsAt: daysAgo(7),
 });
 setEventActive(event.id, "mock-channel-voice", daysAgo(7));
-replaceEventSignups(
-  event.id,
-  [
-    { rawName: "Yuki", normalizedName: "yuki", choice: "Tank", userId: MOCK_USER.yuki, matchSource: "auto" },
-    { rawName: "Lark", normalizedName: "lark", choice: "Heal", userId: MOCK_USER.lark, matchSource: "auto" },
-    { rawName: "Ghost", normalizedName: "ghost", choice: "DPS", userId: MOCK_USER.ghost, matchSource: "auto" },
-    { rawName: "Unbekannt#0000", normalizedName: "unbekannt#0000", choice: "DPS", userId: null, matchSource: "unmatched" },
-  ],
-  "active",
-);
+upsertSignupByUser(event.id, MOCK_USER.yuki, "Yuki", "accepted");
+upsertSignupByUser(event.id, MOCK_USER.lark, "Lark", "accepted");
+upsertSignupByUser(event.id, MOCK_USER.ghost, "Ghost", "accepted");
 setEventCompleted(event.id, daysAgo(7));
 for (const signup of listSignups(event.id)) {
   if (signup.userId === null) continue;
@@ -127,4 +120,4 @@ for (const signup of listSignups(event.id)) {
   });
 }
 
-console.log("✔ Mock data seeded: 4 birthdays, 4 member records (incl. 1 former, 1 pending), 1 reaction-role panel, 1 completed event with 4 signups.");
+console.log("✔ Mock data seeded: 4 birthdays, 4 member records (incl. 1 former, 1 pending), 1 reaction-role panel, 1 completed event with 3 signups.");

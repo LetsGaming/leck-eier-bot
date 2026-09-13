@@ -14,7 +14,7 @@ Three RBAC tiers can log in — `bot-owner`, `guild-owner`, `admin` (anyone with
 
 ## Product Purpose
 
-Lets a Discord server's admins configure and operate the `leck-eier-bot` Discord bot live, without SSH access, editing config files, or restarting the bot: birthday tracking and daily announcements, reaction-role panels, per-command enable/permission toggles, member registration workflows, a member audit log (current and former members), and Apollo-sourced event-attendance tracking. Success means an admin can make a change and trust it took effect immediately, using language and mental models drawn from Discord itself rather than from the bot's internals.
+Lets a Discord server's admins configure and operate the `leck-eier-bot` Discord bot live, without SSH access, editing config files, or restarting the bot: birthday tracking and daily announcements, reaction-role panels, per-command enable/permission toggles, member registration workflows, a member audit log (current and former members), and native event creation (reusable templates, RSVP buttons) with attendance tracking. Success means an admin can make a change and trust it took effect immediately, using language and mental models drawn from Discord itself rather than from the bot's internals.
 
 ## Positioning
 

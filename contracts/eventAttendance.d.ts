@@ -13,7 +13,7 @@ export interface EventAttendanceMonthsResponse {
 /**
  * One signed-up member on an `EventAttendanceEntry`. `choice`,
  * `matchSource`, and `attendanceStatus`'s literal unions mirror the bot's
- * `ApolloRsvpChoice`/`SignupMatchSource`/`AttendanceStatus` types
+ * `RsvpChoice`/`SignupMatchSource`/`AttendanceStatus` types
  * (`src/types.ts`) inline, keeping this contract free of any import into the
  * bot's own module graph:
  * - `matchSource`: how `rawName` was resolved to a guild member.
@@ -24,14 +24,14 @@ export interface EventAttendanceMonthsResponse {
  */
 export interface EventSignupEntry {
   id: number;
-  /** As it appeared in Apollo's embed, exactly. */
+  /** Display name at signup time (or, for a historical row, as it appeared in Apollo's embed). */
   rawName: string;
   choice: "accepted" | "declined" | "tentative";
   userId: string | null;
   displayName: string | null;
   nickname: string | null;
   avatarUrl: string | null;
-  matchSource: "auto" | "manual" | "unmatched" | "ambiguous";
+  matchSource: "button" | "auto" | "manual" | "unmatched" | "ambiguous";
   /** Null while the event is 'scheduled' and always for a 'declined' choice. Computed live (not read from the DB cache) while the event is 'active'. */
   attendanceStatus: "on_time" | "late" | "no_show" | "left_early" | "not_tracked" | null;
   firstJoinedAt: string | null;
@@ -40,33 +40,34 @@ export interface EventSignupEntry {
   lateMinutes: number | null;
   /** Minutes their final departure was before the event ended, only when they never returned. Independent of `lateMinutes`. */
   earlyMinutes: number | null;
-  /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed. Null while still present. */
+  /** ISO UTC — only ever set on a historical, pre-migration row. Null for every native signup. */
   withdrawnAt: string | null;
 }
 
 /**
- * `status`'s literal union mirrors the bot's `ApolloEventStatus` type
+ * `status`'s literal union mirrors the bot's `EventStatus` type
  * (`src/types.ts`) inline: scheduled -> active -> completed, or -> cancelled
- * if the Apollo message is deleted while still scheduled.
+ * if the event message is deleted (or the dashboard cancels it) while still
+ * scheduled.
  */
 export type EventAttendanceStatus = "scheduled" | "active" | "completed" | "cancelled";
 
 /**
- * One Apollo-managed event with its full sign-up/attendance list — see
+ * One natively-created event with its full sign-up/attendance list — see
  * `src/services/eventAttendance.ts` on the backend for the state machine and
  * derivation rules. Response shape of `GET /api/events/attendance/:id` and
  * `PATCH /api/events/attendance/signups/:signupId`.
  */
 export interface EventAttendanceEntry {
   id: number;
-  apolloEventId: string | null;
   title: string;
+  description: string;
   startsAt: string;
   endsAt: string;
   status: EventAttendanceStatus;
   /** The bot was offline for some/all of this event's tracking window — timestamps may be approximate. */
   trackingIncomplete: boolean;
-  /** Jump link to the original Apollo message. */
+  /** Jump link to the event message. */
   messageUrl: string;
   voiceChannelId: string | null;
   signups: EventSignupEntry[];
@@ -103,7 +104,6 @@ export interface EventSignupCounts {
  */
 export interface EventAttendanceSummary {
   id: number;
-  apolloEventId: string | null;
   title: string;
   startsAt: string;
   endsAt: string;

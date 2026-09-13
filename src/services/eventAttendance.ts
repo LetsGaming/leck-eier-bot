@@ -3,6 +3,8 @@ import {
   listDueScheduledEvents,
   listDueActiveEvents,
   listActiveEvents,
+  listDueReminders,
+  setEventReminded,
   setEventActive,
   setEventCompleted,
   markTrackingIncomplete,
@@ -12,36 +14,10 @@ import {
   appendVoiceLog,
   setSignupAttendance,
   getEventById,
-  type ParsedSignupInput,
 } from "../db/eventAttendanceRepository.js";
-import type { ParsedApolloSignup } from "./apolloEventParser.js";
-import { resolveMemberByExactName, normalizeSignupName } from "./memberSearch.js";
-import { APOLLO_EVENT_EARLY_LEAVE_GRACE_MS, APOLLO_EVENT_ON_TIME_GRACE_MS } from "../constants.js";
+import { EVENT_EARLY_LEAVE_GRACE_MS, EVENT_ON_TIME_GRACE_MS, EVENT_REMINDER_LEAD_MS } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
-import type { ApolloEvent, ApolloEventVoiceLogRow, AttendanceStatus, BotClient } from "../types.js";
-
-/**
- * Resolves each parsed Apollo RSVP signup line to a guild member (or leaves
- * it unresolved for later manual linking) — see `apolloEventWatcher.ts`'s
- * `messageCreate`/`messageUpdate` handling, which persists the result via
- * `replaceEventSignups()`. A `<@id>` mention short-circuits straight to that
- * user; a plain-text name instead goes through `resolveMemberByExactName()`,
- * whose `status` (e.g. "ambiguous", "unmatched") becomes this signup's
- * `matchSource` when it isn't a clean match.
- */
-export function buildSignupInputs(signups: ParsedApolloSignup[]): ParsedSignupInput[] {
-  return signups.map((signup) => {
-    const normalizedName = normalizeSignupName(signup.rawName);
-    if (signup.mentionUserId) {
-      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: signup.mentionUserId, matchSource: "auto" };
-    }
-    const resolution = resolveMemberByExactName(signup.rawName);
-    if (resolution.status === "matched") {
-      return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: resolution.userId, matchSource: "auto" };
-    }
-    return { rawName: signup.rawName, normalizedName, choice: signup.choice, userId: null, matchSource: resolution.status };
-  });
-}
+import type { Event, EventVoiceLogRow, AttendanceStatus, BotClient } from "../types.js";
 
 export interface DerivedAttendance {
   status: "on_time" | "late" | "no_show" | "left_early";
@@ -62,17 +38,17 @@ export interface DerivedAttendance {
  *
  * A rejoin naturally un-flags "left early": presence is recomputed from the
  * full replay rather than latched on the first leave. Arriving within
- * `APOLLO_EVENT_ON_TIME_GRACE_MS` of the start, or making a final departure
- * within `APOLLO_EVENT_EARLY_LEAVE_GRACE_MS` of the end, still counts as
- * on_time/stayed for `status` — but the actual minutes are always returned
- * regardless of status, so even a "fine" delay is still visible, not hidden.
+ * `EVENT_ON_TIME_GRACE_MS` of the start, or making a final departure within
+ * `EVENT_EARLY_LEAVE_GRACE_MS` of the end, still counts as on_time/stayed for
+ * `status` — but the actual minutes are always returned regardless of
+ * status, so even a "fine" delay is still visible, not hidden.
  */
-export function deriveAttendance(log: ApolloEventVoiceLogRow[], startsAt: string, endsAt: string): DerivedAttendance {
+export function deriveAttendance(log: EventVoiceLogRow[], startsAt: string, endsAt: string): DerivedAttendance {
   const sorted = [...log].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
   const startMs = new Date(startsAt).getTime();
   const endMs = new Date(endsAt).getTime();
-  const onTimeCutoffMs = startMs + APOLLO_EVENT_ON_TIME_GRACE_MS;
-  const earlyLeaveCutoffMs = endMs - APOLLO_EVENT_EARLY_LEAVE_GRACE_MS;
+  const onTimeCutoffMs = startMs + EVENT_ON_TIME_GRACE_MS;
+  const earlyLeaveCutoffMs = endMs - EVENT_EARLY_LEAVE_GRACE_MS;
 
   let present = false;
   let firstJoinedAt: string | null = null;
@@ -109,8 +85,8 @@ export function deriveAttendance(log: ApolloEventVoiceLogRow[], startsAt: string
   return { status: baseStatus!, firstJoinedAt, lastLeftAt, lateMinutes, earlyMinutes: null };
 }
 
-/** Users whose most recent voice-log action leaves them "present" per a straight replay — used by `catchUpApolloEvents()` to diff against who's actually in the channel after a restart. */
-function computeOpenPresence(log: ApolloEventVoiceLogRow[]): Set<string> {
+/** Users whose most recent voice-log action leaves them "present" per a straight replay — used by `catchUpEvents()` to diff against who's actually in the channel after a restart. */
+function computeOpenPresence(log: EventVoiceLogRow[]): Set<string> {
   const sorted = [...log].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
   const present = new Set<string>();
   for (const row of sorted) {
@@ -145,7 +121,7 @@ async function markAllNotTracked(eventId: number, reason: string): Promise<void>
  * called at completion (`completeEvent`) and again after a manual
  * name-link, so a link made after the fact still reconstructs real
  * attendance from the log (which records every non-bot channel member, not
- * just resolved signups — see `apolloEventWatcher.ts`'s voiceStateUpdate
+ * just resolved signups — see `eventWatcher.ts`'s voiceStateUpdate
  * handler).
  */
 export function recomputeAttendanceForEvent(eventId: number): void {
@@ -171,13 +147,13 @@ async function fetchVoiceChannelMembers(client: BotClient, channelId: string): P
   return [...channel.members.filter((m) => !m.user.bot).keys()];
 }
 
-async function activateEvent(client: BotClient, event: ApolloEvent, now: Date): Promise<void> {
+async function activateEvent(client: BotClient, event: Event, now: Date): Promise<void> {
   const nowIso = now.toISOString();
 
   if (new Date(event.endsAt).getTime() <= now.getTime()) {
     await markAllNotTracked(
       event.id,
-      `Apollo-Event "${event.title}" (#${event.id}): komplettes Zeitfenster verpasst (Bot war offline) — als nicht getrackt markiert.`,
+      `Event "${event.title}" (#${event.id}): komplettes Zeitfenster verpasst (Bot war offline) — als nicht getrackt markiert.`,
     );
     setEventCompleted(event.id, nowIso);
     return;
@@ -188,7 +164,7 @@ async function activateEvent(client: BotClient, event: ApolloEvent, now: Date): 
   if (!vcId || occupantIds === null) {
     await markAllNotTracked(
       event.id,
-      `Apollo-Event "${event.title}" (#${event.id}) konnte nicht getrackt werden: ${
+      `Event "${event.title}" (#${event.id}) konnte nicht getrackt werden: ${
         vcId ? `Sprachkanal ${vcId} nicht sichtbar oder kein Sprachkanal` : "kein Event-Sprachkanal konfiguriert"
       }.`,
     );
@@ -204,7 +180,7 @@ async function activateEvent(client: BotClient, event: ApolloEvent, now: Date): 
   }
 }
 
-async function completeEvent(client: BotClient, event: ApolloEvent, now: Date): Promise<void> {
+async function completeEvent(client: BotClient, event: Event, now: Date): Promise<void> {
   if (event.voiceChannelId) {
     const occupantIds = await fetchVoiceChannelMembers(client, event.voiceChannelId);
     if (occupantIds && occupantIds.length > 0) {
@@ -217,11 +193,30 @@ async function completeEvent(client: BotClient, event: ApolloEvent, now: Date): 
   setEventCompleted(event.id, now.toISOString());
 }
 
-/** One sweep tick: activates due 'scheduled' events, completes due 'active' ones. Called once at startup (after `catchUpApolloEvents()`) and then on `APOLLO_EVENT_SWEEP_INTERVAL_MS`. */
-export async function sweepApolloEvents(client: BotClient): Promise<void> {
+/** Pings every `accepted` signup, once, in the event's own channel — a plain channel message rather than DMs, since a DM can silently fail (closed DMs) while a channel post is always deliverable. Best-effort: a failure here is logged, never thrown, so it can't break the rest of the sweep. */
+async function sendEventReminder(client: BotClient, event: Event): Promise<void> {
+  try {
+    const channel = await client.channels.fetch(event.channelId).catch(() => null);
+    if (!channel || !channel.isTextBased() || !("send" in channel)) return;
+    const accepted = listSignups(event.id).filter((s) => s.choice === "accepted" && s.userId);
+    if (accepted.length === 0) return;
+    const mentions = accepted.map((s) => `<@${s.userId}>`).join(" ");
+    await channel.send(`⏰ **${event.title}** startet bald! ${mentions}`);
+  } catch (err) {
+    logger.error(`Event-Erinnerung für "${event.title}" (#${event.id}) fehlgeschlagen: ${errorMessage(err)}`);
+  }
+}
+
+/** One sweep tick: sends the pre-start reminder for due events, activates due 'scheduled' events, completes due 'active' ones. Called once at startup (after `catchUpEvents()`) and then on `EVENT_SWEEP_INTERVAL_MS`. */
+export async function sweepEvents(client: BotClient): Promise<void> {
   const now = new Date();
   const nowIso = now.toISOString();
+  const reminderCutoffIso = new Date(now.getTime() + EVENT_REMINDER_LEAD_MS).toISOString();
 
+  for (const event of listDueReminders(reminderCutoffIso)) {
+    await sendEventReminder(client, event);
+    setEventReminded(event.id);
+  }
   for (const event of listDueScheduledEvents(nowIso)) {
     await activateEvent(client, event, now);
   }
@@ -239,13 +234,13 @@ export async function sweepApolloEvents(client: BotClient): Promise<void> {
  * flags the event `tracking_incomplete` so the dashboard shows a warning
  * rather than presenting the resulting timestamps as exact. Must run after
  * `initMemberCache()`/guild-ready, since it needs the live voice-channel
- * member list — see `apolloEventWatcher.ts`.
+ * member list — see `eventWatcher.ts`.
  */
-export async function catchUpApolloEvents(client: BotClient): Promise<void> {
+export async function catchUpEvents(client: BotClient): Promise<void> {
   const nowIso = new Date().toISOString();
 
   for (const event of listActiveEvents()) {
-    if (new Date(event.endsAt).getTime() <= Date.now()) continue; // sweepApolloEvents() below will complete it
+    if (new Date(event.endsAt).getTime() <= Date.now()) continue; // sweepEvents() below will complete it
     if (!event.voiceChannelId) continue;
 
     const occupantIds = await fetchVoiceChannelMembers(client, event.voiceChannelId);
@@ -264,10 +259,8 @@ export async function catchUpApolloEvents(client: BotClient): Promise<void> {
     }
     if (toAppend.length > 0) appendVoiceLog(toAppend);
 
-    logger.warn(
-      `Apollo-Event "${event.title}" (#${event.id}) war beim Neustart noch aktiv — Anwesenheit für die Ausfallzeit angenähert.`,
-    );
+    logger.warn(`Event "${event.title}" (#${event.id}) war beim Neustart noch aktiv — Anwesenheit für die Ausfallzeit angenähert.`);
   }
 
-  await sweepApolloEvents(client).catch((err) => logger.error(`Apollo-Event-Sweep fehlgeschlagen: ${errorMessage(err)}`));
+  await sweepEvents(client).catch((err) => logger.error(`Event-Sweep fehlgeschlagen: ${errorMessage(err)}`));
 }

@@ -20,7 +20,7 @@ import registerMemberEvents from "./events/memberEvents.js";
 import registerBirthdayWatcher from "./events/birthdayWatcher.js";
 import registerReactionRoleEvents from "./events/reactionRoleEvents.js";
 import registerRegisterWatcher from "./events/registerWatcher.js";
-import registerApolloEventWatcher from "./events/apolloEventWatcher.js";
+import registerEventWatcher from "./events/eventWatcher.js";
 import { getCachedMembers, initMemberCache } from "./services/memberCache.js";
 import { seedMemberRecordsFromCache } from "./services/memberRecords.js";
 import {
@@ -126,12 +126,12 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     // Privileged intent. Required for the bot to read message content for
     // birthday/registration/event parsing — see events/birthdayWatcher.ts,
-    // events/registerWatcher.ts, and events/apolloEventWatcher.ts.
+    // events/registerWatcher.ts, and events/eventWatcher.ts.
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
     // Non-privileged — no Developer Portal toggle needed. Required for
     // `voiceStateUpdate` events and for a voice channel's `.members` to be
-    // populated at all — see events/apolloEventWatcher.ts.
+    // populated at all — see events/eventWatcher.ts.
     GatewayIntentBits.GuildVoiceStates,
   ],
   // Required so reactions on messages the bot hasn't cached (e.g. added
@@ -219,6 +219,14 @@ settingsBus.on(SettingsEvent.Commands, () => {
 
 // 2. Interaction Handler
 client.on("interactionCreate", async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    const cmd = client.commands.get(interaction.commandName);
+    if (cmd?.autocomplete) {
+      await cmd.autocomplete(interaction).catch((err) => logger.error(`Autocomplete für /${interaction.commandName} fehlgeschlagen: ${errorMessage(err)}`));
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const cmd = client.commands.get(interaction.commandName);
 
@@ -267,7 +275,7 @@ client.on("interactionCreate", async (interaction) => {
     registerBirthdayWatcher(client);
     registerReactionRoleEvents(client);
     registerRegisterWatcher(client);
-    registerApolloEventWatcher(client);
+    registerEventWatcher(client);
 
     client.once("clientReady", async () => {
       logger.info(`Bot logged in as ${client.user?.tag}`);

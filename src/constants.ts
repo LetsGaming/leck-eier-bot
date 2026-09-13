@@ -93,17 +93,13 @@ export const DISCORD_NICKNAME_MAX_LENGTH = 32;
 /** A former member's `member_records` row is archived (exported to a compressed file, then deleted) once this long has passed since `left_at` — see `archiveOldMemberRecords()` in `services/memberRecordsArchive.ts`. Product decision: 1 year. */
 export const MEMBER_RECORD_ARCHIVE_AFTER_MS = 365 * 24 * 60 * 60 * 1000;
 
-// --- Apollo event attendance ---
-/** Apollo's (apollo.fyi) own Discord bot user id — detection filters on this directly rather than a "some bot posted an embed that looks RSVP-shaped" heuristic, since a verified app's messages don't reliably behave like a normal bot's for `message.author.bot`/webhook checks. Confirmed against this server's real Apollo messages. */
-export const APOLLO_BOT_USER_ID = "475744554910351370";
-/** How often the bot checks for events that need to start/end tracking — see `sweepApolloEvents()` in `services/eventAttendance.ts`. */
-export const APOLLO_EVENT_SWEEP_INTERVAL_MS = 30 * 1000;
+// --- Native event system (create/RSVP/attendance) ---
+/** How often the bot checks for events that need to start/end tracking or a reminder — see `sweepEvents()` in `services/eventAttendance.ts`. */
+export const EVENT_SWEEP_INTERVAL_MS = 30 * 1000;
 /** Someone joining the voice channel up to this many ms after the event's start still counts as "on time" rather than "late" — 5 minutes, per the product decision that a small delay is fine (though still logged as an exact lateness figure — see `lateMinutes` in `deriveAttendance()`), not flagged as a problem. */
-export const APOLLO_EVENT_ON_TIME_GRACE_MS = 5 * 60 * 1000;
-/** Mirrors `APOLLO_EVENT_ON_TIME_GRACE_MS` for the other end of the event: leaving up to this many ms before the event's end (with no return) still counts as having stayed, not `left_early` — same "under 5 minutes is fine, but still logged" rule. */
-export const APOLLO_EVENT_EARLY_LEAVE_GRACE_MS = 5 * 60 * 1000;
-/** Assumed event length when Apollo's embed only yields one timestamp (should be rare — Apollo normally gives both start and end). */
-export const APOLLO_EVENT_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+export const EVENT_ON_TIME_GRACE_MS = 5 * 60 * 1000;
+/** Mirrors `EVENT_ON_TIME_GRACE_MS` for the other end of the event: leaving up to this many ms before the event's end (with no return) still counts as having stayed, not `left_early` — same "under 5 minutes is fine, but still logged" rule. */
+export const EVENT_EARLY_LEAVE_GRACE_MS = 5 * 60 * 1000;
 /**
  * Severity-tier boundaries (in minutes) for coloring how late an arrival or
  * how early a departure was — shared by the dashboard's badge coloring
@@ -113,41 +109,17 @@ export const APOLLO_EVENT_DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
  * earliness — they're independent facts and can both apply to the same
  * person at once.
  */
-export const APOLLO_ATTENDANCE_TIER_MILD_MINUTES = 5;
-export const APOLLO_ATTENDANCE_TIER_MODERATE_MINUTES = 15;
-export const APOLLO_ATTENDANCE_TIER_SEVERE_MINUTES = 30;
-/** Matches the numeric event id in an apollo.fyi event link — the real link shape is `apollo.fyi/workspaces/<id>/events/<id>` (arbitrary path segments before the final `events/<id>` or short-form `e/<id>`), not `apollo.fyi/events/<id>` directly. See `parseApolloEventEmbed()` in `services/apolloEventParser.ts`. */
-export const APOLLO_EVENT_URL_REGEX = /apollo\.fyi(?:\/[^/\s]+)*\/(?:e|events)\/(\d+)/i;
-/** Matches a Discord timestamp token, e.g. `<t:1756832423:F>` — Apollo's "Time" field uses these for the event's start/end. */
-export const DISCORD_TIMESTAMP_TOKEN_REGEX = /<t:(-?\d+)(?::[tTdDfFR])?>/g;
-/** Fallback start/end source when timestamp tokens are missing — the `dates=` param on Apollo's "add to Google Calendar" link, e.g. `dates=20260902T165000Z/20260902T175000Z`. */
-export const GOOGLE_CALENDAR_DATES_REGEX = /[?&]dates=(\d{8}T\d{6}Z)(?:%2F|\/)(\d{8}T\d{6}Z)/i;
-/**
- * Embed field names (after stripping emoji/count-suffix and lowercasing —
- * see `normalizeFieldLabel()`) that identify an Apollo RSVP list, mapped to
- * the choice they represent. "Accepted"/"Declined"/"Tentative" are confirmed
- * against a real embed on this server; the German entries are still a guess
- * — see docs/EVENT_ATTENDANCE.md's caveat.
- *
- * "Waitlist" is a real, confirmed field too — it appears once an event has a
- * signup cap (shown as "Accepted (2/1)" — actual/limit — rather than a plain
- * count). Mapped to 'accepted' since a waitlisted member did click Accept,
- * just didn't make the cut; if that turns out to be the wrong call, give it
- * its own ApolloRsvpChoice value instead of merging it in here.
- */
-export const APOLLO_RSVP_FIELD_LABELS: Record<string, "accepted" | "declined" | "tentative"> = {
-  accepted: "accepted",
-  zugesagt: "accepted",
-  angenommen: "accepted",
-  waitlist: "accepted",
-  warteliste: "accepted",
-  declined: "declined",
-  abgesagt: "declined",
-  abgelehnt: "declined",
-  tentative: "tentative",
-  vielleicht: "tentative",
-  unentschlossen: "tentative",
-};
+export const EVENT_ATTENDANCE_TIER_MILD_MINUTES = 5;
+export const EVENT_ATTENDANCE_TIER_MODERATE_MINUTES = 15;
+export const EVENT_ATTENDANCE_TIER_SEVERE_MINUTES = 30;
+/** How long before `starts_at` the accepted-signup reminder ping fires — see `sweepEvents()`. */
+export const EVENT_REMINDER_LEAD_MS = 15 * 60 * 1000;
+export type EventRsvpChoice = "accepted" | "declined" | "tentative";
+export const EVENT_RSVP_CHOICES: { choice: EventRsvpChoice; emoji: string; label: string }[] = [
+  { choice: "accepted", emoji: "✅", label: "Zusagen" },
+  { choice: "tentative", emoji: "❓", label: "Vielleicht" },
+  { choice: "declined", emoji: "❌", label: "Absagen" },
+];
 
 // --- Reaction roles ---
 /**
@@ -199,6 +171,7 @@ export const CommandName = {
   Clear: "clear",
   FindUser: "finduser",
   ReactionRoles: "reactionroles",
+  Event: "event",
 } as const;
 export type CommandName = (typeof CommandName)[keyof typeof CommandName];
 

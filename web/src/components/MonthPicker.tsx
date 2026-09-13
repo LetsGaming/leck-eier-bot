@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Apollo-style month navigation for the Event-Anwesenheit list page:
+ * Month navigation for the Event-Anwesenheit list page:
  * a "Heute" pill, prev/next arrows, and a big month/year label that opens a
  * calendar-style popover for jumping directly to any month. Months that
  * actually hold events are highlighted in the popover grid and carry a

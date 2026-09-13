@@ -53,7 +53,7 @@ function rowToSettings(row: SettingsRow): Settings {
     registerAutoComplete: row.register_auto_complete === 1,
     autoRegisterConfirmationTemplate: row.auto_register_confirmation_template,
     autoRegisterConfirmationUseFont: row.auto_register_confirmation_use_font === 1,
-    apolloEventChannelId: row.apollo_event_channel_id,
+    defaultEventChannelId: row.apollo_event_channel_id,
     eventVoiceChannelId: row.event_voice_channel_id,
   };
 }
@@ -94,7 +94,7 @@ const updateStmt = db.prepare<{
   registerAutoComplete: 0 | 1;
   autoRegisterConfirmationTemplate: string;
   autoRegisterConfirmationUseFont: 0 | 1;
-  apolloEventChannelId: string | null;
+  defaultEventChannelId: string | null;
   eventVoiceChannelId: string | null;
 }>(
   `UPDATE settings SET
@@ -120,7 +120,7 @@ const updateStmt = db.prepare<{
      register_auto_complete = @registerAutoComplete,
      auto_register_confirmation_template = @autoRegisterConfirmationTemplate,
      auto_register_confirmation_use_font = @autoRegisterConfirmationUseFont,
-     apollo_event_channel_id = @apolloEventChannelId,
+     apollo_event_channel_id = @defaultEventChannelId,
      event_voice_channel_id = @eventVoiceChannelId
    WHERE id = 1`,
 );
@@ -179,7 +179,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     registerAutoComplete: next.registerAutoComplete ? 1 : 0,
     autoRegisterConfirmationTemplate: next.autoRegisterConfirmationTemplate,
     autoRegisterConfirmationUseFont: next.autoRegisterConfirmationUseFont ? 1 : 0,
-    apolloEventChannelId: next.apolloEventChannelId,
+    defaultEventChannelId: next.defaultEventChannelId,
     eventVoiceChannelId: next.eventVoiceChannelId,
   });
   settingsBus.emit(SettingsEvent.Settings);

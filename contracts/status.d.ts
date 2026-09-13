@@ -8,7 +8,7 @@
 export interface Status {
   /** Registrations awaiting staff review. */
   pendingRegistrationCount: number;
-  /** Apollo event signups still needing a manual member link. */
+  /** Event signups still needing a manual member link (historical rows only). */
   unmatchedSignupCount: number;
   communitySnapshot: CommunitySnapshot;
   /** `null` unless the requesting session's role is 'bot-owner'. */

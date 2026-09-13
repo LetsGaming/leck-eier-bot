@@ -14,6 +14,7 @@ import MemberAudit from "./pages/MemberAudit";
 import MemberOverview from "./pages/MemberOverview";
 import EventAttendance from "./pages/EventAttendance";
 import EventAttendanceDetail from "./pages/EventAttendanceDetail";
+import EventTemplates from "./pages/EventTemplates";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/members/:userId" element={<MemberOverview />} />
           <Route path="/events" element={<EventAttendance />} />
           <Route path="/events/:eventId" element={<EventAttendanceDetail />} />
+          <Route path="/event-templates" element={<EventTemplates />} />
           <Route path="/settings" element={<Settings me={me} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

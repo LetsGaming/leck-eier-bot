@@ -34,6 +34,7 @@ const ATTENTION_NAV_ITEMS: NavItem[] = [
 const SETUP_NAV_ITEMS: NavItem[] = [
   { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
   { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
+  { to: "/event-templates", label: "Event-Vorlagen", icon: IconEvents },
   { to: "/commands", label: "Befehle", icon: IconCommands },
   { to: "/settings", label: "Einstellungen", icon: IconSettings },
 ];

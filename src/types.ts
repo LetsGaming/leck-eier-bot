@@ -1,4 +1,5 @@
 import type {
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   Client,
   Collection,
@@ -15,6 +16,8 @@ export type { WebRole, PermissionGate };
 export interface Command {
   data: SlashCommandBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<unknown>;
+  /** Only needed by a command with `setAutocomplete(true)` on one of its options — see `commands/general/event.ts`. */
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<unknown>;
   guildOnly?: boolean;
   /** Defaults to {@link CommandPermission.None} when omitted. */
   permission?: CommandPermission;
@@ -113,9 +116,9 @@ export interface Settings {
   autoRegisterConfirmationTemplate: string;
   /** Same as `registerConfirmationUseFont`, for `autoRegisterConfirmationTemplate`'s literal text. Independent toggle — an admin may want one template styled and not the other. */
   autoRegisterConfirmationUseFont: boolean;
-  /** Channel the Apollo bot posts event RSVP embeds in. Null = Apollo event attendance tracking is disabled. See `apolloEventWatcher.ts`. */
-  apolloEventChannelId: string | null;
-  /** The one voice channel every tracked event happens in. Null = tracking never activates even if an event is parsed (see `sweepApolloEvents()`). */
+  /** Default channel a natively-created event is posted in when neither the template nor the creation form overrides it. Null = no default configured. See `services/events.ts`. */
+  defaultEventChannelId: string | null;
+  /** Fallback voice channel for attendance tracking when an event's template doesn't specify its own `defaultVoiceChannelId`. Null = tracking never activates for such an event (see `sweepEvents()`). */
   eventVoiceChannelId: string | null;
 }
 
@@ -228,58 +231,59 @@ export interface MemberRecord {
  */
 export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
 
-/** What a member clicked on Apollo's event embed. */
-export type ApolloRsvpChoice = "accepted" | "declined" | "tentative";
+/** What a member clicked on a native event's RSVP buttons. */
+export type RsvpChoice = "accepted" | "declined" | "tentative";
 
-/** How a signup's `raw_name` was resolved to a guild member — see `resolveMemberByExactName()` in `services/memberSearch.ts`. */
-export type SignupMatchSource = "auto" | "manual" | "unmatched" | "ambiguous";
+/** How a signup's `raw_name`/`user_id` was set. `button` is a native RSVP click (always a real user id). The other three only ever occur on historical, pre-migration rows from the removed Apollo-embed scraper — see `resolveMemberByExactName()` in `services/memberSearch.ts`. */
+export type SignupMatchSource = "button" | "auto" | "manual" | "unmatched" | "ambiguous";
 
 /**
- * scheduled -> active -> completed, or -> cancelled if the Apollo message is
- * deleted while still scheduled. See `sweepApolloEvents()` in
- * `services/eventAttendance.ts`.
+ * scheduled -> active -> completed, or -> cancelled if the event message is
+ * deleted (or the dashboard cancels it) while still scheduled. See
+ * `sweepEvents()` in `services/eventAttendance.ts`.
  */
-export type ApolloEventStatus = "scheduled" | "active" | "completed" | "cancelled";
+export type EventStatus = "scheduled" | "active" | "completed" | "cancelled";
 
-/** on_time/late/no_show/left_early are derived from `apollo_event_voice_log` by `deriveAttendance()`; not_tracked means the bot missed the whole window (offline) or the voice channel wasn't configured/visible when the event activated. Null (on a signup) means not yet computed — still scheduled, or the signup is 'declined' (never tracked at all). */
+/** on_time/late/no_show/left_early are derived from `event_voice_log` by `deriveAttendance()`; not_tracked means the bot missed the whole window (offline) or the voice channel wasn't configured/visible when the event activated. Null (on a signup) means not yet computed — still scheduled, or the signup is 'declined' (never tracked at all). */
 export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "not_tracked";
 
-/** A single Apollo-managed event, parsed from its RSVP embed. See migration v28 in `db/index.ts` for the full column rationale. */
-export interface ApolloEvent {
+/** A single natively-created event, posted and RSVP'd to entirely within Discord. See migration v36 in `db/index.ts` for the schema rationale. */
+export interface Event {
   id: number;
-  /** Numeric id from the event's `apollo.fyi/events/<id>` link. Null if it couldn't be found — `messageId` is then the only identity. */
-  apolloEventId: string | null;
   messageId: string;
   channelId: string;
   title: string;
-  /** ISO UTC. Frozen once `status` leaves 'scheduled' — a later Apollo edit can't move an in-flight measurement's goalposts. */
+  description: string;
+  /** ISO UTC. Frozen once `status` leaves 'scheduled' — an edit can't move an in-flight measurement's goalposts. */
   startsAt: string;
   /** ISO UTC. Same freeze rule as `startsAt`. */
   endsAt: string;
-  status: ApolloEventStatus;
-  /** Snapshot of `settings.eventVoiceChannelId` taken at activation — a later setting change never rewrites an event's own history. Null until activated. */
+  status: EventStatus;
+  /** Snapshot of the template's (or the global fallback) voice channel taken at activation — a later setting change never rewrites an event's own history. Null until activated. */
   voiceChannelId: string | null;
   activatedAt: string | null;
   completedAt: string | null;
-  /** The bot was offline for some/all of this event's tracking window — see `catchUpApolloEvents()`. Timestamps on this event's signups may be approximate. */
+  /** The bot was offline for some/all of this event's tracking window — see `catchUpEvents()`. Timestamps on this event's signups may be approximate. */
   trackingIncomplete: boolean;
+  /** ISO UTC — set once the pre-start reminder has fired for this event, so `sweepEvents()` never double-sends it. Null before that. */
+  remindedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-/** One signed-up member on an `ApolloEvent`. Two independent field groups — see migration v28's doc comment in `db/index.ts` for why they're never written by the same code path. */
-export interface ApolloEventSignup {
+/** One signed-up member on an `Event`. Two independent field groups — see migration v28's doc comment in `db/index.ts` for why they're never written by the same code path. */
+export interface EventSignup {
   id: number;
   eventId: number;
-  /** As it appeared in Apollo's embed, exactly. */
+  /** Display name at the time of signup (or, for historical rows, as it appeared in Apollo's embed). */
   rawName: string;
-  /** `normalizeForSearch(rawName)` — the natural key alongside `eventId` for re-parse upserts. */
+  /** The natural key alongside `eventId` for signup upserts — `discord:<userId>` for a native (button) signup, `normalizeForSearch(rawName)` for a historical fuzzy-matched one. */
   normalizedName: string;
-  choice: ApolloRsvpChoice;
-  /** Null until resolved (or if resolution failed/was ambiguous). */
+  choice: RsvpChoice;
+  /** Null until resolved (or if resolution failed/was ambiguous) — only possible on a historical row; a native signup always has this from the interaction. */
   userId: string | null;
   matchSource: SignupMatchSource;
-  /** ISO UTC — set when this name disappears from a re-parsed embed after the event has gone active/completed (rows are just deleted instead, pre-activation). Null while still present. */
+  /** ISO UTC — only ever set on a historical row (the fuzzy-match reconciliation this supported was removed with the Apollo scraper). Null for every native signup. */
   withdrawnAt: string | null;
   /** Null while the event is still 'scheduled', and always null for a 'declined' choice (never tracked). */
   attendanceStatus: AttendanceStatus | null;
@@ -292,13 +296,26 @@ export interface ApolloEventSignup {
 }
 
 /** One join/leave/snapshot row in the tracked voice channel for an active event — the source of truth `deriveAttendance()` replays. Logged for every non-bot member who touches the channel, not just signed-up ones, so a manual name-link made after the fact can still reconstruct real attendance. */
-export interface ApolloEventVoiceLogRow {
+export interface EventVoiceLogRow {
   id: number;
   eventId: number;
   userId: string;
   action: "present_at_start" | "join" | "leave" | "present_at_end";
   /** ISO UTC, clamped into [startsAt, endsAt]. */
   at: string;
+}
+
+/** A reusable event template with `{token}` placeholders in its title/description — rendered via `renderTemplate()` (`src/shared/messageTemplate.ts`) at publish time, same engine as birthdays/reaction-roles/registration. */
+export interface EventTemplate {
+  id: number;
+  name: string;
+  titleTemplate: string;
+  descriptionTemplate: string;
+  defaultChannelId: string | null;
+  defaultMentionRoleId: string | null;
+  defaultVoiceChannelId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**

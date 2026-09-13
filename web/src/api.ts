@@ -6,9 +6,15 @@ import type {
   CommandDef,
   CreatePanelInput,
   EmojiOption,
+  EditEventBody,
   EventAttendance,
   EventAttendanceListResponse,
   EventMonths,
+  EventTemplate,
+  EventTemplateBody,
+  EventTemplateListResponse,
+  PublishEventBody,
+  PublishedEventEntry,
   GeneralSettings,
   InGuildMembersResponse,
   Mapping,
@@ -115,6 +121,16 @@ export const api = {
   linkEventSignup: (signupId: number, userId: string | null) =>
     request<EventAttendance>(`/events/attendance/signups/${signupId}`, { method: "PATCH", ...json({ userId }) }),
   deleteEventAttendance: (id: number) => request<void>(`/events/attendance/${id}`, { method: "DELETE" }),
+
+  eventTemplates: () => request<EventTemplateListResponse>("/event-templates").then((res) => res.templates),
+  createEventTemplate: (body: EventTemplateBody) => request<EventTemplate>("/event-templates", { method: "POST", ...json(body) }),
+  updateEventTemplate: (id: number, body: EventTemplateBody) =>
+    request<EventTemplate>(`/event-templates/${id}`, { method: "PUT", ...json(body) }),
+  deleteEventTemplate: (id: number) => request<void>(`/event-templates/${id}`, { method: "DELETE" }),
+
+  publishEvent: (body: PublishEventBody) => request<PublishedEventEntry>("/events/publish", { method: "POST", ...json(body) }),
+  editEvent: (id: number, body: EditEventBody) => request<PublishedEventEntry>(`/events/${id}`, { method: "PATCH", ...json(body) }),
+  cancelEvent: (id: number) => request<void>(`/events/${id}/cancel`, { method: "POST" }),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),

@@ -11,7 +11,7 @@
  *
  * `registration.status`/`eventHistory[].choice`/
  * `eventHistory[].attendanceStatus`'s literal unions mirror the bot's
- * `RegistrationStatus`/`ApolloRsvpChoice`/`AttendanceStatus` types
+ * `RegistrationStatus`/`RsvpChoice`/`AttendanceStatus` types
  * (`src/types.ts`) inline — same convention as
  * `contracts/registrations.d.ts`/`contracts/eventAttendance.d.ts`.
  */

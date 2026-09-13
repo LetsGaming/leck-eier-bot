@@ -13,12 +13,21 @@ import type {
 } from "../../contracts/status";
 import type { MemberOverview, MemberOverviewEventEntry } from "../../contracts/memberOverview";
 import type {
+  EventTemplateEntry,
+  EventTemplateListResponse,
+  EventTemplateBody,
+  PublishEventBody,
+  EditEventBody,
+  PublishedEventEntry,
+} from "../../contracts/eventTemplates";
+import type {
   EventAttendanceMonthsResponse,
   EventSignupEntry,
   EventAttendanceEntry,
   EventAttendanceSummary,
   EventAttendanceListResponse,
   EventSignupCounts,
+  EventAttendanceStatus,
 } from "../../contracts/eventAttendance";
 
 export type {
@@ -256,9 +265,9 @@ export interface GeneralSettings {
   autoRegisterConfirmationTemplate: string;
   /** Same as `registerConfirmationUseFont`, for `autoRegisterConfirmationTemplate`. Independent toggle. */
   autoRegisterConfirmationUseFont: boolean;
-  /** Channel the Apollo bot posts event RSVP embeds in. Null = event attendance tracking is disabled. */
-  apolloEventChannelId: string | null;
-  /** The one voice channel every tracked event happens in. Null = tracking never activates even if an event is parsed. */
+  /** Default channel a natively-created event is posted in when neither its template nor the creation form overrides it. Null = no default configured. */
+  defaultEventChannelId: string | null;
+  /** Fallback voice channel for attendance tracking when an event's template doesn't specify its own. Null = tracking never activates for such an event. */
   eventVoiceChannelId: string | null;
 }
 
@@ -288,14 +297,17 @@ export type RegistrationStatus = "pending" | "registered" | "removed" | "left";
  */
 export type Registration = RegistrationEntry;
 
-/** What a member clicked on Apollo's event embed. */
-export type ApolloRsvpChoice = "accepted" | "declined" | "tentative";
+/** A reusable event template — canonical shape lives at `contracts/eventTemplates.ts` as `EventTemplateEntry`. */
+export type EventTemplate = EventTemplateEntry;
+export type { EventTemplateListResponse, EventTemplateBody, PublishEventBody, EditEventBody, PublishedEventEntry };
 
-/** How a signup's `rawName` was resolved to a guild member. */
-export type SignupMatchSource = "auto" | "manual" | "unmatched" | "ambiguous";
+/** What a member clicked on a native event's RSVP buttons. */
+export type RsvpChoice = "accepted" | "declined" | "tentative";
 
-/** scheduled -> active -> completed, or -> cancelled if the Apollo message is deleted while still scheduled. */
-export type ApolloEventStatus = "scheduled" | "active" | "completed" | "cancelled";
+/** How a signup's `rawName`/`userId` was set. `button` is a native RSVP click; the rest only ever occur on historical, pre-migration rows. */
+export type SignupMatchSource = "button" | "auto" | "manual" | "unmatched" | "ambiguous";
+
+export type { EventAttendanceStatus };
 
 /** on_time/late/no_show/left_early are derived from the tracked voice channel; not_tracked means the bot missed the whole window or the voice channel wasn't configured/visible. Null means not yet computed — still scheduled, or the signup is 'declined' (never tracked). */
 export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "not_tracked";
@@ -307,7 +319,7 @@ export type AttendanceStatus = "on_time" | "late" | "no_show" | "left_early" | "
 export type EventSignup = EventSignupEntry;
 
 /**
- * One Apollo-managed event with its full sign-up/attendance list — see
+ * One natively-created event with its full sign-up/attendance list — see
  * `services/eventAttendance.ts` on the backend for the state machine and
  * derivation rules. Canonical shape lives at `contracts/eventAttendance.ts`
  * as `EventAttendanceEntry`.

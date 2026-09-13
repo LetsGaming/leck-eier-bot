@@ -25,6 +25,7 @@ const COMMAND_FILE_EXTENSION = __filename.endsWith(".ts") ? ".ts" : ".js";
 interface CommandModule {
   data?: { name?: string; description?: string };
   execute?: Command["execute"];
+  autocomplete?: Command["autocomplete"];
   permission?: CommandPermission;
 }
 
@@ -76,6 +77,7 @@ export async function loadCommands(client: BotClient): Promise<void> {
       const commandObject: Command = {
         data: discovered.module.data as Command["data"],
         execute: discovered.module.execute,
+        autocomplete: discovered.module.autocomplete,
         guildOnly: override.guildOnly,
         permission: discovered.permission,
         permissionGate: override.permissionGate,

@@ -1,24 +1,24 @@
-import type { ApolloEventStatus, ApolloRsvpChoice, AttendanceStatus } from "./types";
+import type { EventAttendanceStatus, RsvpChoice, AttendanceStatus } from "./types";
 
-export const EVENT_STATUS_LABELS: Record<ApolloEventStatus, string> = {
+export const EVENT_STATUS_LABELS: Record<EventAttendanceStatus, string> = {
   scheduled: "Geplant",
   active: "Läuft",
   completed: "Abgeschlossen",
   cancelled: "Abgesagt",
 };
-export const EVENT_STATUS_BADGE_CLASS: Record<ApolloEventStatus, string> = {
+export const EVENT_STATUS_BADGE_CLASS: Record<EventAttendanceStatus, string> = {
   scheduled: "warn",
   active: "ok",
   completed: "",
   cancelled: "error",
 };
 
-export const CHOICE_LABELS: Record<ApolloRsvpChoice, string> = {
+export const CHOICE_LABELS: Record<RsvpChoice, string> = {
   accepted: "Zugesagt",
   declined: "Abgesagt",
   tentative: "Vielleicht",
 };
-export const CHOICE_BADGE_CLASS: Record<ApolloRsvpChoice, string> = {
+export const CHOICE_BADGE_CLASS: Record<RsvpChoice, string> = {
   accepted: "ok",
   declined: "error",
   tentative: "warn",

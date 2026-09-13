@@ -97,8 +97,8 @@ export default function EventAttendanceDetailPage() {
     const tentative = signups.filter((s) => s.choice === "tentative").length;
     const declined = signups.filter((s) => s.choice === "declined").length;
     const unresolved = signups.filter((s) => s.matchSource === "unmatched" || s.matchSource === "ambiguous").length;
-    // Current, non-bot members with zero signup entry at all — never reacted
-    // to Apollo's embed one way or the other, not even a "declined". A
+    // Current, non-bot members with zero signup entry at all — never RSVP'd
+    // one way or the other, not even a "declined". A
     // signup with no `userId` (unmatched/ambiguous) can't match any real
     // member here either, which is intentional: that person did respond,
     // just isn't linked yet, and is already surfaced above via "unresolved".

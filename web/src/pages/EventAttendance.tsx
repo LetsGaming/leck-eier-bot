@@ -99,7 +99,7 @@ export default function EventAttendancePage() {
     <div>
       <h2>Event-Anwesenheit</h2>
       <p className="muted">
-        Vom Apollo-Bot geparste Events: wer sich angemeldet hat, und wer tatsächlich im Event-Sprachkanal war.
+        Wer sich zu einem Event angemeldet hat, und wer tatsächlich im Event-Sprachkanal war.
         Konfigurierbar unter <a href="/settings">Einstellungen</a>.
       </p>
 

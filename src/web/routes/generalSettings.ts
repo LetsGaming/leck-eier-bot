@@ -18,7 +18,7 @@ const PatchBodySchema = z.object({
   registerAutoComplete: z.boolean().optional(),
   autoRegisterConfirmationTemplate: z.string().min(1).optional(),
   autoRegisterConfirmationUseFont: z.boolean().optional(),
-  apolloEventChannelId: z.string().nullable().optional(),
+  defaultEventChannelId: z.string().nullable().optional(),
   eventVoiceChannelId: z.string().nullable().optional(),
 });
 
@@ -37,7 +37,7 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     registerAutoComplete: settings.registerAutoComplete,
     autoRegisterConfirmationTemplate: settings.autoRegisterConfirmationTemplate,
     autoRegisterConfirmationUseFont: settings.autoRegisterConfirmationUseFont,
-    apolloEventChannelId: settings.apolloEventChannelId,
+    defaultEventChannelId: settings.defaultEventChannelId,
     eventVoiceChannelId: settings.eventVoiceChannelId,
   };
 }
@@ -60,7 +60,7 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
       registerAutoComplete,
       autoRegisterConfirmationTemplate,
       autoRegisterConfirmationUseFont,
-      apolloEventChannelId,
+      defaultEventChannelId,
       eventVoiceChannelId,
     } = request.body;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
@@ -90,7 +90,7 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
         registerAutoComplete,
         autoRegisterConfirmationTemplate,
         autoRegisterConfirmationUseFont,
-        apolloEventChannelId: apolloEventChannelId !== undefined ? apolloEventChannelId || null : undefined,
+        defaultEventChannelId: defaultEventChannelId !== undefined ? defaultEventChannelId || null : undefined,
         eventVoiceChannelId: eventVoiceChannelId !== undefined ? eventVoiceChannelId || null : undefined,
       }),
     );

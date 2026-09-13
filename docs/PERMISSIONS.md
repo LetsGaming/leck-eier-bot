@@ -11,7 +11,7 @@ Portal → your application → **Bot** page → **Privileged Gateway Intents**.
 | **Server Members Intent** | `GatewayIntentBits.GuildMembers` — the member cache, join/leave tracking, Member Audit. |
 | **Message Content Intent** | `GatewayIntentBits.MessageContent` — reading the *text* of messages in the birthday channel (self-registration) and the register channel (registration-form parsing). Without it, message events still fire but `message.content` arrives empty. |
 
-`GatewayIntentBits.GuildVoiceStates` is also requested (event attendance tracking — `events/apolloEventWatcher.ts`) but is **not** privileged, so it needs no Developer Portal toggle and isn't in the table above.
+`GatewayIntentBits.GuildVoiceStates` is also requested (event attendance tracking — `events/eventWatcher.ts`) but is **not** privileged, so it needs no Developer Portal toggle and isn't in the table above.
 
 ## Bot permissions (invite / re-authorize)
 
