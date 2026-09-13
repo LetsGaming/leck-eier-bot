@@ -259,7 +259,9 @@ export interface Event {
   /** ISO UTC. Same freeze rule as `startsAt`. */
   endsAt: string;
   status: EventStatus;
-  /** Snapshot of the template's (or the global fallback) voice channel taken at activation — a later setting change never rewrites an event's own history. Null until activated. */
+  /** Chosen at publish time (template default, overridable) — the channel attendance tracking activates against. Null = fall back to `settings.eventVoiceChannelId` at activation. */
+  configuredVoiceChannelId: string | null;
+  /** Snapshot of `configuredVoiceChannelId` (or the global fallback) taken at activation — a later setting change never rewrites an event's own history. Null until activated. */
   voiceChannelId: string | null;
   activatedAt: string | null;
   completedAt: string | null;
@@ -267,6 +269,8 @@ export interface Event {
   trackingIncomplete: boolean;
   /** ISO UTC — set once the pre-start reminder has fired for this event, so `sweepEvents()` never double-sends it. Null before that. */
   remindedAt: string | null;
+  /** Whether `title`/`description` (stored here as plain, unstyled text) get font-mapped with the current global font (`settings.fontMap`) whenever the embed is (re)rendered — same convention as reaction-role panels' own `useFont` toggle. */
+  useFont: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -305,15 +309,22 @@ export interface EventVoiceLogRow {
   at: string;
 }
 
-/** A reusable event template with `{token}` placeholders in its title/description — rendered via `renderTemplate()` (`src/shared/messageTemplate.ts`) at publish time, same engine as birthdays/reaction-roles/registration. */
+/** A reusable event template — `defaultTitle`/`baseDescription` are plain text (no token/placeholder syntax), pre-filled into the publish form and edited freely from there. */
 export interface EventTemplate {
   id: number;
   name: string;
-  titleTemplate: string;
-  descriptionTemplate: string;
+  defaultTitle: string;
+  baseDescription: string;
   defaultChannelId: string | null;
   defaultMentionRoleId: string | null;
   defaultVoiceChannelId: string | null;
+  /** Recurring-time default ("this event is always Tuesdays at 8pm") — all three null means no default; the publish form starts with empty start/end fields. 0=Sunday..6=Saturday. See `nextOccurrence()` in `services/events.ts`. */
+  defaultWeekday: number | null;
+  /** "HH:MM", server timezone. */
+  defaultStartTime: string | null;
+  /** "HH:MM", server timezone. */
+  defaultEndTime: string | null;
+  useFont: boolean;
   createdAt: string;
   updatedAt: string;
 }

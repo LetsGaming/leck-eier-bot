@@ -356,6 +356,8 @@ label {
 input[type="text"],
 input[type="number"],
 input[type="search"],
+input[type="datetime-local"],
+input[type="time"],
 select,
 textarea {
   width: 100%;
@@ -394,6 +396,14 @@ select {
 textarea {
   resize: vertical;
   min-height: 70px;
+}
+
+/* The browser's own calendar/clock picker icon renders black-on-black
+   against this app's dark inputs otherwise. */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
 }
 
 input:focus,
@@ -769,6 +779,12 @@ th[aria-sort="descending"] .sortable-th-arrow {
 .searchable-select-list {
   max-height: 240px;
   overflow-y: auto;
+  /* Without this, `overflow-y: auto` alone computes overflow-x to `auto`
+     too (per the CSS Overflow spec) — the vertical scrollbar's own reserved
+     width then makes the 100%-wide option buttons a few px "too wide" for
+     the now-narrower content box, triggering a spurious horizontal
+     scrollbar even though nothing actually needs to scroll sideways. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -875,6 +891,29 @@ th[aria-sort="descending"] .sortable-th-arrow {
 .message-preview-embed-desc {
   white-space: pre-wrap;
   font-size: 13px;
+}
+
+.message-preview-embed-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.message-preview-embed-field {
+  min-width: 100px;
+}
+
+.message-preview-embed-field-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #f2f3f5;
+  margin-bottom: 2px;
+}
+
+.message-preview-embed-field-value {
+  font-size: 13px;
+  white-space: pre-wrap;
 }
 
 .message-preview-reactions {

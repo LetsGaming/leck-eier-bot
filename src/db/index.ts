@@ -757,9 +757,9 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
   // "apollo" until recreated below, purely cosmetic). Drops
   // `apollo_event_id` — nothing reads it once the parser is gone, so no
   // replacement column. Adds `reminded_at` for the new pre-event reminder
-  // sweep, and `event_templates` for reusable {placeholder} templates (see
-  // `src/shared/messageTemplate.ts`, already used by birthdays/reaction
-  // roles/registration — this is its fourth consumer, no new engine).
+  // sweep, and `event_templates` for reusable events — a template just
+  // stores a default title and a base description (both plain text, no
+  // token/placeholder syntax), edited freely at publish time.
   //
   // The old `UNIQUE(event_id, normalized_name)` constraint on
   // event_signups is a table-level constraint and can't be dropped without
@@ -814,15 +814,33 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE TABLE IF NOT EXISTS event_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        title_template TEXT NOT NULL,
-        description_template TEXT NOT NULL DEFAULT '',
+        default_title TEXT NOT NULL,
+        base_description TEXT NOT NULL DEFAULT '',
         default_channel_id TEXT,
         default_mention_role_id TEXT,
         default_voice_channel_id TEXT,
+        -- Recurring-time defaults ("this event is always Tuesdays at 8pm") —
+        -- all three null means "no default, admin picks the date/time fresh
+        -- every time". default_weekday is 0=Sunday..6=Saturday (JS Date
+        -- convention); the two time-of-day columns are "HH:MM" in the
+        -- server's configured TIMEZONE, combined with the next matching
+        -- weekday at publish time — see nextOccurrence() in services/events.ts.
+        default_weekday INTEGER,
+        default_start_time TEXT,
+        default_end_time TEXT,
+        use_font INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_event_templates_name ON event_templates(name);
+
+      -- The channel an event's attendance tracking is actually configured
+      -- for, chosen at publish time (template default, overridable) — the
+      -- existing voice_channel_id column is an activation-time *snapshot*
+      -- (frozen once tracking starts) that now sources from this instead of
+      -- always the single global settings.event_voice_channel_id fallback.
+      ALTER TABLE events ADD COLUMN configured_voice_channel_id TEXT;
+      ALTER TABLE events ADD COLUMN use_font INTEGER NOT NULL DEFAULT 0;
     `);
   },
 ];

@@ -29,12 +29,11 @@ interface NavItem {
 const ATTENTION_NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Übersicht", icon: IconOverview, end: true },
   { to: "/members", label: "Mitgliederprüfung", icon: IconMembers, countKey: "pendingRegistrationCount" },
-  { to: "/events", label: "Event-Anwesenheit", icon: IconEvents, countKey: "unmatchedSignupCount" },
+  { to: "/events", label: "Event", icon: IconEvents, countKey: "unmatchedSignupCount" },
 ];
 const SETUP_NAV_ITEMS: NavItem[] = [
   { to: "/birthdays", label: "Geburtstage", icon: IconBirthdays },
   { to: "/reaction-roles", label: "Reaktionsrollen", icon: IconReactionRoles },
-  { to: "/event-templates", label: "Event-Vorlagen", icon: IconEvents },
   { to: "/commands", label: "Befehle", icon: IconCommands },
   { to: "/settings", label: "Einstellungen", icon: IconSettings },
 ];

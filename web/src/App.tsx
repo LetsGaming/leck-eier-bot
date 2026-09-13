@@ -12,9 +12,8 @@ import Birthdays from "./pages/Birthdays";
 import Commands from "./pages/Commands";
 import MemberAudit from "./pages/MemberAudit";
 import MemberOverview from "./pages/MemberOverview";
-import EventAttendance from "./pages/EventAttendance";
+import Events from "./pages/Events";
 import EventAttendanceDetail from "./pages/EventAttendanceDetail";
-import EventTemplates from "./pages/EventTemplates";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -47,9 +46,8 @@ export default function App() {
           <Route path="/commands" element={<Commands />} />
           <Route path="/members" element={<MemberAudit />} />
           <Route path="/members/:userId" element={<MemberOverview />} />
-          <Route path="/events" element={<EventAttendance />} />
+          <Route path="/events" element={<Events />} />
           <Route path="/events/:eventId" element={<EventAttendanceDetail />} />
-          <Route path="/event-templates" element={<EventTemplates />} />
           <Route path="/settings" element={<Settings me={me} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

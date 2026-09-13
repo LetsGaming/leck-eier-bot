@@ -1,9 +1,9 @@
 import {
   SlashCommandBuilder,
   ModalBuilder,
+  LabelBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ActionRowBuilder,
   MessageFlags,
   type ChatInputCommandInteraction,
   type AutocompleteInteraction,
@@ -11,9 +11,24 @@ import {
 } from "discord.js";
 import { listEventTemplates, getEventTemplateByName } from "../../db/eventTemplatesRepository.js";
 import { getSettings } from "../../db/settingsRepository.js";
-import { publishEvent, getTemplatePlaceholderTokens } from "../../services/events.js";
+import { publishEvent } from "../../services/events.js";
+import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
+import { loadConfig } from "../../config/index.js";
 import { errorMessage } from "../../utils/logger.js";
 import { CommandName, CommandPermission } from "../../constants.js";
+import type { EventTemplate } from "../../types.js";
+
+/** `template`'s recurring-time default (if set), as ISO strings in the server's configured timezone — prefilled into the modal's start/end fields, still editable. Null if the template has no default. */
+function defaultOccurrence(template: EventTemplate): { startsAt: string; endsAt: string } | null {
+  if (template.defaultWeekday === null || template.defaultStartTime === null || template.defaultEndTime === null) return null;
+  const { startsAt, endsAt } = nextWeekdayOccurrenceUtc(
+    template.defaultWeekday,
+    template.defaultStartTime,
+    template.defaultEndTime,
+    loadConfig().timezone,
+  );
+  return { startsAt, endsAt };
+}
 
 export const permission = CommandPermission.Admin;
 
@@ -28,8 +43,6 @@ export const data = new SlashCommandBuilder()
   );
 
 const MODAL_ID_PREFIX = "event:create-modal";
-/** Discord caps a modal at 5 text inputs. Two are always start/end time, leaving at most 3 for a template's own `{token}` placeholders — a template needing more has to be published from the dashboard instead, which has no such limit. */
-const MAX_MODAL_PLACEHOLDERS = 3;
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const templateName = interaction.options.getString("vorlage", true);
@@ -39,35 +52,41 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const placeholders = getTemplatePlaceholderTokens(template.titleTemplate, template.descriptionTemplate);
-  if (placeholders.length > MAX_MODAL_PLACEHOLDERS) {
-    await interaction.reply({
-      content: `Diese Vorlage hat zu viele Platzhalter für ein Discord-Formular (${placeholders.length}, maximal ${MAX_MODAL_PLACEHOLDERS}) — bitte über das Dashboard veröffentlichen.`,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
+  const occurrence = defaultOccurrence(template);
 
-  const modal = new ModalBuilder().setCustomId(`${MODAL_ID_PREFIX}:${template.id}`).setTitle(`Event: ${template.name}`.slice(0, 45));
-  for (const token of placeholders) {
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder().setCustomId(`ph:${token}`).setLabel(token.slice(0, 45)).setStyle(TextInputStyle.Short).setRequired(true),
-      ),
-    );
-  }
-  modal.addComponents(
-    new ActionRowBuilder<TextInputBuilder>().addComponents(
-      new TextInputBuilder()
-        .setCustomId("startsAt")
+  const modal = new ModalBuilder()
+    .setCustomId(`${MODAL_ID_PREFIX}:${template.id}`)
+    .setTitle(`Event: ${template.name}`.slice(0, 45))
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Titel")
+        .setTextInputComponent(
+          new TextInputBuilder().setCustomId("title").setStyle(TextInputStyle.Short).setValue(template.defaultTitle).setRequired(true),
+        ),
+      new LabelBuilder()
+        .setLabel("Beschreibung")
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId("description")
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(template.baseDescription)
+            .setRequired(false),
+        ),
+      new LabelBuilder()
         .setLabel("Start (ISO, z.B. 2026-09-20T19:00:00+02:00)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true),
-    ),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(
-      new TextInputBuilder().setCustomId("endsAt").setLabel("Ende (ISO)").setStyle(TextInputStyle.Short).setRequired(true),
-    ),
-  );
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId("startsAt")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setValue(occurrence?.startsAt ?? ""),
+        ),
+      new LabelBuilder()
+        .setLabel("Ende (ISO)")
+        .setTextInputComponent(
+          new TextInputBuilder().setCustomId("endsAt").setStyle(TextInputStyle.Short).setRequired(true).setValue(occurrence?.endsAt ?? ""),
+        ),
+    );
 
   await interaction.showModal(modal);
 }
@@ -81,11 +100,10 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
   await interaction.respond(choices);
 }
 
-/** Handles the modal shown by `execute()` above — parses the placeholder/time fields, renders and publishes the event. Registered from `eventWatcher.ts`'s `interactionCreate` listener alongside the RSVP button handler, not the central command dispatcher (this is a modal submission, not a chat-input command). */
+/** Handles the modal shown by `execute()` above — parses title/description/time and publishes the event. Registered from `eventWatcher.ts`'s `interactionCreate` listener alongside the RSVP button handler, not the central command dispatcher (this is a modal submission, not a chat-input command). */
 export async function handleCreateModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
   const templateId = Number(interaction.customId.slice(MODAL_ID_PREFIX.length + 1));
-  const templates = listEventTemplates();
-  const template = templates.find((t) => t.id === templateId);
+  const template = listEventTemplates().find((t) => t.id === templateId);
   if (!template) {
     await interaction.reply({ content: "Diese Vorlage existiert nicht mehr.", flags: MessageFlags.Ephemeral });
     return;
@@ -100,11 +118,6 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     return;
   }
 
-  const placeholders: Record<string, string> = {};
-  for (const token of getTemplatePlaceholderTokens(template.titleTemplate, template.descriptionTemplate)) {
-    placeholders[token] = interaction.fields.getTextInputValue(`ph:${token}`);
-  }
-
   const channelId = template.defaultChannelId ?? getSettings().defaultEventChannelId;
   if (!channelId) {
     await interaction.reply({ content: "Kein Kanal konfiguriert (weder auf der Vorlage noch als Standard in den Einstellungen).", flags: MessageFlags.Ephemeral });
@@ -114,11 +127,12 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     await publishEvent(interaction.client, {
-      titleTemplate: template.titleTemplate,
-      descriptionTemplate: template.descriptionTemplate,
-      placeholders,
+      title: interaction.fields.getTextInputValue("title"),
+      description: interaction.fields.getTextInputValue("description"),
       channelId,
       mentionRoleId: template.defaultMentionRoleId,
+      voiceChannelId: template.defaultVoiceChannelId,
+      useFont: template.useFont,
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
     });

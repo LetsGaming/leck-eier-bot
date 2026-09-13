@@ -159,7 +159,7 @@ async function activateEvent(client: BotClient, event: Event, now: Date): Promis
     return;
   }
 
-  const vcId = getSettings().eventVoiceChannelId;
+  const vcId = event.configuredVoiceChannelId ?? getSettings().eventVoiceChannelId;
   const occupantIds = vcId ? await fetchVoiceChannelMembers(client, vcId) : null;
   if (!vcId || occupantIds === null) {
     await markAllNotTracked(

@@ -18,11 +18,13 @@ interface EventRow {
   starts_at: string;
   ends_at: string;
   status: string;
+  configured_voice_channel_id: string | null;
   voice_channel_id: string | null;
   activated_at: string | null;
   completed_at: string | null;
   tracking_incomplete: 0 | 1;
   reminded_at: string | null;
+  use_font: 0 | 1;
   created_at: string;
   updated_at: string;
 }
@@ -61,11 +63,13 @@ function rowToEvent(row: EventRow): Event {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     status: row.status as EventStatus,
+    configuredVoiceChannelId: row.configured_voice_channel_id,
     voiceChannelId: row.voice_channel_id,
     activatedAt: row.activated_at,
     completedAt: row.completed_at,
     trackingIncomplete: row.tracking_incomplete === 1,
     remindedAt: row.reminded_at,
+    useFont: row.use_font === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -100,7 +104,8 @@ function rowToVoiceLog(row: VoiceLogRow): EventVoiceLogRow {
 }
 
 const EVENT_COLUMNS = `id, message_id, channel_id, title, description, starts_at, ends_at, status,
-  voice_channel_id, activated_at, completed_at, tracking_incomplete, reminded_at, created_at, updated_at`;
+  configured_voice_channel_id, voice_channel_id, activated_at, completed_at, tracking_incomplete, reminded_at,
+  use_font, created_at, updated_at`;
 const SIGNUP_COLUMNS = `id, event_id, raw_name, normalized_name, choice, user_id, match_source, withdrawn_at,
   attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes`;
 const VOICE_LOG_COLUMNS = "id, event_id, user_id, action, at";
@@ -167,11 +172,13 @@ const insertEventStmt = db.prepare<{
   description: string;
   startsAt: string;
   endsAt: string;
+  configuredVoiceChannelId: string | null;
+  useFont: 0 | 1;
   createdAt: string;
   updatedAt: string;
 }>(
-  `INSERT INTO events (message_id, channel_id, title, description, starts_at, ends_at, created_at, updated_at)
-   VALUES (@messageId, @channelId, @title, @description, @startsAt, @endsAt, @createdAt, @updatedAt)`,
+  `INSERT INTO events (message_id, channel_id, title, description, starts_at, ends_at, configured_voice_channel_id, use_font, created_at, updated_at)
+   VALUES (@messageId, @channelId, @title, @description, @startsAt, @endsAt, @configuredVoiceChannelId, @useFont, @createdAt, @updatedAt)`,
 );
 const updateEventFieldsStmt = db.prepare<{
   id: number;
@@ -276,6 +283,9 @@ export interface CreateEventInput {
   startsAt: string;
   /** ISO UTC. */
   endsAt: string;
+  /** Null = fall back to `settings.eventVoiceChannelId` at activation. */
+  configuredVoiceChannelId: string | null;
+  useFont: boolean;
 }
 
 /** Creates a new event row for a just-published event message. Status always starts 'scheduled'. */
@@ -288,6 +298,8 @@ export function createEvent(input: CreateEventInput): Event {
     description: input.description,
     startsAt: input.startsAt,
     endsAt: input.endsAt,
+    configuredVoiceChannelId: input.configuredVoiceChannelId,
+    useFont: input.useFont ? 1 : 0,
     createdAt: now,
     updatedAt: now,
   });

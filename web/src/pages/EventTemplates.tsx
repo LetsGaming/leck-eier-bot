@@ -2,47 +2,37 @@ import { useState } from "react";
 import BaseTable from "../components/BaseTable";
 import SearchableSelect from "../components/SearchableSelect";
 import TemplateEditor from "../components/TemplateEditor";
-import TemplatePreview from "../components/TemplatePreview";
+import EventEmbedPreview from "../components/EventEmbedPreview";
+import PublishEventForm from "../components/PublishEventForm";
 import { useConfirm } from "../components/ConfirmContext";
 import { useToast } from "../components/ToastContext";
 import { useChannels } from "../hooks/useChannels";
 import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { useRoles } from "../hooks/useRoles";
+import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { useFetchedResource } from "../hooks/useFetchedResource";
 import { api, errorMessage } from "../api";
-import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
+import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION } from "../utils/selectOptions";
 import type { EventTemplate } from "../types";
-
-const TIME_PLACEHOLDERS = [
-  { token: "start_time", label: "Start" },
-  { token: "end_time", label: "Ende" },
-];
-
-/** Every distinct `{token}` in the two fields, excluding the always-available start/end time tokens — mirrors `getTemplatePlaceholderTokens()` on the bot (`src/services/events.ts`), kept in sync by hand since it's a small, stable regex on both sides. */
-function extractPlaceholders(titleTemplate: string, descriptionTemplate: string): string[] {
-  const found = new Set<string>();
-  const pattern = /\{([^{}]+)\}/g;
-  for (const text of [titleTemplate, descriptionTemplate]) {
-    pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text))) {
-      if (match[1] !== "start_time" && match[1] !== "end_time") found.add(match[1]!);
-    }
-  }
-  return [...found];
-}
 
 const EMPTY_TEMPLATE: EventTemplate = {
   id: 0,
   name: "",
-  titleTemplate: "",
-  descriptionTemplate: "",
+  defaultTitle: "",
+  baseDescription: "",
   defaultChannelId: null,
   defaultMentionRoleId: null,
   defaultVoiceChannelId: null,
+  defaultWeekday: null,
+  defaultStartTime: null,
+  defaultEndTime: null,
+  useFont: false,
   createdAt: "",
   updatedAt: "",
 };
+
+/** `Date#getDay()` convention: 0=Sunday..6=Saturday. */
+const WEEKDAY_LABELS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 
 function TemplateForm({
   initial,
@@ -57,23 +47,33 @@ function TemplateForm({
   const channels = useChannels();
   const voiceChannels = useVoiceChannels();
   const roles = useRoles();
+  const generalSettings = useGeneralSettings();
   const [form, setForm] = useState<EventTemplate>(initial ?? EMPTY_TEMPLATE);
+  const [hasDefaultTime, setHasDefaultTime] = useState(initial?.defaultWeekday !== null && initial !== null);
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!form.name.trim() || !form.titleTemplate.trim()) {
-      showError("Name und Titel sind erforderlich.");
+    if (!form.name.trim() || !form.defaultTitle.trim()) {
+      showError("Name und Standard-Titel sind erforderlich.");
+      return;
+    }
+    if (hasDefaultTime && (!form.defaultStartTime || !form.defaultEndTime)) {
+      showError("Bitte Start- und Endzeit für die Standard-Zeit angeben.");
       return;
     }
     setSaving(true);
     try {
       const body = {
         name: form.name,
-        titleTemplate: form.titleTemplate,
-        descriptionTemplate: form.descriptionTemplate,
+        defaultTitle: form.defaultTitle,
+        baseDescription: form.baseDescription,
         defaultChannelId: form.defaultChannelId,
         defaultMentionRoleId: form.defaultMentionRoleId,
         defaultVoiceChannelId: form.defaultVoiceChannelId,
+        defaultWeekday: hasDefaultTime ? form.defaultWeekday : null,
+        defaultStartTime: hasDefaultTime ? form.defaultStartTime : null,
+        defaultEndTime: hasDefaultTime ? form.defaultEndTime : null,
+        useFont: form.useFont,
       };
       if (initial) await api.updateEventTemplate(initial.id, body);
       else await api.createEventTemplate(body);
@@ -91,30 +91,27 @@ function TemplateForm({
       <h2>{initial ? `Vorlage bearbeiten: ${initial.name}` : "Neue Vorlage"}</h2>
       <div className="field">
         <label htmlFor="template-name">Name</label>
-        <input id="template-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input id="template-name" type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div className="field">
-        <label htmlFor="template-title">Titel</label>
-        <TemplateEditor
+        <label htmlFor="template-title">Standard-Titel</label>
+        <input
           id="template-title"
-          value={form.titleTemplate}
-          onChange={(v) => setForm({ ...form, titleTemplate: v })}
-          channels={channels.data ?? []}
-          placeholders={TIME_PLACEHOLDERS}
+          type="text"
+          value={form.defaultTitle}
+          onChange={(e) => setForm({ ...form, defaultTitle: e.target.value })}
         />
+        <div className="hint">Wird beim Veröffentlichen vorausgefüllt und ist dort frei bearbeitbar.</div>
       </div>
       <div className="field">
-        <label htmlFor="template-description">Beschreibung</label>
+        <label htmlFor="template-description">Basis-Beschreibung</label>
         <TemplateEditor
           id="template-description"
-          value={form.descriptionTemplate}
-          onChange={(v) => setForm({ ...form, descriptionTemplate: v })}
+          value={form.baseDescription}
+          onChange={(v) => setForm({ ...form, baseDescription: v })}
           channels={channels.data ?? []}
-          placeholders={TIME_PLACEHOLDERS}
         />
-        <div className="hint">
-          Eigene Platzhalter wie <code>{"{organisator}"}</code> sind erlaubt — sie werden beim Veröffentlichen abgefragt.
-        </div>
+        <div className="hint">Wird beim Veröffentlichen vorausgefüllt — meist unverändert übernommen, bei Bedarf frei anpassbar.</div>
       </div>
       <div className="field">
         <label htmlFor="template-channel">Standard-Kanal</label>
@@ -135,7 +132,7 @@ function TemplateForm({
           onChange={(v) => setForm({ ...form, defaultMentionRoleId: v || null })}
           placeholder="Rollen durchsuchen…"
           emptyLabel="— keine —"
-          options={toRoleOptions(roles.data ?? [])}
+          options={[EVERYONE_MENTION_OPTION, ...toRoleOptions(roles.data ?? [])]}
         />
       </div>
       <div className="field">
@@ -150,29 +147,88 @@ function TemplateForm({
         />
       </div>
 
+      <div className="field">
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={hasDefaultTime}
+            onChange={(e) => {
+              setHasDefaultTime(e.target.checked);
+              // The weekday <select> below just *displays* a fallback of
+              // Montag (1) via `value={form.defaultWeekday ?? 1}` — it never
+              // writes that back to state unless the admin actually changes
+              // the selection, so leaving it on its default-looking value
+              // would silently save `defaultWeekday: null` while the times
+              // are set, tripping the backend's all-or-nothing validation.
+              if (e.target.checked && form.defaultWeekday === null) setForm((f) => ({ ...f, defaultWeekday: 1 }));
+            }}
+          />
+          Standard-Zeit
+        </label>
+        <div className="hint">Für wiederkehrende Events, die immer am selben Wochentag zur selben Zeit stattfinden — wird beim Veröffentlichen als nächster passender Termin vorausgefüllt.</div>
+        {hasDefaultTime && (
+          <>
+            <select
+              value={form.defaultWeekday ?? 1}
+              onChange={(e) => setForm({ ...form, defaultWeekday: Number(e.target.value) })}
+              className="mt-8"
+            >
+              {WEEKDAY_LABELS.map((label, weekday) => (
+                <option key={weekday} value={weekday}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <div className="row mt-8">
+              <div className="field">
+                <label htmlFor="template-start-time">Startzeit</label>
+                <input
+                  id="template-start-time"
+                  type="time"
+                  value={form.defaultStartTime ?? ""}
+                  onChange={(e) => setForm({ ...form, defaultStartTime: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="template-end-time">Endzeit</label>
+                <input
+                  id="template-end-time"
+                  type="time"
+                  value={form.defaultEndTime ?? ""}
+                  onChange={(e) => setForm({ ...form, defaultEndTime: e.target.value })}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <label className="switch">
+        <input type="checkbox" checked={form.useFont} onChange={(e) => setForm({ ...form, useFont: e.target.checked })} />
+        Schrift verwenden
+      </label>
+      <div className="hint">
+        Formatiert Titel/Beschreibung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten Schrift, sofern konfiguriert.
+      </div>
+
       <div className="card">
         <h3>Vorschau</h3>
-        <TemplatePreview
-          template={form.titleTemplate}
-          context={{ raw: { start_time: "<t:0:F>", end_time: "<t:0:F>" } }}
+        <EventEmbedPreview
+          title={form.defaultTitle}
+          description={form.baseDescription}
+          startsAt={null}
+          endsAt={null}
           channels={channels.data ?? []}
-          useFont={false}
-          fontMap={null}
-        />
-        <TemplatePreview
-          template={form.descriptionTemplate}
-          context={{ raw: { start_time: "<t:0:F>", end_time: "<t:0:F>" } }}
-          channels={channels.data ?? []}
-          useFont={false}
-          fontMap={null}
+          useFont={form.useFont}
+          fontMap={generalSettings.data?.fontMap ?? null}
         />
       </div>
 
       <div className="button-row">
-        <button className="btn btn-primary" disabled={saving} onClick={save}>
+        <button className="primary" disabled={saving} onClick={save}>
           {saving ? "Speichert…" : "Speichern"}
         </button>
-        <button className="btn btn-simple" onClick={onCancel}>
+        <button onClick={onCancel}>
           Abbrechen
         </button>
       </div>
@@ -180,103 +236,7 @@ function TemplateForm({
   );
 }
 
-function PublishForm({ template, onDone, onCancel }: { template: EventTemplate; onDone: () => void; onCancel: () => void }) {
-  const { showError, showSuccess } = useToast();
-  const channels = useChannels();
-  const roles = useRoles();
-  const placeholderTokens = extractPlaceholders(template.titleTemplate, template.descriptionTemplate);
-  const [placeholders, setPlaceholders] = useState<Record<string, string>>(Object.fromEntries(placeholderTokens.map((t) => [t, ""])));
-  const [channelId, setChannelId] = useState(template.defaultChannelId ?? "");
-  const [mentionRoleId, setMentionRoleId] = useState(template.defaultMentionRoleId ?? "");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [publishing, setPublishing] = useState(false);
-
-  async function publish() {
-    if (!channelId) return showError("Bitte einen Kanal wählen.");
-    if (!startsAt || !endsAt) return showError("Start und Ende sind erforderlich.");
-    const startDate = new Date(startsAt);
-    const endDate = new Date(endsAt);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return showError("Ungültiges Datum.");
-    if (endDate <= startDate) return showError("Das Ende muss nach dem Start liegen.");
-    if (placeholderTokens.some((t) => !placeholders[t]?.trim())) return showError("Bitte alle Platzhalter ausfüllen.");
-
-    setPublishing(true);
-    try {
-      await api.publishEvent({
-        titleTemplate: template.titleTemplate,
-        descriptionTemplate: template.descriptionTemplate,
-        placeholders,
-        channelId,
-        mentionRoleId: mentionRoleId || null,
-        startsAt: startDate.toISOString(),
-        endsAt: endDate.toISOString(),
-      });
-      showSuccess("Event veröffentlicht!");
-      onDone();
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setPublishing(false);
-    }
-  }
-
-  return (
-    <div className="card">
-      <h2>Event veröffentlichen: {template.name}</h2>
-      {placeholderTokens.map((token) => (
-        <div className="field" key={token}>
-          <label htmlFor={`ph-${token}`}>{token}</label>
-          <input
-            id={`ph-${token}`}
-            value={placeholders[token] ?? ""}
-            onChange={(e) => setPlaceholders({ ...placeholders, [token]: e.target.value })}
-          />
-        </div>
-      ))}
-      <div className="field">
-        <label htmlFor="publish-channel">Kanal</label>
-        <SearchableSelect
-          id="publish-channel"
-          value={channelId}
-          onChange={setChannelId}
-          placeholder="Kanäle durchsuchen…"
-          emptyLabel="— keiner —"
-          options={toChannelOptions(channels.data ?? [])}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="publish-role">Erwähnte Rolle</label>
-        <SearchableSelect
-          id="publish-role"
-          value={mentionRoleId}
-          onChange={setMentionRoleId}
-          placeholder="Rollen durchsuchen…"
-          emptyLabel="— keine —"
-          options={toRoleOptions(roles.data ?? [])}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="publish-start">Start</label>
-        <input id="publish-start" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-      </div>
-      <div className="field">
-        <label htmlFor="publish-end">Ende</label>
-        <input id="publish-end" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
-      </div>
-      <div className="button-row">
-        <button className="btn btn-primary" disabled={publishing} onClick={publish}>
-          {publishing ? "Veröffentlicht…" : "Veröffentlichen"}
-        </button>
-        <button className="btn btn-simple" onClick={onCancel}>
-          Abbrechen
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function EventTemplates() {
+export default function EventTemplatesTab() {
   const templates = useFetchedResource(api.eventTemplates, []);
   const { showError, showSuccess } = useToast();
   const confirm = useConfirm();
@@ -301,7 +261,7 @@ export default function EventTemplates() {
 
   if (publishingTemplate) {
     return (
-      <PublishForm
+      <PublishEventForm
         template={publishingTemplate}
         onDone={() => setPublishingTemplate(null)}
         onCancel={() => setPublishingTemplate(null)}
@@ -324,32 +284,31 @@ export default function EventTemplates() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2>Event-Vorlagen</h2>
-        <button className="btn btn-primary" onClick={() => setEditing(null)}>
+      <div className="toolbar">
+        <p className="muted">
+          Vorlage einmal anlegen, dann jederzeit über <em>Veröffentlichen</em> als echtes Event posten — inklusive Anmeldebuttons und
+          Erwähnung.
+        </p>
+        <button className="primary" onClick={() => setEditing(null)}>
           Neue Vorlage
         </button>
       </div>
-      <p className="muted">
-        Vorlage einmal anlegen, dann jederzeit über <em>Veröffentlichen</em> mit den passenden Werten als echtes Event posten — inklusive
-        Anmeldebuttons und Erwähnung.
-      </p>
       <BaseTable<EventTemplate>
         columns={[
           { key: "name", label: "Name", accessor: (t) => t.name, render: (t) => t.name },
-          { key: "title", label: "Titel", render: (t) => t.titleTemplate },
+          { key: "title", label: "Standard-Titel", render: (t) => t.defaultTitle },
           {
             key: "actions",
             label: "",
             render: (t) => (
               <div className="button-row">
-                <button className="btn btn-primary btn-sm" onClick={() => setPublishingTemplate(t)}>
+                <button className="primary" onClick={() => setPublishingTemplate(t)}>
                   Veröffentlichen
                 </button>
-                <button className="btn btn-simple btn-sm" onClick={() => setEditing(t)}>
+                <button onClick={() => setEditing(t)}>
                   Bearbeiten
                 </button>
-                <button className="btn btn-simple btn-sm" onClick={() => remove(t)}>
+                <button className="danger" onClick={() => remove(t)}>
                   Löschen
                 </button>
               </div>

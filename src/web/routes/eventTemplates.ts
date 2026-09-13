@@ -10,14 +10,24 @@ import {
 import type { EventTemplateListResponse, EventTemplateEntry } from "../../../contracts/eventTemplates.js";
 import type { EventTemplate } from "../../types.js";
 
-const TemplateBodySchema = z.object({
-  name: z.string().min(1),
-  titleTemplate: z.string().min(1),
-  descriptionTemplate: z.string(),
-  defaultChannelId: z.string().nullable(),
-  defaultMentionRoleId: z.string().nullable(),
-  defaultVoiceChannelId: z.string().nullable(),
-});
+const TIME_HHMM_REGEX = /^\d{2}:\d{2}$/;
+
+const TemplateBodySchema = z
+  .object({
+    name: z.string().min(1),
+    defaultTitle: z.string().min(1),
+    baseDescription: z.string(),
+    defaultChannelId: z.string().nullable(),
+    defaultMentionRoleId: z.string().nullable(),
+    defaultVoiceChannelId: z.string().nullable(),
+    defaultWeekday: z.number().int().min(0).max(6).nullable(),
+    defaultStartTime: z.string().regex(TIME_HHMM_REGEX).nullable(),
+    defaultEndTime: z.string().regex(TIME_HHMM_REGEX).nullable(),
+    useFont: z.boolean(),
+  })
+  .refine((body) => (body.defaultWeekday === null) === (body.defaultStartTime === null) && (body.defaultWeekday === null) === (body.defaultEndTime === null), {
+    message: "defaultWeekday/defaultStartTime/defaultEndTime must be all set or all null.",
+  });
 const IdParamsSchema = z.object({ id: z.string() });
 
 function serialize(template: EventTemplate): EventTemplateEntry {

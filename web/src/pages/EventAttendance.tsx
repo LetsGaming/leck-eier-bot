@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import EventCard from "../components/EventCard";
 import MonthPicker, { monthLabel } from "../components/MonthPicker";
+import CreateEventFlow from "../components/CreateEventFlow";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useEventAttendanceList, useEventAttendanceMonths } from "../hooks/useEventAttendance";
 
@@ -10,6 +11,7 @@ const DEBOUNCE_MS = 300;
 export default function EventAttendancePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchInput, setSearchInput] = useState(searchParams.get("q") ?? "");
+  const [creating, setCreating] = useState(false);
 
   const problems = searchParams.get("problems") === "1";
   const scope = searchParams.get("scope") === "all" ? "all" : "month";
@@ -95,13 +97,21 @@ export default function EventAttendancePage() {
 
   const events = listResponse.events;
 
+  if (creating) {
+    return <CreateEventFlow onDone={() => setCreating(false)} onCancel={() => setCreating(false)} />;
+  }
+
   return (
     <div>
-      <h2>Event-Anwesenheit</h2>
-      <p className="muted">
-        Wer sich zu einem Event angemeldet hat, und wer tatsächlich im Event-Sprachkanal war.
-        Konfigurierbar unter <a href="/settings">Einstellungen</a>.
-      </p>
+      <div className="toolbar">
+        <p className="muted">
+          Wer sich zu einem Event angemeldet hat, und wer tatsächlich im Event-Sprachkanal war.
+          Konfigurierbar unter <a href="/settings">Einstellungen</a>.
+        </p>
+        <button className="primary" onClick={() => setCreating(true)}>
+          Neues Event
+        </button>
+      </div>
 
       {problems ? (
         <div className="card">

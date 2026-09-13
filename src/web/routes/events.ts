@@ -6,11 +6,12 @@ import { errorMessage } from "../../utils/logger.js";
 import type { BotClient } from "../../types.js";
 
 const PublishBodySchema = z.object({
-  titleTemplate: z.string().min(1),
-  descriptionTemplate: z.string(),
-  placeholders: z.record(z.string(), z.string()),
+  title: z.string().min(1),
+  description: z.string(),
   channelId: z.string().min(1),
   mentionRoleId: z.string().nullable(),
+  voiceChannelId: z.string().nullable(),
+  useFont: z.boolean(),
   startsAt: z.string().min(1),
   endsAt: z.string().min(1),
 });

@@ -16,13 +16,17 @@ import {
   listSignups,
   setEventCancelled,
 } from "../db/eventAttendanceRepository.js";
-import { renderTemplate } from "../shared/messageTemplate.js";
 import { createEmbed } from "../utils/embedUtils.js";
+import { applyFont } from "../utils/font.js";
+import { getSettings } from "../db/settingsRepository.js";
 import { EVENT_RSVP_CHOICES, EmbedColor } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { Event, RsvpChoice } from "../types.js";
 
 const COMPONENT_ID_PREFIX = "event";
+
+/** Sentinel `mentionRoleId` value standing in for @everyone, which isn't a real role — see `/discord/roles`' deliberate `r.id !== guild.id` filter (correct for reaction-roles/gate-role pickers, wrong for this one), and `mentionContent()` below. */
+export const EVERYONE_MENTION_SENTINEL = "everyone";
 
 function rsvpCustomId(eventId: number, choice: RsvpChoice): string {
   return `${COMPONENT_ID_PREFIX}:rsvp:${eventId}:${choice}`;
@@ -33,46 +37,10 @@ function discordTimestamp(iso: string): string {
   return `<t:${Math.floor(new Date(iso).getTime() / 1000)}:F>`;
 }
 
-const PLACEHOLDER_TOKEN_REGEX = /\{([^{}]+)\}/g;
-const CORE_TIME_TOKENS = new Set(["start_time", "end_time"]);
-
-/** Every distinct `{token}` in a template's title/description, excluding the always-available `{start_time}`/`{end_time}` — the set of placeholder values a caller (the dashboard form, or `/event`'s modal) needs to collect before publishing. */
-export function getTemplatePlaceholderTokens(...templates: string[]): string[] {
-  const found = new Set<string>();
-  for (const template of templates) {
-    PLACEHOLDER_TOKEN_REGEX.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = PLACEHOLDER_TOKEN_REGEX.exec(template))) {
-      if (!CORE_TIME_TOKENS.has(match[1]!)) found.add(match[1]!);
-    }
-  }
-  return [...found];
-}
-
-export interface RenderEventTextInput {
-  titleTemplate: string;
-  descriptionTemplate: string;
-  /** Arbitrary `{token}` fill-ins the caller collected for this specific event (from a template's placeholders, or typed directly for a from-scratch event). */
-  placeholders: Record<string, string>;
-  startsAt: string;
-  endsAt: string;
-}
-
-/**
- * Renders a template's title/description through the shared token engine
- * (`renderTemplate()`, `src/shared/messageTemplate.ts` — the same engine
- * birthdays/reaction-roles/registration use). `{start_time}`/`{end_time}`
- * are always available as raw context, resolving to Discord timestamp
- * tokens; every other placeholder comes from the caller. No font styling —
- * events don't have a per-feature font toggle (unlike the other three
- * template consumers), so `useFont` is always off here.
- */
-export function renderEventText(input: RenderEventTextInput): { title: string; description: string } {
-  const raw = { ...input.placeholders, start_time: discordTimestamp(input.startsAt), end_time: discordTimestamp(input.endsAt) };
-  return {
-    title: renderTemplate(input.titleTemplate, { raw }, {}, { useFont: false, fontMap: null }),
-    description: renderTemplate(input.descriptionTemplate, { raw }, {}, { useFont: false, fontMap: null }),
-  };
+/** `@everyone` (plain text — Discord doesn't use `<@&id>` mention syntax for it) or a real role mention, or nothing. */
+function mentionContent(mentionRoleId: string | null): string | undefined {
+  if (!mentionRoleId) return undefined;
+  return mentionRoleId === EVERYONE_MENTION_SENTINEL ? "@everyone" : `<@&${mentionRoleId}>`;
 }
 
 function buildRsvpButtons(eventId: number): ActionRowBuilder<ButtonBuilder> {
@@ -89,58 +57,81 @@ function nameList(signups: ReturnType<typeof listSignups>, choice: RsvpChoice): 
   return matching.map((s) => (s.userId ? `<@${s.userId}>` : s.rawName)).join("\n");
 }
 
-/** Rebuilds the event embed from scratch (title/description + a live per-choice name list) — called both right after publishing and after every RSVP click. */
+/**
+ * Rebuilds the event embed from scratch (title/description, a "🕐
+ * Zeitpunkt" field, and a live per-choice name list) — called both right
+ * after publishing and after every RSVP click/edit. `title`/`description`
+ * are stored raw (unstyled); `event.useFont` applies the *current* global
+ * font (`settings.fontMap`) fresh on every render, same convention as
+ * reaction-role panels' `styled()` — a later font change is reflected the
+ * next time the embed is rebuilt, not frozen at publish time.
+ */
 function buildEventEmbed(event: Event) {
   const signups = listSignups(event.id);
   const accepted = signups.filter((s) => s.choice === "accepted").length;
   const tentative = signups.filter((s) => s.choice === "tentative").length;
   const declined = signups.filter((s) => s.choice === "declined").length;
+  const fontMap = event.useFont ? getSettings().fontMap : null;
+  const styled = (text: string) => (fontMap ? applyFont(text, fontMap) : text);
   return createEmbed({
-    title: event.title,
-    description: event.description || undefined,
+    title: styled(event.title),
+    description: event.description ? styled(event.description) : undefined,
     color: event.status === "cancelled" ? EmbedColor.Error : EmbedColor.Info,
     fields: [
+      { name: "🕐 Zeitpunkt", value: `${discordTimestamp(event.startsAt)} – ${discordTimestamp(event.endsAt)}` },
       { name: `✅ Zusagen (${accepted})`, value: nameList(signups, "accepted"), inline: true },
-      { name: `❓ Vielleicht (${tentative})`, value: nameList(signups, "tentative"), inline: true },
       { name: `❌ Absagen (${declined})`, value: nameList(signups, "declined"), inline: true },
+      { name: `❓ Vielleicht (${tentative})`, value: nameList(signups, "tentative"), inline: true },
     ],
   });
 }
 
 export interface PublishEventInput {
-  titleTemplate: string;
-  descriptionTemplate: string;
-  placeholders: Record<string, string>;
+  title: string;
+  description: string;
   channelId: string;
+  /** A real role id, `EVERYONE_MENTION_SENTINEL`, or null for no mention. */
   mentionRoleId: string | null;
+  /** Null = fall back to `settings.eventVoiceChannelId` at activation. */
+  voiceChannelId: string | null;
+  useFont: boolean;
   /** ISO UTC. */
   startsAt: string;
   /** ISO UTC. */
   endsAt: string;
 }
 
-/** Renders a template (or from-scratch fields), posts the event message with its three RSVP buttons, and creates the `events` row — the single entry point both the dashboard and `/event` go through. */
+/** Posts the event message with its three RSVP buttons and creates the `events` row — the single entry point both the dashboard and `/event` go through. */
 export async function publishEvent(client: Client, input: PublishEventInput): Promise<Event> {
-  const { title, description } = renderEventText(input);
   const channel = await client.channels.fetch(input.channelId);
   if (!channel || !channel.isTextBased() || !("send" in channel)) {
     throw new Error(`Kanal ${input.channelId} ist kein Textkanal oder wurde nicht gefunden.`);
   }
 
+  const fontMap = input.useFont ? getSettings().fontMap : null;
+  const styled = (text: string) => (fontMap ? applyFont(text, fontMap) : text);
+
   // A placeholder id (0) is fine for the first render — the message doesn't
   // exist yet, so no signups can reference it; the real id is stamped onto
   // the buttons via a follow-up edit right after the DB row is created.
-  const placeholderEmbed = createEmbed({ title, description: description || undefined, color: EmbedColor.Info });
-  const content = input.mentionRoleId ? `<@&${input.mentionRoleId}>` : undefined;
+  const placeholderEmbed = createEmbed({
+    title: styled(input.title),
+    description: input.description ? styled(input.description) : undefined,
+    color: EmbedColor.Info,
+    fields: [{ name: "🕐 Zeitpunkt", value: `${discordTimestamp(input.startsAt)} – ${discordTimestamp(input.endsAt)}` }],
+  });
+  const content = mentionContent(input.mentionRoleId);
   const message = await channel.send({ content, embeds: [placeholderEmbed], components: [buildRsvpButtons(0)] });
 
   const event = createEventRow({
     messageId: message.id,
     channelId: input.channelId,
-    title,
-    description,
+    title: input.title,
+    description: input.description,
     startsAt: input.startsAt,
     endsAt: input.endsAt,
+    configuredVoiceChannelId: input.voiceChannelId,
+    useFont: input.useFont,
   });
 
   await message.edit({ embeds: [buildEventEmbed(event)], components: [buildRsvpButtons(event.id)] });

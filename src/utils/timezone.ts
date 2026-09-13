@@ -34,7 +34,7 @@
  * 02:00→03:00) — there is no correct answer for genuinely nonexistent
  * local times, and this resolves them to the post-transition offset.
  */
-function tzOffsetMs(utcMs: number, tz: string): number {
+export function tzOffsetMs(utcMs: number, tz: string): number {
   const offsetAt = (guessMs: number): number => {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
@@ -124,6 +124,66 @@ export function monthKeyInTimezone(iso: string, tz: string): string {
 /** Returns the current `"YYYY-MM"` calendar month in `tz`. */
 export function currentMonthKey(tz: string): string {
   return monthKeyInTimezone(new Date().toISOString(), tz);
+}
+
+/**
+ * Finds the next UTC instant, at or after `nowMs`, that falls on calendar
+ * weekday `weekday` (0=Sunday..6=Saturday, `Date#getUTCDay()` convention) at
+ * `startTimeHHMM`/`endTimeHHMM` ("HH:MM") wall-clock time in `tz` — the
+ * "this event is always Tuesdays at 8pm" default-time feature on event
+ * templates (see `EventTemplate.defaultWeekday` in `src/types.ts`). Today
+ * counts if its occurrence hasn't started yet; otherwise the search moves to
+ * next week. `endTimeHHMM` earlier than `startTimeHHMM` is treated as
+ * crossing midnight (end lands the following calendar day).
+ *
+ * Same naive-UTC-guess + `tzOffsetMs` correction as `monthRangeUtc` above —
+ * weekday itself is checked on the plain calendar date (a pure Gregorian
+ * property, independent of timezone), only the actual start/end instants
+ * need the DST-aware conversion.
+ */
+export function nextWeekdayOccurrenceUtc(
+  weekday: number,
+  startTimeHHMM: string,
+  endTimeHHMM: string,
+  tz: string,
+  nowMs: number = Date.now(),
+): { startsAt: string; endsAt: string } {
+  const [startHour, startMinute] = startTimeHHMM.split(":").map(Number);
+  const [endHour, endMinute] = endTimeHHMM.split(":").map(Number);
+
+  const todayParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(nowMs));
+  const lookup: Record<string, string> = {};
+  for (const part of todayParts) if (part.type !== "literal") lookup[part.type] = part.value;
+  const todayYear = Number(lookup.year);
+  const todayMonthIndex = Number(lookup.month) - 1;
+  const todayDay = Number(lookup.day);
+
+  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+    const candidateDate = new Date(Date.UTC(todayYear, todayMonthIndex, todayDay + dayOffset));
+    if (candidateDate.getUTCDay() !== weekday) continue;
+
+    const y = candidateDate.getUTCFullYear();
+    const m = candidateDate.getUTCMonth();
+    const d = candidateDate.getUTCDate();
+
+    const naiveStartMs = Date.UTC(y, m, d, startHour, startMinute);
+    const startMs = naiveStartMs - tzOffsetMs(naiveStartMs, tz);
+    if (startMs < nowMs) continue; // this week's occurrence already started/passed
+
+    const naiveEndMs = Date.UTC(y, m, d, endHour, endMinute);
+    let endMs = naiveEndMs - tzOffsetMs(naiveEndMs, tz);
+    if (endMs < startMs) endMs += 24 * 60 * 60 * 1000; // end time-of-day is before start's — crosses midnight
+
+    return { startsAt: new Date(startMs).toISOString(), endsAt: new Date(endMs).toISOString() };
+  }
+
+  // Unreachable: every weekday occurs at least once in any 8-day window.
+  throw new Error(`nextWeekdayOccurrenceUtc: no occurrence of weekday ${weekday} found`);
 }
 
 /**
