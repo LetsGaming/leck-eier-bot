@@ -32,9 +32,14 @@ function rsvpCustomId(eventId: number, choice: RsvpChoice): string {
   return `${COMPONENT_ID_PREFIX}:rsvp:${eventId}:${choice}`;
 }
 
-/** Discord's `<t:epoch:F>` mention-style timestamp token — renders in each viewer's own timezone/locale, unlike a fixed-format string. */
-function discordTimestamp(iso: string): string {
-  return `<t:${Math.floor(new Date(iso).getTime() / 1000)}:F>`;
+/** Discord's `<t:epoch:STYLE>` mention-style timestamp token — renders in each viewer's own timezone/locale, unlike a fixed-format string. */
+function discordTimestamp(iso: string, style: "F" | "t" | "R" = "F"): string {
+  return `<t:${Math.floor(new Date(iso).getTime() / 1000)}:${style}>`;
+}
+
+/** Apollo-style "Zeitpunkt" field: full start date/time, short end time, and a relative "in 3 Tagen" line — mirrors apollo-event-embed-example.png. */
+function timeFieldValue(startsAt: string, endsAt: string): string {
+  return `${discordTimestamp(startsAt, "F")} – ${discordTimestamp(endsAt, "t")}\n🕐 ${discordTimestamp(startsAt, "R")}`;
 }
 
 /** `@everyone` (plain text — Discord doesn't use `<@&id>` mention syntax for it) or a real role mention, or nothing. */
@@ -66,23 +71,56 @@ function nameList(signups: ReturnType<typeof listSignups>, choice: RsvpChoice): 
  * reaction-role panels' `styled()` — a later font change is reflected the
  * next time the embed is rebuilt, not frozen at publish time.
  */
-function buildEventEmbed(event: Event) {
-  const signups = listSignups(event.id);
+function renderEventEmbed(params: {
+  title: string;
+  description: string;
+  useFont: boolean;
+  startsAt: string;
+  endsAt: string;
+  cancelled: boolean;
+  signups: ReturnType<typeof listSignups>;
+}) {
+  const { title, description, useFont, startsAt, endsAt, cancelled, signups } = params;
   const accepted = signups.filter((s) => s.choice === "accepted").length;
   const tentative = signups.filter((s) => s.choice === "tentative").length;
   const declined = signups.filter((s) => s.choice === "declined").length;
-  const fontMap = event.useFont ? getSettings().fontMap : null;
+  const fontMap = useFont ? getSettings().fontMap : null;
   const styled = (text: string) => (fontMap ? applyFont(text, fontMap) : text);
   return createEmbed({
-    title: styled(event.title),
-    description: event.description ? styled(event.description) : undefined,
-    color: event.status === "cancelled" ? EmbedColor.Error : EmbedColor.Info,
+    title: styled(title),
+    description: description ? styled(description) : undefined,
+    color: cancelled ? EmbedColor.Error : EmbedColor.Info,
     fields: [
-      { name: "🕐 Zeitpunkt", value: `${discordTimestamp(event.startsAt)} – ${discordTimestamp(event.endsAt)}` },
+      { name: "Zeitpunkt", value: timeFieldValue(startsAt, endsAt) },
       { name: `✅ Zusagen (${accepted})`, value: nameList(signups, "accepted"), inline: true },
       { name: `❌ Absagen (${declined})`, value: nameList(signups, "declined"), inline: true },
       { name: `❓ Vielleicht (${tentative})`, value: nameList(signups, "tentative"), inline: true },
     ],
+  });
+}
+
+function buildEventEmbed(event: Event) {
+  return renderEventEmbed({
+    title: event.title,
+    description: event.description,
+    useFont: event.useFont,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    cancelled: event.status === "cancelled",
+    signups: listSignups(event.id),
+  });
+}
+
+/** Exact embed a freshly-published event will show (zero signups yet) — used to preview the event in a confirmation thread before it's actually posted. */
+export function buildPreviewEmbed(input: PublishEventInput) {
+  return renderEventEmbed({
+    title: input.title,
+    description: input.description,
+    useFont: input.useFont,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    cancelled: false,
+    signups: [],
   });
 }
 
@@ -108,20 +146,11 @@ export async function publishEvent(client: Client, input: PublishEventInput): Pr
     throw new Error(`Kanal ${input.channelId} ist kein Textkanal oder wurde nicht gefunden.`);
   }
 
-  const fontMap = input.useFont ? getSettings().fontMap : null;
-  const styled = (text: string) => (fontMap ? applyFont(text, fontMap) : text);
-
   // A placeholder id (0) is fine for the first render — the message doesn't
   // exist yet, so no signups can reference it; the real id is stamped onto
   // the buttons via a follow-up edit right after the DB row is created.
-  const placeholderEmbed = createEmbed({
-    title: styled(input.title),
-    description: input.description ? styled(input.description) : undefined,
-    color: EmbedColor.Info,
-    fields: [{ name: "🕐 Zeitpunkt", value: `${discordTimestamp(input.startsAt)} – ${discordTimestamp(input.endsAt)}` }],
-  });
   const content = mentionContent(input.mentionRoleId);
-  const message = await channel.send({ content, embeds: [placeholderEmbed], components: [buildRsvpButtons(0)] });
+  const message = await channel.send({ content, embeds: [buildPreviewEmbed(input)], components: [buildRsvpButtons(0)] });
 
   const event = createEventRow({
     messageId: message.id,

@@ -5,13 +5,19 @@ import {
   TextInputBuilder,
   TextInputStyle,
   MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  ComponentType,
   type ChatInputCommandInteraction,
   type AutocompleteInteraction,
   type ModalSubmitInteraction,
+  type TextChannel,
 } from "discord.js";
 import { listEventTemplates, getEventTemplateByName } from "../../db/eventTemplatesRepository.js";
 import { getSettings } from "../../db/settingsRepository.js";
-import { publishEvent } from "../../services/events.js";
+import { publishEvent, buildPreviewEmbed, type PublishEventInput } from "../../services/events.js";
 import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
 import { loadConfig } from "../../config/index.js";
 import { errorMessage } from "../../utils/logger.js";
@@ -124,20 +130,72 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     return;
   }
 
+  const input: PublishEventInput = {
+    title: interaction.fields.getTextInputValue("title"),
+    description: interaction.fields.getTextInputValue("description"),
+    channelId,
+    mentionRoleId: template.defaultMentionRoleId,
+    voiceChannelId: template.defaultVoiceChannelId,
+    useFont: template.useFont,
+    startsAt: startsAt.toISOString(),
+    endsAt: endsAt.toISOString(),
+  };
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    await interaction.editReply({ content: `Kanal ${channelId} ist kein Textkanal oder wurde nicht gefunden.` });
+    return;
+  }
+
+  let thread;
   try {
-    await publishEvent(interaction.client, {
-      title: interaction.fields.getTextInputValue("title"),
-      description: interaction.fields.getTextInputValue("description"),
-      channelId,
-      mentionRoleId: template.defaultMentionRoleId,
-      voiceChannelId: template.defaultVoiceChannelId,
-      useFont: template.useFont,
-      startsAt: startsAt.toISOString(),
-      endsAt: endsAt.toISOString(),
+    thread = await (channel as TextChannel).threads.create({
+      name: `Event-Vorschau: ${input.title}`.slice(0, 100),
+      type: ChannelType.PrivateThread,
+      autoArchiveDuration: 60,
+      reason: "Event-Erstellung Vorschau",
     });
-    await interaction.editReply({ content: "Event veröffentlicht!" });
   } catch (err) {
-    await interaction.editReply({ content: `Event konnte nicht veröffentlicht werden: ${errorMessage(err)}` });
+    await interaction.editReply({ content: `Vorschau-Thread konnte nicht erstellt werden: ${errorMessage(err)}` });
+    return;
+  }
+
+  try {
+    const previewMessage = await thread.send({
+      content: `${interaction.user}, so sieht das Event aus. Veröffentlichen?`,
+      embeds: [buildPreviewEmbed(input)],
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId("confirm").setLabel("Veröffentlichen").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("cancel").setLabel("Abbrechen").setStyle(ButtonStyle.Danger),
+        ),
+      ],
+    });
+
+    await interaction.editReply({ content: `Vorschau erstellt: ${thread}` });
+
+    try {
+      const buttonInteraction = await previewMessage.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        time: 5 * 60 * 1000,
+        filter: (i) => i.user.id === interaction.user.id,
+      });
+      await buttonInteraction.deferUpdate();
+
+      if (buttonInteraction.customId === "confirm") {
+        await publishEvent(interaction.client, input);
+        await interaction.editReply({ content: "Event veröffentlicht!" });
+      } else {
+        await interaction.editReply({ content: "Abgebrochen." });
+      }
+    } catch {
+      await interaction.editReply({ content: "Zeit abgelaufen — Event wurde nicht veröffentlicht." }).catch(() => undefined);
+    }
+  } catch (err) {
+    await interaction.editReply({ content: `Event konnte nicht veröffentlicht werden: ${errorMessage(err)}` }).catch(() => undefined);
+  } finally {
+    await thread.delete().catch(() => undefined);
   }
 }

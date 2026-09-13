@@ -17,16 +17,17 @@ export interface EventEmbedPreviewProps {
 
 /**
  * Mirrors the real event embed built by `buildEventEmbed()`
- * (`src/services/events.ts`): title, description, a "🕐 Zeitpunkt" field,
- * and the three (always-zero, since this is a preview) RSVP fields. Reuses
- * the `.message-preview*` embed-mockup chrome already built for
- * ReactionRoles.tsx instead of inventing new styling.
+ * (`src/services/events.ts`, Apollo-style layout): title, description, a
+ * "Zeitpunkt" field with a relative-time line, and the three (always-zero,
+ * since this is a preview) RSVP fields. Reuses the `.message-preview*`
+ * embed-mockup chrome already built for ReactionRoles.tsx instead of
+ * inventing new styling.
  */
 export default function EventEmbedPreview({ title, description, startsAt, endsAt, channels, useFont, fontMap }: EventEmbedPreviewProps) {
   const styledTitle = useFont ? applyFont(title, fontMap) : title;
   const styledDescription = useFont ? applyFont(description, fontMap) : description;
   const mockifiedDescription = mockifyChannelMentions(styledDescription, channels);
-  const timeValue = startsAt && endsAt ? `${formatAbsolute(startsAt)} – ${formatAbsolute(endsAt)}` : "—";
+  const timeValue = startsAt && endsAt ? `${formatAbsolute(startsAt)} – ${formatAbsolute(endsAt)}\n🕐 (relativ)` : "—";
 
   return (
     <div className="message-preview">
@@ -49,8 +50,8 @@ export default function EventEmbedPreview({ title, description, startsAt, endsAt
         </div>
         <div className="message-preview-embed-fields">
           <div className="message-preview-embed-field" style={{ width: "100%" }}>
-            <div className="message-preview-embed-field-name">🕐 Zeitpunkt</div>
-            <div className="message-preview-embed-field-value">{timeValue}</div>
+            <div className="message-preview-embed-field-name">Zeitpunkt</div>
+            <div className="message-preview-embed-field-value">{renderDiscordMarkdown(timeValue)}</div>
           </div>
           <div className="message-preview-embed-field">
             <div className="message-preview-embed-field-name">✅ Zusagen (0)</div>
