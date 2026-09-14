@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { listCommandDefinitions } from "../../loaders/commandLoader.js";
 import { setCommandOverride } from "../../db/settingsRepository.js";
+import { requireRole } from "../session.js";
 import type { ZodFastifyInstance } from "../utils.js";
 
 const PermissionGateSchema = z.union([
@@ -23,9 +24,15 @@ const PatchParamsSchema = z.object({
 export function registerCommandRoutes(app: ZodFastifyInstance): void {
   app.get("/commands", async () => listCommandDefinitions());
 
+  // Narrower than the blanket requireAdmin every other /api route gets
+  // (registered in routes/index.ts): this can loosen a command's own
+  // permissionGate (including to "everyone"), so an `admin`-tier session —
+  // anyone whose *role* carries Discord's Administrator flag, not
+  // necessarily someone individually trusted with bot configuration —
+  // shouldn't be able to grant other members access to gated commands.
   app.patch(
     "/commands/:name",
-    { schema: { params: PatchParamsSchema, body: PatchBodySchema } },
+    { schema: { params: PatchParamsSchema, body: PatchBodySchema }, preHandler: requireRole("bot-owner", "guild-owner") },
     async (request, reply) => {
       const { name } = request.params;
       const definitions = await listCommandDefinitions();
