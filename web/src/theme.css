@@ -3,14 +3,44 @@
   --bg-elevated: #2b2d31;
   --bg-inset: #1e1f22;
   --border: #3f4147;
+  /* --border itself is 1.2–1.6:1 against every app surface — nowhere near
+     the 3:1 WCAG 1.4.11 UI-component minimum, so it can't do its job on any
+     boundary a user actually needs to perceive (card/input/table edges).
+     Kept as-is for purely decorative dividers; boundaries that must be seen
+     use this lighter neutral instead, verified ≥3:1 against --bg (3.07:1),
+     --bg-elevated (3.35:1), and --bg-inset (4.0:1). */
+  --border-strong: #7a7d84;
   --text: #f2f3f5;
   --text-muted: #949ba4;
   --accent: #5865f2;
   --accent-hover: #4752c4;
+  /* Discord's own dark-theme text-link color (not a tinted Blurple) — --accent
+     only reaches 2.74:1 against --bg, failing WCAG AA (4.5:1 text / 3:1 UI).
+     This is the real client value for foreground use: links, focus rings,
+     anything accent-colored sitting directly on --bg rather than filling it. */
+  --text-link: #00aff4;
+  /* A darkened --text-link for :hover — not --accent-hover, which is a fill
+     color (2.15:1 as text) unrelated to --text-link's own hue. Verified
+     4.63:1 against --bg and 5.05:1 against --bg-elevated. */
+  --text-link-hover: #00a6ee;
   --success: #23a55a;
+  /* DESIGN.md's already-approved success-tint-text — brightened for legibility
+     when success text sits on its own translucent tint (badges), where the
+     base --success hue reads at only ~3.3–3.5:1. */
+  --success-fg: #7ee2a8;
   --danger: #f23f42;
   --danger-hover: #da373c;
+  /* DESIGN.md's already-approved danger-tint-text — same brightened-for-tint
+     role as --success-fg, and also fixes button.danger's default-state text
+     (was 3.35–3.66:1 against --bg/--bg-elevated). */
+  --danger-fg: #ff8a8d;
   --warning: #f0b232;
+  /* Graduated lateness/early-leave severity tier (Event-Anwesenheit only) —
+     was a one-off literal; promoted to a token here for the -fg pairing below. */
+  --warning-deep: #e8730c;
+  --warning-deep-fg: #ffab5c;
+  --danger-severe: #a12226;
+  --danger-severe-fg: #ff8288;
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* Code/data role only (template placeholders, cron syntax, IDs) — never body text. Distinguishes "this is syntax, copy it exactly" from prose at a glance. */
@@ -60,7 +90,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--text-link);
 }
 
 /* Scrollbar polish */
@@ -256,7 +286,7 @@ code {
 
 .card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 20px;
@@ -319,7 +349,7 @@ code {
 
 .stat-tile {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -362,7 +392,7 @@ select,
 textarea {
   width: 100%;
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   color: var(--text);
   padding: 8px 10px;
@@ -409,7 +439,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text-link);
   outline-offset: -1px;
 }
 
@@ -464,12 +494,18 @@ button.primary:hover {
 
 button.danger {
   background: transparent;
-  color: var(--danger);
-  border: 1px solid var(--danger);
+  /* var(--danger) as text/border only reached 3.35–3.66:1 (fails the 4.5:1
+     text minimum, even though it clears the 3:1 border minimum) — --danger-fg
+     fixes both at once since a single-color outline reads cleaner than a
+     two-tone border/text split. */
+  color: var(--danger-fg);
+  border: 1px solid var(--danger-fg);
 }
 
 button.danger:hover {
-  background: var(--danger);
+  /* var(--danger) as a fill only gave white text 3.77:1 (fails 4.5:1);
+     --danger-hover (previously unused) is dark enough for white to clear it. */
+  background: var(--danger-hover);
   color: white;
 }
 
@@ -489,6 +525,43 @@ button + button {
   margin-bottom: 16px;
 }
 
+/* An intro sentence living in a `.toolbar` (Events, Event-Vorlagen) is a
+   flex item next to the toolbar's action button — with nothing else
+   constraining it, `justify-content: space-between` lets it stretch to
+   fill the gap, running past 100+ characters per line on a wide viewport.
+   Same 60ch cap as `.muted.small`'s intro/hint prose, without borrowing
+   its smaller font-size — this text stays at the default body size. */
+.toolbar p.muted {
+  max-width: 60ch;
+}
+
+/* Bulk-selection bar (Commands, Registrierungen) — shown above a table once
+   1+ rows are checked. Flat, no shadow/gradient, matching the rest of the
+   dashboard's at-rest styling. */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.bulk-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-bar-actions button + button {
+  margin-left: 0;
+}
+
 /* Lets a wide table scroll horizontally within its own box instead of
    forcing the whole page wider — every <table> in the app is wrapped in
    this on the React side. */
@@ -506,7 +579,7 @@ th,
 td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-strong);
   font-size: var(--fs-body);
 }
 
@@ -568,7 +641,10 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .badge.ok {
   background: rgba(35, 165, 90, 0.15);
-  color: var(--success);
+  /* --success itself only reaches ~3.3–3.5:1 against its own tint here (fails
+     the 4.5:1 text minimum); --success-fg is the brightened variant meant
+     for exactly this "text on its own tinted surface" case. */
+  color: var(--success-fg);
 }
 
 .badge.warn {
@@ -578,19 +654,21 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .badge.error {
   background: rgba(242, 63, 66, 0.15);
-  color: var(--danger);
+  color: var(--danger-fg);
 }
 
 /* Severity tiers for lateness/early-leave (Event-Anwesenheit) — "fine"/"mild"
-   reuse .ok/.warn above; these two darken further for "moderate"/"severe". */
+   reuse .ok/.warn above; these two darken further for "moderate"/"severe".
+   Both -fg variants are brightened the same way as --success-fg/--danger-fg,
+   verified ≥4.5:1 against their own tint composited over --bg/--bg-elevated. */
 .badge.moderate {
   background: rgba(232, 115, 12, 0.18);
-  color: #e8730c;
+  color: var(--warning-deep-fg);
 }
 
 .badge.severe {
   background: rgba(161, 34, 38, 0.2);
-  color: #a12226;
+  color: var(--danger-severe-fg);
 }
 
 /* RoleCheckboxList — a filtered multi-select checkbox grid (Allowed roles /
@@ -604,7 +682,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   flex-wrap: wrap;
   gap: 6px;
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 8px;
   max-height: 140px;
@@ -651,7 +729,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   justify-content: center;
   font-size: 18px;
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 .emoji-picker-trigger .muted {
@@ -670,7 +748,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   left: 0;
   width: 280px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 8px;
@@ -743,7 +821,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   gap: 8px;
   text-align: left;
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 .searchable-select-trigger:disabled {
@@ -766,7 +844,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   z-index: 20;
   min-width: 220px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 8px;
@@ -1026,7 +1104,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 }
 
 .switch input:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text-link);
   outline-offset: 2px;
 }
 
@@ -1156,7 +1234,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .preview-box {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 12px;
   white-space: pre-wrap;
@@ -1186,7 +1264,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   margin-left: 0;
   padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background: var(--bg-inset);
   color: var(--text);
   font-size: var(--fs-small);
@@ -1438,7 +1516,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   text-align: left;
   margin: 0 0 6px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 .rr-list button.active {
@@ -1474,14 +1552,14 @@ th[aria-sort="descending"] .sortable-th-arrow {
 }
 
 .tabs button.active {
-  border-color: var(--border);
+  border-color: var(--border-strong);
   background: rgba(88, 101, 242, 0.15);
   color: var(--text);
 }
 
 .mode-hint {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 10px 12px;
   font-size: var(--fs-small);
@@ -1498,7 +1576,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .login-card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
@@ -1586,7 +1664,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
    background + border used for informational (non error/success) notices. */
 .alert.neutral {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 /* A 28px round avatar image (member/signup tables) and its no-avatar
@@ -1647,7 +1725,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
   width: 280px;
   padding: 12px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
@@ -1724,7 +1802,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 }
 
 .event-card:focus-visible .card {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text-link);
   outline-offset: 2px;
 }
 
@@ -1789,14 +1867,14 @@ th[aria-sort="descending"] .sortable-th-arrow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--text-link);
   text-decoration: none;
   margin-bottom: 16px;
   font-weight: 500;
 }
 
 .back-link:hover {
-  color: var(--accent-hover);
+  color: var(--text-link-hover);
 }
 
 /* Inline text-styled button — for actions embedded in a sentence (e.g. a hint) that shouldn't look like a form button. */
@@ -1806,13 +1884,13 @@ th[aria-sort="descending"] .sortable-th-arrow {
   padding: 0;
   margin: 0;
   font: inherit;
-  color: var(--accent);
+  color: var(--text-link);
   text-decoration: underline;
   cursor: pointer;
 }
 
 .link-button:hover {
-  color: var(--accent-hover);
+  color: var(--text-link-hover);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1835,7 +1913,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
     padding: 0 16px;
     flex-shrink: 0;
     background: var(--bg-inset);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-strong);
     font-weight: 600;
     font-size: var(--fs-body);
   }
@@ -1960,6 +2038,24 @@ th[aria-sort="descending"] .sortable-th-arrow {
   button + button {
     margin-top: 8px;
   }
+
+  .bulk-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bulk-bar-actions {
+    justify-content: stretch;
+  }
+
+  .bulk-bar-actions button,
+  .bulk-bar-actions select {
+    flex: 1 1 auto;
+  }
+
+  .bulk-bar-actions button + button {
+    margin-top: 0;
+  }
 }
 
 /* Narrow phones: a couple of fixed-width things that fit fine down to ~400px
@@ -2016,7 +2112,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
   table.stack-on-mobile tr {
     margin-bottom: 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     padding: 4px 12px;
   }
@@ -2027,7 +2123,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
     align-items: center;
     gap: 12px;
     padding: 7px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-strong);
     text-align: right;
   }
 
@@ -2051,6 +2147,22 @@ th[aria-sort="descending"] .sortable-th-arrow {
   table.stack-on-mobile td.stack-plain {
     display: block;
     text-align: left;
+  }
+
+  /* A cell whose content is itself multiple controls (e.g. two <select>s
+     plus a hint line), not one right-alignable value — the default
+     label-left/value-right flex row squeezes both label and controls
+     until the label text truncates (e.g. "Mindest-Berechtigungsstufe" ->
+     "Mindest-Be"). Stack the label above the content instead, each at
+     full row width, so neither has to compete for horizontal space. */
+  table.stack-on-mobile td.stack-column {
+    display: block;
+    text-align: left;
+  }
+
+  table.stack-on-mobile td.stack-column::before {
+    display: block;
+    margin-bottom: 6px;
   }
 }
 

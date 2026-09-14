@@ -71,6 +71,69 @@
         "value": "#fff",
         "createdAt": "2026-09-08T12:45:31.197Z",
         "reason": "theme.css:937 — switch toggle thumb foreground in its checked state, a near-universal literal-white icon/thumb-foreground exception"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#abb2bf",
+        "createdAt": "2026-09-14T09:57:11.842Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d19a66",
+        "createdAt": "2026-09-14T09:57:11.914Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#98c379",
+        "createdAt": "2026-09-14T09:57:11.993Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#56b6c2",
+        "createdAt": "2026-09-14T09:57:12.070Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#c678dd",
+        "createdAt": "2026-09-14T09:57:12.152Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#61afef",
+        "createdAt": "2026-09-14T09:57:12.234Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#e5c07b",
+        "createdAt": "2026-09-14T09:57:12.316Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#7f848e",
+        "createdAt": "2026-09-14T09:57:12.396Z",
+        "reason": "Prism.js 'One Dark' syntax-highlighter token color, a bundled third-party theme palette (see commit a5509973, 'Add Prism.js for syntax highlighting') — not part of the app's own Discord-chrome design system, same rationale as other documented signature-component exceptions"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "20px",
+        "files": [
+          "web/src/theme.css"
+        ],
+        "createdAt": "2026-09-14T09:57:12.472Z",
+        "reason": "markdown-rendered .discord-md-h2 deliberately sits between the app's own heading-sm/heading-lg steps (commit 57926151, markdown rendering) to mirror Discord's own markdown H2 scale rather than reuse the app chrome's heading sizes"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255, 255, 255, 0.08)",
+        "createdAt": "2026-09-14T09:57:36.477Z",
+        "reason": "Discord-mirrored spoiler-reveal overlay (.discord-md-spoiler.revealed) — a literal white-opacity scrim matching Discord's own markdown spoiler chrome, same category as the already-documented black-opacity scrim exceptions"
       }
     ]
   }
