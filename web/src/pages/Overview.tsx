@@ -92,15 +92,15 @@ function BotOwnerStatsSection({ stats }: { stats: BotOwnerStats }) {
     <div className="stat-grid">
       <div className="stat-tile">
         <div className="label">Bot</div>
-        <div className="value">{stats.botTag ?? "—"}</div>
+        <div className="value fs-18">{stats.botTag ?? "—"}</div>
       </div>
       <div className="stat-tile">
         <div className="label">Laufzeit</div>
-        <div className="value">{formatUptime(stats.uptimeMs)}</div>
+        <div className="value fs-18">{formatUptime(stats.uptimeMs)}</div>
       </div>
       <div className="stat-tile">
         <div className="label">Server</div>
-        <div className="value">{stats.guildName ?? "—"}</div>
+        <div className="value fs-18">{stats.guildName ?? "—"}</div>
       </div>
       <div className="stat-tile">
         <div className="label">Zwischengespeicherte Mitglieder</div>

@@ -105,7 +105,7 @@ function ConfirmDialog({ pending, onClose }: { pending: PendingConfirm; onClose:
           <button ref={pending.requireText ? undefined : cancelRef} onClick={() => onClose(false)}>
             {pending.cancelLabel ?? "Abbrechen"}
           </button>
-          <button className={isDanger ? "danger" : ""} disabled={!canConfirm} onClick={() => onClose(true)}>
+          <button className={isDanger ? "danger" : "primary"} disabled={!canConfirm} onClick={() => onClose(true)}>
             {pending.confirmLabel ?? "Bestätigen"}
           </button>
         </div>

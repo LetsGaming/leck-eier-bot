@@ -41,6 +41,7 @@ export default function EventAttendanceDetailPage() {
 
   const [nameQuery, setNameQuery] = useState("");
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [showNoResponse, setShowNoResponse] = useState(false);
 
   const { data: event, setData: setEvent } = useEventAttendanceDetail(eventId);
 
@@ -103,7 +104,8 @@ export default function EventAttendanceDetailPage() {
     // member here either, which is intentional: that person did respond,
     // just isn't linked yet, and is already surfaced above via "unresolved".
     const respondedIds = new Set(signups.filter((s) => s.userId).map((s) => s.userId));
-    const noResponse = members.filter((m) => !m.isBot && !respondedIds.has(m.userId)).length;
+    const noResponseMembers = members.filter((m) => !m.isBot && !respondedIds.has(m.userId));
+    const noResponse = noResponseMembers.length;
 
     const onTime = signups.filter((s) => s.attendanceStatus === "on_time").length;
     const late = signups.filter((s) => s.attendanceStatus === "late").length;
@@ -124,6 +126,7 @@ export default function EventAttendanceDetailPage() {
       declined,
       unresolved,
       noResponse,
+      noResponseMembers,
       onTime,
       late,
       noShow,
@@ -186,7 +189,17 @@ export default function EventAttendanceDetailPage() {
             <strong>{tallies.declined}</strong>
           </div>
           <div className="tally-item">
-            <span className="muted small">Keine Rückmeldung</span>
+            <span className="muted small">
+              Keine Rückmeldung
+              {tallies.noResponse > 0 && (
+                <>
+                  {" "}
+                  <button type="button" className="link-button" onClick={() => setShowNoResponse((v) => !v)}>
+                    ({showNoResponse ? "ausblenden" : "wer?"})
+                  </button>
+                </>
+              )}
+            </span>
             <strong>{tallies.noResponse}</strong>
           </div>
           {tallies.unresolved > 0 && (
@@ -198,6 +211,10 @@ export default function EventAttendanceDetailPage() {
             </div>
           )}
         </div>
+
+        {showNoResponse && tallies.noResponse > 0 && (
+          <p className="muted small">{tallies.noResponseMembers.map((m) => m.displayName).join(", ")}</p>
+        )}
 
         {event.status !== "scheduled" && (
           <div className="tally-grid">

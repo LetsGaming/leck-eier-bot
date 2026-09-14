@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
+import { useConfirm } from "../components/ConfirmContext";
 import SearchableSelect from "../components/SearchableSelect";
 import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { useCommands } from "../hooks/useCommands";
@@ -40,6 +41,46 @@ export default function Commands() {
   // that point, so the select's displayed mode would otherwise snap back.
   const [pendingMode, setPendingMode] = useState<Record<string, GateMode>>({});
   const { showError, showSuccess } = useToast();
+  const confirmDialog = useConfirm();
+
+  // Bulk "set minimum permission tier" — row selection plus the names
+  // currently mid-batch-update, mirroring `pending` above but for many rows
+  // at once.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkTier, setBulkTier] = useState<WebRole>("admin");
+  const [pendingNames, setPendingNames] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+
+  const filteredCommands = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return commands ?? [];
+    return (commands ?? []).filter((c) => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
+  })();
+
+  // "Alle auswählen" selects/counts against the currently filtered rows, not
+  // the full list — matching what's actually visible and clickable.
+  const commandNames = filteredCommands.map((c) => c.name);
+  const allSelected = commandNames.length > 0 && commandNames.every((n) => selected.has(n));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selected.size > 0 && !allSelected;
+    }
+  }, [selected, allSelected]);
+
+  function toggleSelect(name: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(name);
+      else next.delete(name);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    setSelected(checked ? new Set(commandNames) : new Set());
+  }
 
   async function toggle(name: string, field: "enabled" | "guildOnly", value: boolean) {
     setPending(name);
@@ -96,12 +137,82 @@ export default function Commands() {
     updatePermissionGate(c.name, { mode: "tier", tier });
   }
 
+  async function handleBulkApply() {
+    const names = Array.from(selected);
+    if (names.length === 0) return;
+
+    const ok = await confirmDialog({
+      title: "Mindest-Berechtigungsstufe setzen",
+      message: `${names.length} Befehle werden auf "${WEB_ROLE_LABELS[bulkTier]}" gesetzt.`,
+      confirmLabel: "Anwenden",
+    });
+    if (!ok) return;
+
+    setPendingNames(new Set(names));
+    try {
+      const results = await Promise.allSettled(
+        names.map((name) => api.updateCommand(name, { permissionGate: { mode: "tier", tier: bulkTier } })),
+      );
+
+      const updated = new Map<string, CommandDef>();
+      const failed: string[] = [];
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") updated.set(names[i], result.value);
+        else failed.push(names[i]);
+      });
+
+      if (updated.size > 0) {
+        setCommands((prev) => prev?.map((c) => updated.get(c.name) ?? c) ?? null);
+      }
+
+      if (failed.length === 0) {
+        showSuccess(`${updated.size} Befehle aktualisiert.`);
+        setSelected(new Set());
+      } else if (updated.size === 0) {
+        showError(`Aktualisierung fehlgeschlagen für: ${failed.map((n) => `/${n}`).join(", ")}`);
+      } else {
+        showError(`${updated.size} aktualisiert, fehlgeschlagen für: ${failed.map((n) => `/${n}`).join(", ")}`);
+        // Keep only the failures selected so retrying the batch is a single click.
+        setSelected(new Set(failed));
+      }
+    } finally {
+      setPendingNames(new Set());
+    }
+  }
+
   function handleRoleChange(c: CommandDef, roleId: string) {
     clearPendingMode(c.name);
     updatePermissionGate(c.name, { mode: "role", roleId });
   }
 
+  function isRowBusy(name: string): boolean {
+    return pending === name || pendingNames.has(name);
+  }
+
   const columns: BaseTableColumn<CommandDef>[] = [
+    {
+      key: "select",
+      label: (
+        <input
+          type="checkbox"
+          ref={selectAllRef}
+          aria-label="Alle Befehle auswählen"
+          checked={allSelected}
+          disabled={commandNames.length === 0}
+          onChange={(e) => toggleSelectAll(e.target.checked)}
+        />
+      ),
+      dataLabel: "Auswählen",
+      render: (c) => (
+        <input
+          type="checkbox"
+          aria-label={`/${c.name} auswählen`}
+          checked={selected.has(c.name)}
+          disabled={isRowBusy(c.name)}
+          onChange={(e) => toggleSelect(c.name, e.target.checked)}
+        />
+      ),
+    },
     {
       key: "name",
       label: "Befehl",
@@ -119,6 +230,7 @@ export default function Commands() {
       key: "permission",
       label: "Berechtigung",
       dataLabel: "Berechtigung",
+      className: "stack-column",
       hint: (
         <>
           "Bestimmte Rolle" erlaubt genau einer Discord-Rolle deines Servers, den Befehl zu nutzen.
@@ -135,7 +247,7 @@ export default function Commands() {
             <select
               aria-label={`/${c.name} Berechtigungsmodus`}
               value={mode}
-              disabled={pending === c.name}
+              disabled={isRowBusy(c.name)}
               onChange={(e) => handleModeChange(c, e.target.value as GateMode)}
             >
               <option value="everyone">{MODE_LABELS.everyone}</option>
@@ -146,7 +258,7 @@ export default function Commands() {
               <select
                 aria-label={`/${c.name} Mindest-Berechtigungsstufe`}
                 value={eff.mode === "tier" ? eff.tier : "admin"}
-                disabled={pending === c.name}
+                disabled={isRowBusy(c.name)}
                 onChange={(e) => handleTierChange(c, e.target.value as WebRole)}
               >
                 <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
@@ -162,7 +274,7 @@ export default function Commands() {
                 placeholder="Rollen durchsuchen…"
                 emptyLabel="— Rolle wählen —"
                 options={roles.map((r) => ({ value: r.id, label: r.name }))}
-                disabled={pending === c.name}
+                disabled={isRowBusy(c.name)}
               />
             )}
             <p className="muted small">Standard: {gateLabel(defaultGateFor(c.permission), roles)}</p>
@@ -180,7 +292,7 @@ export default function Commands() {
             type="checkbox"
             aria-label={`/${c.name} aktiviert`}
             checked={c.enabled}
-            disabled={pending === c.name}
+            disabled={isRowBusy(c.name)}
             onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
           />
         </label>
@@ -197,7 +309,7 @@ export default function Commands() {
             type="checkbox"
             aria-label={`/${c.name} nur auf Server`}
             checked={c.guildOnly}
-            disabled={pending === c.name}
+            disabled={isRowBusy(c.name)}
             onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
           />
         </label>
@@ -215,7 +327,47 @@ export default function Commands() {
         {!commands ? (
           <div className="loading">Wird geladen…</div>
         ) : (
-          <BaseTable columns={columns} rows={commands} rowKey={(c) => c.name} />
+          <>
+            {commands.length > 6 && (
+              <div className="field">
+                <input
+                  type="text"
+                  aria-label="Befehle durchsuchen"
+                  placeholder="Befehle durchsuchen…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            )}
+            {selected.size > 0 && (
+              <div className="bulk-bar">
+                <span>{selected.size} ausgewählt</span>
+                <div className="bulk-bar-actions">
+                  <select
+                    aria-label="Ziel-Mindest-Berechtigungsstufe für Auswahl"
+                    value={bulkTier}
+                    disabled={pendingNames.size > 0}
+                    onChange={(e) => setBulkTier(e.target.value as WebRole)}
+                  >
+                    <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
+                    <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
+                    <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+                  </select>
+                  <button className="primary" disabled={pendingNames.size > 0} onClick={handleBulkApply}>
+                    Anwenden
+                  </button>
+                  <button disabled={pendingNames.size > 0} onClick={() => setSelected(new Set())}>
+                    Auswahl aufheben
+                  </button>
+                </div>
+              </div>
+            )}
+            {filteredCommands.length === 0 ? (
+              <p className="muted">Keine Befehle gefunden.</p>
+            ) : (
+              <BaseTable columns={columns} rows={filteredCommands} rowKey={(c) => c.name} />
+            )}
+          </>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage } from "../api";
 import { useToast } from "../components/ToastContext";
@@ -30,6 +30,50 @@ function RegistrationsCard({ query }: { query: string }) {
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
   const confirmDialog = useConfirm();
+
+  // Bulk approve/reject — only "pending" rows can be acted on, same as the
+  // per-row actions column below.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const pendingIds = (entries ?? []).filter((e) => e.status === "pending").map((e) => e.userId);
+  const allSelected = pendingIds.length > 0 && selected.size === pendingIds.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selected.size > 0 && !allSelected;
+    }
+  });
+
+  // Drop any selected id that's no longer a pending registration (search
+  // change, reload after an action, status flip) so the count/bar can't go
+  // stale.
+  useEffect(() => {
+    setSelected((prev) => {
+      const validIds = new Set((entries ?? []).filter((e) => e.status === "pending").map((e) => e.userId));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [entries]);
+
+  function toggleSelect(userId: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    setSelected(checked ? new Set(pendingIds) : new Set());
+  }
 
   async function handleApprove(entry: Registration) {
     const ok = await confirmDialog({
@@ -73,9 +117,98 @@ function RegistrationsCard({ query }: { query: string }) {
     }
   }
 
+  async function handleBulkApprove() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+
+    const ok = await confirmDialog({
+      title: "Registrierungen genehmigen",
+      message: `${ids.length} Mitglieder erhalten die konfigurierte Rolle nach der Registrierung und werden damit als registriert markiert. Die privaten Threads werden automatisch geschlossen.`,
+      confirmLabel: "Genehmigen",
+    });
+    if (!ok) return;
+
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.approveRegistration(id)));
+      const failed = ids.filter((_, i) => results[i].status === "rejected");
+
+      if (failed.length === 0) {
+        showSuccess(`${ids.length} Registrierungen genehmigt.`);
+        setSelected(new Set());
+      } else if (failed.length === ids.length) {
+        showError(`Genehmigung fehlgeschlagen für ${failed.length} Registrierungen.`);
+      } else {
+        showError(`${ids.length - failed.length} genehmigt, ${failed.length} fehlgeschlagen.`);
+        setSelected(new Set(failed));
+      }
+      load();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkRemove() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+
+    const ok = await confirmDialog({
+      title: "Registrierungen zurücksetzen",
+      message: `Die privaten Threads von ${ids.length} Registrierungen werden unwiderruflich gelöscht und die Mitglieder können das Formular erneut einreichen. Diese Aktion kann nicht rückgängig gemacht werden.`,
+      confirmLabel: "Zurücksetzen",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.removeRegistration(id)));
+      const failed = ids.filter((_, i) => results[i].status === "rejected");
+
+      if (failed.length === 0) {
+        showSuccess(`${ids.length} Registrierungen zurückgesetzt.`);
+        setSelected(new Set());
+      } else if (failed.length === ids.length) {
+        showError(`Zurücksetzen fehlgeschlagen für ${failed.length} Registrierungen.`);
+      } else {
+        showError(`${ids.length - failed.length} zurückgesetzt, ${failed.length} fehlgeschlagen.`);
+        setSelected(new Set(failed));
+      }
+      load();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   if (!entries) return null;
 
   const columns: BaseTableColumn<Registration>[] = [
+    {
+      key: "select",
+      label: (
+        <input
+          type="checkbox"
+          ref={selectAllRef}
+          aria-label="Alle ausstehenden Registrierungen auswählen"
+          checked={allSelected}
+          disabled={bulkBusy || pendingIds.length === 0}
+          onChange={(e) => toggleSelectAll(e.target.checked)}
+        />
+      ),
+      dataLabel: "Auswählen",
+      render: (e) =>
+        e.status === "pending" ? (
+          <input
+            type="checkbox"
+            aria-label={`${e.displayName} auswählen`}
+            checked={selected.has(e.userId)}
+            disabled={bulkBusy}
+            onChange={(ev) => toggleSelect(e.userId, ev.target.checked)}
+          />
+        ) : (
+          <span className="muted">—</span>
+        ),
+    },
     { key: "avatar", label: "", render: (e) => <img src={e.avatarUrl} alt="" width={28} height={28} className="avatar-round" />, className: "stack-plain" },
     {
       key: "displayName",
@@ -124,10 +257,10 @@ function RegistrationsCard({ query }: { query: string }) {
       render: (e) =>
         e.status === "pending" && (
           <>
-            <button disabled={busyUserId === e.userId} onClick={() => handleApprove(e)}>
+            <button disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleApprove(e)}>
               Genehmigen
             </button>
-            <button className="danger" disabled={busyUserId === e.userId} onClick={() => handleRemove(e)}>
+            <button className="danger" disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleRemove(e)}>
               Entfernen
             </button>
           </>
@@ -138,6 +271,22 @@ function RegistrationsCard({ query }: { query: string }) {
   return (
     <div className="card">
       <h2>Registrierungen ({entries.length})</h2>
+      {selected.size > 0 && (
+        <div className="bulk-bar">
+          <span>{selected.size} ausgewählt</span>
+          <div className="bulk-bar-actions">
+            <button className="primary" disabled={bulkBusy} onClick={handleBulkApprove}>
+              Genehmigen
+            </button>
+            <button className="danger" disabled={bulkBusy} onClick={handleBulkRemove}>
+              Entfernen
+            </button>
+            <button disabled={bulkBusy} onClick={() => setSelected(new Set())}>
+              Auswahl aufheben
+            </button>
+          </div>
+        </div>
+      )}
       <BaseTable
         columns={columns}
         rows={entries}
