@@ -23,14 +23,29 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /** Closes the popover and, unless the trigger already has focus, returns focus there — otherwise Escape or picking an emoji would drop keyboard focus to <body>. */
+  function closePopover() {
+    setOpen(false);
+    setSearch("");
+    if (document.activeElement !== triggerRef.current) triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closePopover();
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") closePopover();
     }
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   const filteredCustom = useMemo(() => {
@@ -47,8 +62,7 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
 
   function pick(v: EmojiValue) {
     onChange(v);
-    setOpen(false);
-    setSearch("");
+    closePopover();
   }
 
   const selectedCustom = value.emojiId ? customEmojis.find((e) => e.id === value.emojiId) : undefined;
@@ -57,7 +71,10 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
     <div className="emoji-picker" ref={rootRef}>
       <button
         type="button"
+        ref={triggerRef}
         className="emoji-picker-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         title="Emoji auswählen"
       >

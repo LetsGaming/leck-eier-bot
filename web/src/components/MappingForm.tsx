@@ -92,6 +92,11 @@ export default function MappingForm({
       <input
         type="text"
         className="grow"
+        aria-label={
+          selectionType === "reactions"
+            ? "Beschriftung (optional)"
+            : `${selectionType === "buttons" ? "Button" : "Options"}text (erforderlich)`
+        }
         placeholder={
           selectionType === "reactions"
             ? "Beschriftung (optional)"

@@ -41,6 +41,7 @@ export default function RoleCheckboxList({ options, value, onChange, placeholder
       {options.length > 8 && (
         <input
           type="text"
+          aria-label={placeholder}
           placeholder={placeholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}

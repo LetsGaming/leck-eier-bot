@@ -30,6 +30,8 @@ export function useConfirm(): ConfirmFn {
 
 interface PendingConfirm extends ConfirmOptions {
   resolve: (value: boolean) => void;
+  /** Element focused when confirm() was called — refocused on close so keyboard users don't lose their place. */
+  triggerEl: HTMLElement | null;
 }
 
 function ConfirmDialog({ pending, onClose }: { pending: PendingConfirm; onClose: (result: boolean) => void }) {
@@ -119,13 +121,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
   const confirmFn = useCallback<ConfirmFn>((options) => {
     return new Promise<boolean>((resolve) => {
-      setPending({ ...options, resolve });
+      setPending({ ...options, resolve, triggerEl: document.activeElement as HTMLElement | null });
     });
   }, []);
 
   const handleClose = useCallback(
     (result: boolean) => {
       pending?.resolve(result);
+      pending?.triggerEl?.focus();
       setPending(null);
     },
     [pending],

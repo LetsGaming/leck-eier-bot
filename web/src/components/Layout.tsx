@@ -109,6 +109,9 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
 
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        Zum Inhalt springen
+      </a>
       <header className="mobile-topbar">
         <button
           className="menu-toggle"
@@ -138,7 +141,7 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
           </div>
         </div>
       </nav>
-      <main className="main">
+      <main className="main" id="main-content" tabIndex={-1}>
         <div className="main-inner">{children}</div>
       </main>
     </div>

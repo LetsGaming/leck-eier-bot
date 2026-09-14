@@ -138,6 +138,30 @@ code {
   height: 100%;
 }
 
+/* Off-screen until focused (Tab from the page) — lets a keyboard user jump
+   straight to .main-inner instead of tabbing through every sidebar link
+   (10+) on every single page load. */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 12px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.skip-link:focus {
+  top: 12px;
+  /* The outline itself is what a keyboard user actually needs to perceive
+     here, not the card's own border — matches every other focus ring in
+     the app rather than reaching for --border-strong for this one chip. */
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
 .sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
@@ -286,7 +310,13 @@ code {
 
 .card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  /* Per DESIGN.md's Signal Border Rule, a neutral card's border is always
+     the subtle one — --border-strong is reserved for boundaries a user
+     must actively locate (inputs, popovers, list-item buttons), not every
+     static page-section container. Applying it here cascaded a highly
+     visible border onto nearly every box in the app, at odds with
+     Discord's own flat, subtle client chrome this system is borrowed from. */
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 20px;
@@ -309,6 +339,10 @@ code {
 
 .attention-list {
   list-style: none;
+  /* Browsers still indent a plain <ul> ~40px by default once the bullet is
+     gone — without this it sat well right of the card's own h2 above it. */
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -318,6 +352,20 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Birthdays/Events/Activity entries end in a trailing "<name> <detail text>
+   <meta span>" run — on Letzte Aktivität specifically (name + activity verb
+   + relative timestamp) that's long enough to wrap mid-sentence, breaking
+   the date across two lines. Dropping the meta span to its own line reads
+   as an attached detail line instead of a run-on sentence, and never wraps
+   awkwardly regardless of content length. Direct-child only: MemberOverview's
+   "Verlauf" list nests its own `.muted.small` a level deeper (an inline
+   "(vor 3 Tagen)" annotation right after the absolute date), which this
+   must not touch. */
+.attention-list > li > .muted.small {
+  display: block;
+  margin-top: 2px;
 }
 
 .card > summary {
@@ -349,7 +397,7 @@ code {
 
 .stat-tile {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -547,7 +595,7 @@ button + button {
   padding: 10px 14px;
   margin-bottom: 12px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
@@ -579,7 +627,7 @@ th,
 td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border);
   font-size: var(--fs-body);
 }
 
@@ -1050,6 +1098,56 @@ th[aria-sort="descending"] .sortable-th-arrow {
   height: 16px;
 }
 
+/* A plain (non-toggle) checkbox — row/bulk-select in Commands and Member
+   Audit — previously left at browser default: a stark white square with no
+   relation to this dark, Discord-borrowed palette. appearance:none drops
+   that native control so it can be redrawn to match, mirroring .switch's
+   own input below (same border/background tokens, same focus ring); the
+   checkmark is the classic rotated-border trick rather than an image asset.
+   Placed before .switch so its own input rule (equal specificity, later in
+   source) still wins there and keeps the pill-toggle look untouched. */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 4px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
 .switch {
   display: inline-flex;
   align-items: center;
@@ -1217,10 +1315,18 @@ th[aria-sort="descending"] .sortable-th-arrow {
 }
 
 .toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 24x24px hit area (WCAG 2.5.8 minimum) around the same 16px "x" glyph —
+     margin pulls the extra hitbox back in so it doesn't widen the toast's
+     visual footprint. */
+  width: 24px;
+  height: 24px;
+  margin: -4px -4px -4px 0;
   background: none;
   border: none;
   padding: 0;
-  margin: 0;
   font-size: 16px;
   line-height: 1;
   color: inherit;
@@ -1234,7 +1340,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .preview-box {
   background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px;
   white-space: pre-wrap;
@@ -1559,7 +1665,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .mode-hint {
   background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
   font-size: var(--fs-small);
@@ -1576,7 +1682,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
 .login-card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
@@ -1664,7 +1770,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
    background + border used for informational (non error/success) notices. */
 .alert.neutral {
   background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
 }
 
 /* A 28px round avatar image (member/signup tables) and its no-avatar
@@ -1791,10 +1897,22 @@ th[aria-sort="descending"] .sortable-th-arrow {
   color: var(--accent);
 }
 
+/* A finished event's card carries one more content line (the Pünktlich/Zu
+   spät/Nicht erschienen tally, hidden for a still-scheduled event) than an
+   announced one — without this, the grid's default row-stretch only
+   stretched the <a> wrapper, not the .card inside it, so rows mixing both
+   statuses had ragged, mismatched card borders. Flex column + .card flex:1
+   lets every card in a row share one border-box height, the shorter one
+   just carrying blank space at the bottom. */
 .event-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
   color: inherit;
   text-decoration: none;
+}
+
+.event-card .card {
+  flex: 1;
 }
 
 .event-card:hover .card {
@@ -1913,7 +2031,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
     padding: 0 16px;
     flex-shrink: 0;
     background: var(--bg-inset);
-    border-bottom: 1px solid var(--border-strong);
+    border-bottom: 1px solid var(--border);
     font-weight: 600;
     font-size: var(--fs-body);
   }
@@ -1975,6 +2093,15 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
   .card {
     padding: 16px;
+  }
+
+  /* The 560px column floor above (see .card-grid-registration's own
+     comment) is wider than any phone viewport this side of a tablet — with
+     no override here it forces the whole grid, and the page, to scroll
+     horizontally starting under ~590px. Same breakpoint as every other
+     content reflow in this file. */
+  .card-grid-registration {
+    grid-template-columns: 1fr;
   }
 
   .row {
@@ -2072,7 +2199,8 @@ th[aria-sort="descending"] .sortable-th-arrow {
   }
 
   .emoji-picker-popover,
-  .searchable-select-popover {
+  .searchable-select-popover,
+  .month-calendar-popover {
     max-width: calc(100vw - 32px);
   }
 
@@ -2112,7 +2240,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
 
   table.stack-on-mobile tr {
     margin-bottom: 10px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 4px 12px;
   }
@@ -2123,7 +2251,7 @@ th[aria-sort="descending"] .sortable-th-arrow {
     align-items: center;
     gap: 12px;
     padding: 7px 0;
-    border-bottom: 1px solid var(--border-strong);
+    border-bottom: 1px solid var(--border);
     text-align: right;
   }
 
@@ -2166,10 +2294,12 @@ th[aria-sort="descending"] .sortable-th-arrow {
   }
 }
 
-/* A `.stack-plain` action cell (Member Audit's Genehmigen/Entfernen buttons)
-   that still needs its own row layout, independent of the mobile-stacking
-   rule above. */
-.actions-cell {
+/* Member Audit's Genehmigen/Entfernen buttons — a row wrapper *inside* the
+   `.stack-plain` <td>, not a class on the <td> itself. Overriding a <td>'s
+   own `display` (e.g. to flex) pulls it out of the table's row-height/
+   border layout in some browsers, which is exactly what made this cell's
+   bottom border stop short of the rest of the row. */
+.actions-row {
   display: flex;
   gap: 8px;
 }

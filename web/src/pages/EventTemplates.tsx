@@ -12,7 +12,7 @@ import { useRoles } from "../hooks/useRoles";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { useFetchedResource } from "../hooks/useFetchedResource";
 import { api, errorMessage } from "../api";
-import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION } from "../utils/selectOptions";
+import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION, defaultChannelEmptyLabel } from "../utils/selectOptions";
 import type { EventTemplate } from "../types";
 
 const EMPTY_TEMPLATE: EventTemplate = {
@@ -120,7 +120,7 @@ function TemplateForm({
           value={form.defaultChannelId ?? ""}
           onChange={(v) => setForm({ ...form, defaultChannelId: v || null })}
           placeholder="Kanäle durchsuchen…"
-          emptyLabel="— Standard aus den Einstellungen —"
+          emptyLabel={defaultChannelEmptyLabel(generalSettings.data?.defaultEventChannelId, channels.data ?? [])}
           options={toChannelOptions(channels.data ?? [])}
         />
       </div>
@@ -142,7 +142,7 @@ function TemplateForm({
           value={form.defaultVoiceChannelId ?? ""}
           onChange={(v) => setForm({ ...form, defaultVoiceChannelId: v || null })}
           placeholder="Sprachkanäle durchsuchen…"
-          emptyLabel="— Standard aus den Einstellungen —"
+          emptyLabel={defaultChannelEmptyLabel(generalSettings.data?.eventVoiceChannelId, voiceChannels.data ?? [], "🔊 ")}
           options={toChannelOptions(voiceChannels.data ?? [], "🔊 ")}
         />
       </div>
@@ -212,7 +212,7 @@ function TemplateForm({
       </div>
 
       <div className="card">
-        <h3>Vorschau</h3>
+        <h2>Vorschau</h2>
         <EventEmbedPreview
           title={form.defaultTitle}
           description={form.baseDescription}

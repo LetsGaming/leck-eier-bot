@@ -58,7 +58,15 @@ export default function SearchableSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
+
+  /** Closes the popover and, unless the trigger already has focus (a plain click on it), returns focus there — otherwise closing via Escape, outside-click, or picking a row would drop keyboard focus to <body>. */
+  function closePopover() {
+    setOpen(false);
+    setSearch("");
+    if (document.activeElement !== triggerRef.current) triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -66,8 +74,7 @@ export default function SearchableSelect({
       const target = e.target as Node;
       if (rootRef.current?.contains(target)) return;
       if (popoverRef.current?.contains(target)) return;
-      setOpen(false);
-      setSearch("");
+      closePopover();
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -135,8 +142,7 @@ export default function SearchableSelect({
 
   function pick(v: string) {
     onChange(v);
-    setOpen(false);
-    setSearch("");
+    closePopover();
   }
 
   function optionId(index: number): string {
@@ -185,8 +191,7 @@ export default function SearchableSelect({
       }
       case "Escape":
         e.preventDefault();
-        setOpen(false);
-        setSearch("");
+        closePopover();
         break;
     }
   }
@@ -196,6 +201,7 @@ export default function SearchableSelect({
       <button
         type="button"
         id={id}
+        ref={triggerRef}
         className="searchable-select-trigger"
         disabled={disabled}
         aria-haspopup="listbox"
@@ -203,6 +209,7 @@ export default function SearchableSelect({
         onClick={() => {
           if (open) {
             setOpen(false);
+            setSearch("");
           } else {
             openPopover();
             // Focus lands on the search input once it mounts, matching the
@@ -237,6 +244,7 @@ export default function SearchableSelect({
               aria-controls={listId}
               aria-autocomplete="list"
               aria-activedescendant={rows.length > 0 ? optionId(highlighted) : undefined}
+              aria-label={placeholder}
               autoFocus
               placeholder={placeholder}
               value={search}
@@ -258,6 +266,7 @@ export default function SearchableSelect({
                     index === highlighted ? " highlighted" : ""
                   }`}
                   disabled={o.disabled}
+                  tabIndex={-1}
                   onMouseEnter={() => setHighlighted(index)}
                   onClick={() => pick(o.value)}
                 >

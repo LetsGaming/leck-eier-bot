@@ -253,17 +253,17 @@ function RegistrationsCard({ query }: { query: string }) {
     {
       key: "actions",
       label: "",
-      className: "stack-plain actions-cell",
+      className: "stack-plain",
       render: (e) =>
         e.status === "pending" && (
-          <>
+          <div className="actions-row">
             <button disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleApprove(e)}>
               Genehmigen
             </button>
             <button className="danger" disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleRemove(e)}>
               Entfernen
             </button>
-          </>
+          </div>
         ),
     },
   ];

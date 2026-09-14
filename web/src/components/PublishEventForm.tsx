@@ -8,7 +8,7 @@ import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { useRoles } from "../hooks/useRoles";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { api, errorMessage } from "../api";
-import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION } from "../utils/selectOptions";
+import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION, defaultChannelEmptyLabel } from "../utils/selectOptions";
 import type { EventTemplate } from "../types";
 
 export interface PublishEventFormProps {
@@ -150,7 +150,7 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
           value={voiceChannelId}
           onChange={setVoiceChannelId}
           placeholder="Sprachkanäle durchsuchen…"
-          emptyLabel="— Standard aus den Einstellungen —"
+          emptyLabel={defaultChannelEmptyLabel(generalSettings.data?.eventVoiceChannelId, voiceChannels.data ?? [], "🔊 ")}
           options={toChannelOptions(voiceChannels.data ?? [], "🔊 ")}
         />
       </div>
@@ -163,7 +163,7 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
       </div>
 
       <div className="card">
-        <h3>Vorschau</h3>
+        <h2>Vorschau</h2>
         <EventEmbedPreview
           title={title}
           description={description}

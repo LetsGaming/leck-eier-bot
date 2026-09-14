@@ -19,3 +19,20 @@ export function toRoleOptions(roles: RoleOption[]): { value: string; label: stri
  * `value` must match `EVERYONE_MENTION_SENTINEL` in `src/services/events.ts`.
  */
 export const EVERYONE_MENTION_OPTION = { value: "everyone", label: "@everyone" };
+
+/**
+ * SearchableSelect's `emptyLabel` for a channel field whose "leave unset"
+ * behavior falls back to a global Einstellungen default (event channel,
+ * attendance voice channel) — names the actual configured channel instead
+ * of a generic "aus den Einstellungen" that reads the same whether or not
+ * anything is actually set there, and says plainly when nothing is.
+ */
+export function defaultChannelEmptyLabel(
+  defaultChannelId: string | null | undefined,
+  channels: Channel[],
+  prefix: string = "#",
+): string {
+  if (!defaultChannelId) return "— kein Standard in den Einstellungen konfiguriert —";
+  const channel = channels.find((c) => c.id === defaultChannelId);
+  return channel ? `— Standard: ${prefix}${channel.name} —` : "— Standard aus den Einstellungen —";
+}
