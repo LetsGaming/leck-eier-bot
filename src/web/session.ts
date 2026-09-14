@@ -35,14 +35,17 @@ export function clearSessionCookie(reply: FastifyReply): void {
 
 /**
  * RBAC gate factory — pass the roles (see WebRole in types.ts) allowed to
- * use a given route. `requireAdmin` (below) is the blanket "any logged-in
- * dashboard user" gate every route uses today; narrowing an individual
- * route to e.g. `requireRole("bot-owner")` later needs no schema change,
- * since the role is already resolved and stored on the session at login.
+ * use a given route, e.g. `requireRole("bot-owner")` on a route-level
+ * `preHandler` to narrow past the blanket `/api/*` gate
+ * (`createRequireDashboardUser` in `accessControl.ts`). Prefers an
+ * already-attached `request.session` over re-deriving one from the cookie,
+ * so when used as a route-level preHandler (which runs after that blanket
+ * gate) it sees the same live-re-resolved role the blanket gate computed,
+ * not a second, potentially different, read of the raw session row.
  */
 export function requireRole(...allowed: WebRole[]) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const session = getSessionFromRequest(request);
+    const session = request.session ?? getSessionFromRequest(request);
     if (!session) {
       reply.code(401).send({ error: "Nicht authentifiziert" });
       return;
@@ -54,9 +57,6 @@ export function requireRole(...allowed: WebRole[]) {
     request.session = session;
   };
 }
-
-/** Gate for every `/api/*` route except `/api/me` — any authenticated dashboard user, regardless of tier. */
-export const requireAdmin = requireRole("bot-owner", "guild-owner", "admin");
 
 export function logout(request: FastifyRequest, reply: FastifyReply): void {
   const session = getSessionFromRequest(request);

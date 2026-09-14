@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { isValidFontMap } from "../../utils/font.js";
+import { requireFeature } from "../accessControl.js";
 import { pickDefined, type ZodFastifyInstance } from "../utils.js";
 import type { Settings } from "../../types.js";
 
@@ -9,6 +10,7 @@ const PatchBodySchema = z.object({
   fontMap: z.string().nullable().optional(),
   registerGateRoleId: z.string().nullable().optional(),
   registrationTierRoleId: z.string().nullable().optional(),
+  dashboardModeratorRoleId: z.string().nullable().optional(),
   rulesAcceptedUseDiscordScreening: z.boolean().optional(),
   registerChannelId: z.string().nullable().optional(),
   registerConfirmationTemplate: z.string().min(1).optional(),
@@ -28,6 +30,7 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     fontMap: settings.fontMap,
     registerGateRoleId: settings.registerGateRoleId,
     registrationTierRoleId: settings.registrationTierRoleId,
+    dashboardModeratorRoleId: settings.dashboardModeratorRoleId,
     rulesAcceptedUseDiscordScreening: settings.rulesAcceptedUseDiscordScreening,
     registerChannelId: settings.registerChannelId,
     registerConfirmationTemplate: settings.registerConfirmationTemplate,
@@ -45,12 +48,13 @@ function serialize(settings: ReturnType<typeof getSettings>) {
 export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
   app.get("/settings/general", async () => serialize(getSettings()));
 
-  app.patch("/settings/general", { schema: { body: PatchBodySchema } }, async (request, reply) => {
+  app.patch("/settings/general", { schema: { body: PatchBodySchema }, preHandler: requireFeature("settings.write") }, async (request, reply) => {
     const {
       leaveNotificationsEnabled,
       fontMap,
       registerGateRoleId,
       registrationTierRoleId,
+      dashboardModeratorRoleId,
       rulesAcceptedUseDiscordScreening,
       registerChannelId,
       registerConfirmationTemplate,
@@ -81,6 +85,7 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
         fontMap: fontMap !== undefined ? fontMap || null : undefined,
         registerGateRoleId: registerGateRoleId !== undefined ? registerGateRoleId || null : undefined,
         registrationTierRoleId: registrationTierRoleId !== undefined ? registrationTierRoleId || null : undefined,
+        dashboardModeratorRoleId: dashboardModeratorRoleId !== undefined ? dashboardModeratorRoleId || null : undefined,
         rulesAcceptedUseDiscordScreening,
         registerChannelId: registerChannelId !== undefined ? registerChannelId || null : undefined,
         registerConfirmationTemplate,

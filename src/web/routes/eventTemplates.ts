@@ -7,6 +7,7 @@ import {
   updateEventTemplate,
   deleteEventTemplate,
 } from "../../db/eventTemplatesRepository.js";
+import { requireFeature } from "../accessControl.js";
 import type { EventTemplateListResponse, EventTemplateEntry } from "../../../contracts/eventTemplates.js";
 import type { EventTemplate } from "../../types.js";
 
@@ -46,12 +47,12 @@ export function registerEventTemplateRoutes(app: ZodFastifyInstance): void {
     return response;
   });
 
-  app.post("/event-templates", { schema: { body: TemplateBodySchema } }, async (request, reply) => {
+  app.post("/event-templates", { schema: { body: TemplateBodySchema }, preHandler: requireFeature("eventTemplates.write") }, async (request, reply) => {
     const template = createEventTemplate(request.body);
     return reply.code(201).send(serialize(template));
   });
 
-  app.put("/event-templates/:id", { schema: { params: IdParamsSchema, body: TemplateBodySchema } }, async (request, reply) => {
+  app.put("/event-templates/:id", { schema: { params: IdParamsSchema, body: TemplateBodySchema }, preHandler: requireFeature("eventTemplates.write") }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
     if (id === null) return reply.code(400).send({ error: "Ungültige Vorlagen-ID" });
     if (!getEventTemplateById(id)) return reply.code(404).send({ error: "Vorlage nicht gefunden." });
@@ -59,7 +60,7 @@ export function registerEventTemplateRoutes(app: ZodFastifyInstance): void {
     return serialize(updateEventTemplate(id, request.body));
   });
 
-  app.delete("/event-templates/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.delete("/event-templates/:id", { schema: { params: IdParamsSchema }, preHandler: requireFeature("eventTemplates.write") }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
     if (id === null) return reply.code(400).send({ error: "Ungültige Vorlagen-ID" });
 

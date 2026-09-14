@@ -12,6 +12,8 @@ import type {
   BotOwnerStats,
 } from "../../contracts/status";
 import type { MemberOverview, MemberOverviewEventEntry } from "../../contracts/memberOverview";
+import type { AccessControlFeature } from "../../contracts/accessControl";
+import type { AuditLogEntry, AuditLogResponse } from "../../contracts/auditLog";
 import type {
   EventTemplateEntry,
   EventTemplateListResponse,
@@ -44,6 +46,9 @@ export type {
   BotOwnerStats,
   MemberOverview,
   MemberOverviewEventEntry,
+  AccessControlFeature,
+  AuditLogEntry,
+  AuditLogResponse,
 };
 
 export type SelectionType = "reactions" | "buttons" | "dropdown";
@@ -56,6 +61,13 @@ export interface Me {
   role: WebRole;
   /** IANA timezone name (e.g. "Europe/Berlin") every dashboard date is displayed in — see `setDisplayTimezone` in `../dateFormat`. */
   timezone: string;
+  /** Whether the current session can use each gated dashboard feature (see `FEATURES` in `src/web/accessControl.ts`) — keyed by feature key. Purely a UX hint for hiding controls; the backend's own `requireFeature` check is the real enforcement either way. */
+  capabilities: Record<string, boolean>;
+}
+
+/** `me.capabilities[key] ?? true` — defaults to visible/permissive so a stale frontend build never hides something the backend actually allows. */
+export function hasCapability(me: Me, key: string): boolean {
+  return me.capabilities[key] ?? true;
 }
 
 /**
@@ -237,6 +249,7 @@ export const WEB_ROLE_LABELS: Record<WebRole, string> = {
   "bot-owner": "Bot-Besitzer",
   "guild-owner": "Server-Besitzer",
   admin: "Admin",
+  moderator: "Moderator",
 };
 
 export interface GeneralSettings {
@@ -247,6 +260,8 @@ export interface GeneralSettings {
   registerGateRoleId: string | null;
   /** The lowest membership tier role, granted once at manual registration. Null = the register-gate role swap is disabled. */
   registrationTierRoleId: string | null;
+  /** Discord role granting the dashboard's lowest RBAC tier, `moderator` — read-only by default (see the "Zugriff" tab). Null = the moderator tier is disabled; nobody resolves to it. */
+  dashboardModeratorRoleId: string | null;
   /** How "rules accepted" is detected on the Member Audit page. Off (default) = role-based: newly granted registerGateRoleId. On = Discord's native membership-screening `pending` flag. */
   rulesAcceptedUseDiscordScreening: boolean;
   /** Channel watched for self-service registration-form submissions. Null = the feature is disabled. */

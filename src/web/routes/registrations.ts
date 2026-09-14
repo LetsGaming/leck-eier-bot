@@ -4,6 +4,7 @@ import { getCachedMembers } from "../../services/memberCache.js";
 import { removeRegistration, completeRegistration } from "../../events/registerWatcher.js";
 import { buildAvatarUrl } from "./memberAudit.js";
 import { getSettings } from "../../db/settingsRepository.js";
+import { requireFeature } from "../accessControl.js";
 import { REGISTRATIONS_LIST_LIMIT } from "../../constants.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Config } from "../../types.js";
@@ -55,7 +56,7 @@ export function registerRegistrationRoutes(app: ZodFastifyInstance, client: BotC
     );
   });
 
-  app.delete("/members/registrations/:userId", { schema: { params: UserIdParamsSchema } }, async (request, reply) => {
+  app.delete("/members/registrations/:userId", { schema: { params: UserIdParamsSchema }, preHandler: requireFeature("registrations.write") }, async (request, reply) => {
     const { userId } = request.params;
     await removeRegistration(client, userId);
     return reply.code(204).send();
@@ -75,7 +76,7 @@ export function registerRegistrationRoutes(app: ZodFastifyInstance, client: BotC
   // registration afterward.
   app.post(
     "/members/registrations/:userId/approve",
-    { schema: { params: UserIdParamsSchema } },
+    { schema: { params: UserIdParamsSchema }, preHandler: requireFeature("registrations.write") },
     async (request, reply) => {
       const { userId } = request.params;
       const { registrationTierRoleId } = getSettings();

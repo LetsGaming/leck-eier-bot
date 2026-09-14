@@ -67,4 +67,6 @@ export interface BotOwnerStats {
   guildName: string | null;
   cachedMemberCount: number;
   reactionRolePanelCount: number;
+  /** True when `@everyone` carries Discord's Administrator permission — every guild member then resolves to the dashboard's `admin` tier (see `resolveDashboardRole()`), not just individually-trusted staff. Surfaced only to the bot owner, who's the one who'd fix it. */
+  everyoneHasAdministrator: boolean;
 }

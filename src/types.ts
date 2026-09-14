@@ -120,6 +120,8 @@ export interface Settings {
   defaultEventChannelId: string | null;
   /** Fallback voice channel for attendance tracking when an event's template doesn't specify its own `defaultVoiceChannelId`. Null = tracking never activates for such an event (see `sweepEvents()`). */
   eventVoiceChannelId: string | null;
+  /** Discord role granting the `moderator` dashboard tier (see WebRole) — the lowest tier, read-only by default (see `web/accessControl.ts`'s FEATURES). Null = the moderator tier is disabled; nobody resolves to it. */
+  dashboardModeratorRoleId: string | null;
 }
 
 export interface CommandSetting {

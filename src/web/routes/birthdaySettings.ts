@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { z } from "zod";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { syncAnchorMessage } from "../../services/birthdays.js";
+import { requireFeature } from "../accessControl.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient, Settings } from "../../types.js";
 import { pickDefined, type ZodFastifyInstance } from "../utils.js";
@@ -33,7 +34,7 @@ function serializeBirthdaySettings(settings: ReturnType<typeof getSettings>) {
 export function registerBirthdaySettingsRoutes(app: ZodFastifyInstance, client: BotClient): void {
   app.get("/settings/birthday", async () => serializeBirthdaySettings(getSettings()));
 
-  app.patch("/settings/birthday", { schema: { body: PatchBodySchema } }, async (request, reply) => {
+  app.patch("/settings/birthday", { schema: { body: PatchBodySchema }, preHandler: requireFeature("settings.write") }, async (request, reply) => {
     const { template, channelId, cron: cronExpression, modChannelId, anchorTemplate, anchorIntro, anchorUseFont, announcementUseFont } =
       request.body;
 
@@ -71,7 +72,7 @@ export function registerBirthdaySettingsRoutes(app: ZodFastifyInstance, client: 
   });
 
   /** Manually regenerates the bot-managed anchor message — e.g. after an admin edits a birthday entry directly. */
-  app.post("/settings/birthday/sync-anchor", async (_request, reply) => {
+  app.post("/settings/birthday/sync-anchor", { preHandler: requireFeature("settings.write") }, async (_request, reply) => {
     const settings = getSettings();
     if (!settings.birthdayListChannelId) {
       return reply.code(400).send({ error: "Wähle zuerst einen Kanal für die Ankündigungsliste aus." });

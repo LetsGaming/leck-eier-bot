@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType, type ReactNode, type SVGProps 
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import {
+  IconAuditLog,
   IconBirthdays,
   IconCommands,
   IconEvents,
@@ -37,6 +38,8 @@ const SETUP_NAV_ITEMS: NavItem[] = [
   { to: "/commands", label: "Befehle", icon: IconCommands },
   { to: "/settings", label: "Einstellungen", icon: IconSettings },
 ];
+/** Bot-owner only — the accountability mechanism for a trust model where admin/moderator are broader groups (see docs/DASHBOARD.md's RBAC section). */
+const AUDIT_LOG_NAV_ITEM: NavItem = { to: "/audit-log", label: "Audit-Log", icon: IconAuditLog };
 
 function MenuIcon() {
   return (
@@ -130,7 +133,7 @@ export default function Layout({ me, onLogout, children }: LayoutProps) {
         <h1>leck-eier-bot</h1>
         <NavLinks items={ATTENTION_NAV_ITEMS} counts={counts} />
         <div className="nav-divider" role="separator" />
-        <NavLinks items={SETUP_NAV_ITEMS} counts={counts} />
+        <NavLinks items={me.role === "bot-owner" ? [...SETUP_NAV_ITEMS, AUDIT_LOG_NAV_ITEM] : SETUP_NAV_ITEMS} counts={counts} />
         <div className="spacer" />
         <div className="user">
           Angemeldet als <strong>{me.username}</strong> ({WEB_ROLE_LABELS[me.role] ?? me.role})

@@ -117,7 +117,9 @@ function BotOwnerStatsSection({ stats }: { stats: BotOwnerStats }) {
 export default function Overview() {
   const { data: status } = useStatus();
 
-  const hasAttentionItems = !!status && (status.pendingRegistrationCount > 0 || status.unmatchedSignupCount > 0);
+  const everyoneHasAdministrator = status?.botOwnerStats?.everyoneHasAdministrator ?? false;
+  const hasAttentionItems =
+    !!status && (status.pendingRegistrationCount > 0 || status.unmatchedSignupCount > 0 || everyoneHasAdministrator);
 
   return (
     <div>
@@ -145,6 +147,13 @@ export default function Overview() {
                     ? "Event-Anmeldung braucht manuelle Zuordnung"
                     : "Event-Anmeldungen brauchen manuelle Zuordnung"}
                 </Link>
+              </li>
+            )}
+            {everyoneHasAdministrator && (
+              <li>
+                <span className="badge warn">!</span> @everyone hat die Administrator-Berechtigung — jedes
+                Server-Mitglied kann sich in dieses Dashboard einloggen (als Admin-Stufe). Entferne die Berechtigung
+                von @everyone, falls das nicht beabsichtigt ist.
               </li>
             )}
           </ul>

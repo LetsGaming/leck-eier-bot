@@ -10,8 +10,8 @@
 
 /**
  * Dashboard RBAC role. Strict hierarchy, highest first: 'bot-owner' (always
- * total access) > 'guild-owner' > 'admin'. Canonical source for both the bot
- * (`src/types.ts`, which re-exports it) and the dashboard frontend
- * (`web/src/types.ts`, which re-exports it).
+ * total access) > 'guild-owner' > 'admin' > 'moderator'. Canonical source for
+ * both the bot (`src/types.ts`, which re-exports it) and the dashboard
+ * frontend (`web/src/types.ts`, which re-exports it).
  */
-export type WebRole = "bot-owner" | "guild-owner" | "admin";
+export type WebRole = "bot-owner" | "guild-owner" | "admin" | "moderator";

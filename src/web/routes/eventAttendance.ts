@@ -17,6 +17,7 @@ import {
 import { getCachedMembers } from "../../services/memberCache.js";
 import { deriveAttendance, recomputeAttendanceForEvent } from "../../services/eventAttendance.js";
 import { buildAvatarUrl } from "./memberAudit.js";
+import { requireFeature } from "../accessControl.js";
 import { monthRangeUtc, currentMonthKey, monthKeyInTimezone } from "../../utils/timezone.js";
 import type { Event, EventSignup, Config } from "../../types.js";
 import type {
@@ -255,7 +256,7 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
 
   app.patch(
     "/events/attendance/signups/:signupId",
-    { schema: { params: SignupIdParamsSchema, body: LinkSignupBodySchema } },
+    { schema: { params: SignupIdParamsSchema, body: LinkSignupBodySchema }, preHandler: requireFeature("eventAttendance.write") },
     async (request, reply) => {
       const { signupId } = request.params;
       const id = Number(signupId);
@@ -288,7 +289,7 @@ export function registerEventAttendanceRoutes(app: ZodFastifyInstance, config: C
   );
 
   /** Mainly a test-cleanup/mistake-recovery affordance — destroys the event's full attendance history, cascading via the FK. */
-  app.delete("/events/attendance/:id", { schema: { params: EventIdParamsSchema } }, async (request, reply) => {
+  app.delete("/events/attendance/:id", { schema: { params: EventIdParamsSchema }, preHandler: requireFeature("eventAttendance.write") }, async (request, reply) => {
     const { id } = request.params;
     const eventId = parseEventIdParam(id);
     if (eventId === null) return reply.code(400).send({ error: "Ungültige Event-ID" });

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { PermissionsBitField } from "discord.js";
 import { listPanels } from "../../db/reactionRolesRepository.js";
 import { getCachedMembers, isCacheReady } from "../../services/memberCache.js";
 import { countPendingRegistrations, listRecentMemberActivity } from "../../db/memberRecordsRepository.js";
@@ -64,6 +65,8 @@ export function registerStatusRoutes(app: FastifyInstance, client: BotClient, co
             guildName: client.guilds.cache.get(config.guildId)?.name ?? null,
             cachedMemberCount: isCacheReady() ? getCachedMembers().size : 0,
             reactionRolePanelCount: listPanels().length,
+            everyoneHasAdministrator:
+              client.guilds.cache.get(config.guildId)?.roles.everyone.permissions.has(PermissionsBitField.Flags.Administrator) ?? false,
           }
         : null,
     };

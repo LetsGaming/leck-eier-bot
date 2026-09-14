@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ZodFastifyInstance } from "../utils.js";
 import { getEventById } from "../../db/eventAttendanceRepository.js";
 import { publishEvent, editEvent, cancelEvent } from "../../services/events.js";
+import { requireFeature } from "../accessControl.js";
 import { errorMessage } from "../../utils/logger.js";
 import type { BotClient } from "../../types.js";
 
@@ -30,7 +31,7 @@ function parseIdParam(id: string): number | null {
 
 /** Create/edit/cancel a native event — read/list/attendance history lives in `eventAttendance.ts`. */
 export function registerEventRoutes(app: ZodFastifyInstance, client: BotClient): void {
-  app.post("/events/publish", { schema: { body: PublishBodySchema } }, async (request, reply) => {
+  app.post("/events/publish", { schema: { body: PublishBodySchema }, preHandler: requireFeature("events.write") }, async (request, reply) => {
     try {
       const event = await publishEvent(client, request.body);
       return reply.code(201).send(event);
@@ -39,7 +40,7 @@ export function registerEventRoutes(app: ZodFastifyInstance, client: BotClient):
     }
   });
 
-  app.patch("/events/:id", { schema: { params: IdParamsSchema, body: EditBodySchema } }, async (request, reply) => {
+  app.patch("/events/:id", { schema: { params: IdParamsSchema, body: EditBodySchema }, preHandler: requireFeature("events.write") }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
     if (id === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
 
@@ -53,7 +54,7 @@ export function registerEventRoutes(app: ZodFastifyInstance, client: BotClient):
     return event;
   });
 
-  app.post("/events/:id/cancel", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.post("/events/:id/cancel", { schema: { params: IdParamsSchema }, preHandler: requireFeature("events.write") }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
     if (id === null) return reply.code(400).send({ error: "Ungültige Event-ID" });
 

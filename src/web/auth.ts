@@ -3,6 +3,8 @@ import { PermissionsBitField } from "discord.js";
 import { z } from "zod";
 import type { FastifyRequest } from "fastify";
 import { createSession } from "../db/sessionsRepository.js";
+import { getSettings } from "../db/settingsRepository.js";
+import { FEATURES, checkFeatureGate, resolveFeatureGate, resolveLiveRole } from "./accessControl.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import { getSessionFromRequest, logout, setSessionCookie } from "./session.js";
 import type { ZodFastifyInstance } from "./utils.js";
@@ -89,11 +91,12 @@ function requestHostOrigin(request: FastifyRequest): string {
 
 /**
  * Resolves the dashboard RBAC role (see WebRole in types.ts) a logging-in
- * user gets, or null if none of the three ways in apply — strictly
+ * user gets, or null if none of the four ways in apply — strictly
  * hierarchical, checked highest first: the bot owner gets 'bot-owner'; the
  * configured guild's owner (if not also the bot owner) gets 'guild-owner';
  * anyone else who holds Administrator in that guild (directly or via
- * @everyone) gets 'admin'.
+ * @everyone) gets 'admin'; anyone holding the configured
+ * `dashboardModeratorRoleId` role gets the lowest tier, 'moderator'.
  *
  * Exported so `utils/commandPermissions.ts` can reuse it for tier-mode
  * command-permission enforcement instead of duplicating the owner/admin
@@ -111,7 +114,11 @@ export function resolveDashboardRole(client: BotClient, config: Config, userId: 
   const hasAdminRole = roleIds.some((roleId) =>
     guild.roles.cache.get(roleId)?.permissions.has(PermissionsBitField.Flags.Administrator),
   );
-  return hasAdminRole ? "admin" : null;
+  if (hasAdminRole) return "admin";
+
+  const { dashboardModeratorRoleId } = getSettings();
+  if (dashboardModeratorRoleId && roleIds.includes(dashboardModeratorRoleId)) return "moderator";
+  return null;
 }
 
 export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {
@@ -294,12 +301,23 @@ export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, c
   app.get("/api/me", async (request, reply) => {
     const session = getSessionFromRequest(request);
     if (!session) return reply.code(401).send({ error: "Nicht authentifiziert" });
+    // Shows the LIVE role (a role grant/revoke since login takes effect
+    // here immediately), not the up-to-7-day-old session snapshot — but
+    // never 401s a "who am I" read over it; a truly revoked session is
+    // still caught by the blanket /api/* gate on the next real action (see
+    // createRequireDashboardUser in accessControl.ts).
+    const liveRole = resolveLiveRole(client, config, session) ?? session.role;
+    const liveSession = { ...session, role: liveRole };
+    const capabilities = Object.fromEntries(
+      FEATURES.map((f) => [f.key, checkFeatureGate(resolveFeatureGate(f.key), liveSession)]),
+    );
     return {
       userId: session.userId,
       username: session.username,
       avatar: session.avatar,
-      role: session.role,
+      role: liveRole,
       timezone: config.timezone,
+      capabilities,
     };
   });
 }

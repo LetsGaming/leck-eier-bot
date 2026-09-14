@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { listCommandDefinitions } from "../../loaders/commandLoader.js";
 import { setCommandOverride } from "../../db/settingsRepository.js";
-import { requireRole } from "../session.js";
+import { requireFeature } from "../accessControl.js";
 import type { ZodFastifyInstance } from "../utils.js";
 
 const PermissionGateSchema = z.union([
   z.object({ mode: z.literal("everyone") }),
-  z.object({ mode: z.literal("tier"), tier: z.enum(["bot-owner", "guild-owner", "admin"]) }),
+  z.object({ mode: z.literal("tier"), tier: z.enum(["bot-owner", "guild-owner", "admin", "moderator"]) }),
   z.object({ mode: z.literal("role"), roleId: z.string() }),
 ]);
 
@@ -24,15 +24,17 @@ const PatchParamsSchema = z.object({
 export function registerCommandRoutes(app: ZodFastifyInstance): void {
   app.get("/commands", async () => listCommandDefinitions());
 
-  // Narrower than the blanket requireAdmin every other /api route gets
-  // (registered in routes/index.ts): this can loosen a command's own
-  // permissionGate (including to "everyone"), so an `admin`-tier session —
-  // anyone whose *role* carries Discord's Administrator flag, not
-  // necessarily someone individually trusted with bot configuration —
-  // shouldn't be able to grant other members access to gated commands.
+  // Gated by the "commands.write" feature (see web/accessControl.ts), not
+  // the blanket dashboard-user check every other /api route gets: this can
+  // loosen a command's own permissionGate (including to "everyone"), so its
+  // default requires guild-owner-or-higher rather than the broader
+  // admin-tier (anyone whose *role* carries Discord's Administrator flag,
+  // not necessarily someone individually trusted with bot configuration).
+  // A bot-owner/guild-owner can still loosen or tighten this default via the
+  // dashboard's "Zugriff" settings tab — see routes/accessControl.ts.
   app.patch(
     "/commands/:name",
-    { schema: { params: PatchParamsSchema, body: PatchBodySchema }, preHandler: requireRole("bot-owner", "guild-owner") },
+    { schema: { params: PatchParamsSchema, body: PatchBodySchema }, preHandler: requireFeature("commands.write") },
     async (request, reply) => {
       const { name } = request.params;
       const definitions = await listCommandDefinitions();

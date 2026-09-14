@@ -5,8 +5,8 @@ import { useConfirm } from "../components/ConfirmContext";
 import SearchableSelect from "../components/SearchableSelect";
 import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { useCommands } from "../hooks/useCommands";
-import { defaultGateFor, WEB_ROLE_LABELS } from "../types";
-import type { CommandDef, PermissionGate, RoleOption, WebRole } from "../types";
+import { defaultGateFor, hasCapability, WEB_ROLE_LABELS } from "../types";
+import type { CommandDef, Me, PermissionGate, RoleOption, WebRole } from "../types";
 
 type GateMode = PermissionGate["mode"];
 
@@ -33,7 +33,8 @@ function effectiveGate(c: CommandDef): PermissionGate {
   return c.permissionGate ?? defaultGateFor(c.permission);
 }
 
-export default function Commands() {
+export default function Commands({ me }: { me: Me }) {
+  const canWrite = hasCapability(me, "commands.write");
   const { commands, setCommands, roles } = useCommands();
   const [pending, setPending] = useState<string | null>(null);
   // Tracks a command mid-switch to "role" mode before a role has actually
@@ -190,29 +191,33 @@ export default function Commands() {
   }
 
   const columns: BaseTableColumn<CommandDef>[] = [
-    {
-      key: "select",
-      label: (
-        <input
-          type="checkbox"
-          ref={selectAllRef}
-          aria-label="Alle Befehle auswählen"
-          checked={allSelected}
-          disabled={commandNames.length === 0}
-          onChange={(e) => toggleSelectAll(e.target.checked)}
-        />
-      ),
-      dataLabel: "Auswählen",
-      render: (c) => (
-        <input
-          type="checkbox"
-          aria-label={`/${c.name} auswählen`}
-          checked={selected.has(c.name)}
-          disabled={isRowBusy(c.name)}
-          onChange={(e) => toggleSelect(c.name, e.target.checked)}
-        />
-      ),
-    },
+    ...(canWrite
+      ? [
+          {
+            key: "select",
+            label: (
+              <input
+                type="checkbox"
+                ref={selectAllRef}
+                aria-label="Alle Befehle auswählen"
+                checked={allSelected}
+                disabled={commandNames.length === 0}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+              />
+            ),
+            dataLabel: "Auswählen",
+            render: (c) => (
+              <input
+                type="checkbox"
+                aria-label={`/${c.name} auswählen`}
+                checked={selected.has(c.name)}
+                disabled={isRowBusy(c.name)}
+                onChange={(e) => toggleSelect(c.name, e.target.checked)}
+              />
+            ),
+          } satisfies BaseTableColumn<CommandDef>,
+        ]
+      : []),
     {
       key: "name",
       label: "Befehl",
@@ -242,6 +247,7 @@ export default function Commands() {
       render: (c) => {
         const eff = effectiveGate(c);
         const mode = pendingMode[c.name] ?? eff.mode;
+        if (!canWrite) return <span className="muted small">{gateLabel(eff, roles)}</span>;
         return (
           <>
             <select
@@ -264,6 +270,7 @@ export default function Commands() {
                 <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
                 <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
                 <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+                <option value="moderator">{WEB_ROLE_LABELS.moderator}</option>
               </select>
             )}
             {mode === "role" && (
@@ -286,34 +293,40 @@ export default function Commands() {
       key: "enabled",
       label: "Aktiviert",
       accessor: (c) => (c.enabled ? 1 : 0),
-      render: (c) => (
-        <label className="switch">
-          <input
-            type="checkbox"
-            aria-label={`/${c.name} aktiviert`}
-            checked={c.enabled}
-            disabled={isRowBusy(c.name)}
-            onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
-          />
-        </label>
-      ),
+      render: (c) =>
+        canWrite ? (
+          <label className="switch">
+            <input
+              type="checkbox"
+              aria-label={`/${c.name} aktiviert`}
+              checked={c.enabled}
+              disabled={isRowBusy(c.name)}
+              onChange={(e) => toggle(c.name, "enabled", e.target.checked)}
+            />
+          </label>
+        ) : (
+          <span className={`badge ${c.enabled ? "ok" : "error"}`}>{c.enabled ? "Ja" : "Nein"}</span>
+        ),
     },
     {
       key: "guildOnly",
       label: "Nur auf Server",
       accessor: (c) => (c.guildOnly ? 1 : 0),
       hint: "Wenn deaktiviert, kann der Befehl auch per Direktnachricht an den Bot verwendet werden.",
-      render: (c) => (
-        <label className="switch">
-          <input
-            type="checkbox"
-            aria-label={`/${c.name} nur auf Server`}
-            checked={c.guildOnly}
-            disabled={isRowBusy(c.name)}
-            onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
-          />
-        </label>
-      ),
+      render: (c) =>
+        canWrite ? (
+          <label className="switch">
+            <input
+              type="checkbox"
+              aria-label={`/${c.name} nur auf Server`}
+              checked={c.guildOnly}
+              disabled={isRowBusy(c.name)}
+              onChange={(e) => toggle(c.name, "guildOnly", e.target.checked)}
+            />
+          </label>
+        ) : (
+          <span className="muted small">{c.guildOnly ? "Ja" : "Nein"}</span>
+        ),
     },
   ];
 
@@ -339,7 +352,7 @@ export default function Commands() {
                 />
               </div>
             )}
-            {selected.size > 0 && (
+            {canWrite && selected.size > 0 && (
               <div className="bulk-bar">
                 <span>{selected.size} ausgewählt</span>
                 <div className="bulk-bar-actions">
@@ -352,6 +365,7 @@ export default function Commands() {
                     <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
                     <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
                     <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+                    <option value="moderator">{WEB_ROLE_LABELS.moderator}</option>
                   </select>
                   <button className="primary" disabled={pendingNames.size > 0} onClick={handleBulkApply}>
                     Anwenden

@@ -14,6 +14,7 @@ import {
   upsertMapping,
 } from "../../db/reactionRolesRepository.js";
 import { syncPanelMessage } from "../../services/reactionRoles.js";
+import { requireFeature } from "../accessControl.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import { MAX_BUTTONS_PER_PANEL, MAX_DROPDOWN_OPTIONS_PER_PANEL, PanelMessageType, SelectionType } from "../../constants.js";
 import type { BotClient } from "../../types.js";
@@ -141,7 +142,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
     return panel;
   });
 
-  app.post("/reaction-roles/panels", { schema: { body: CreatePanelBodySchema } }, async (request, reply) => {
+  app.post("/reaction-roles/panels", { schema: { body: CreatePanelBodySchema }, preHandler: requireFeature("reactionRoles.write") }, async (request, reply) => {
     if (request.body.existingMessageId && request.body.selectionType !== SelectionType.Reactions) {
       return reply
         .code(400)
@@ -154,7 +155,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
 
   app.patch(
     "/reaction-roles/panels/:id",
-    { schema: { params: IdParamsSchema, body: PanelBodySchema } },
+    { schema: { params: IdParamsSchema, body: PanelBodySchema }, preHandler: requireFeature("reactionRoles.write") },
     async (request, reply) => {
       const id = parsePanelId(request.params.id, reply);
       if (id === null) return;
@@ -176,7 +177,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
     },
   );
 
-  app.delete("/reaction-roles/panels/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.delete("/reaction-roles/panels/:id", { schema: { params: IdParamsSchema }, preHandler: requireFeature("reactionRoles.write") }, async (request, reply) => {
     const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
@@ -194,7 +195,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
     return reply.code(204).send();
   });
 
-  app.post("/reaction-roles/panels/:id/sync", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.post("/reaction-roles/panels/:id/sync", { schema: { params: IdParamsSchema }, preHandler: requireFeature("reactionRoles.write") }, async (request, reply) => {
     const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
@@ -208,7 +209,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
   });
 
   /** First activation of a draft panel — posts/attaches it to Discord and marks it sent. Idempotent afterward (re-running just re-syncs). */
-  app.post("/reaction-roles/panels/:id/send", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.post("/reaction-roles/panels/:id/send", { schema: { params: IdParamsSchema }, preHandler: requireFeature("reactionRoles.write") }, async (request, reply) => {
     const id = parsePanelId(request.params.id, reply);
     if (id === null) return;
     const panel = getPanel(id);
@@ -232,7 +233,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
 
   app.post(
     "/reaction-roles/panels/:id/mappings",
-    { schema: { params: IdParamsSchema, body: MappingBodySchema } },
+    { schema: { params: IdParamsSchema, body: MappingBodySchema }, preHandler: requireFeature("reactionRoles.write") },
     async (request, reply) => {
       const id = parsePanelId(request.params.id, reply);
       if (id === null) return;
@@ -257,7 +258,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
 
   app.patch(
     "/reaction-roles/panels/:id/mappings/:mappingId",
-    { schema: { params: MappingIdParamsSchema, body: MappingBodySchema } },
+    { schema: { params: MappingIdParamsSchema, body: MappingBodySchema }, preHandler: requireFeature("reactionRoles.write") },
     async (request, reply) => {
       const id = parsePanelId(request.params.id, reply);
       if (id === null) return;
@@ -282,7 +283,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
 
   app.delete(
     "/reaction-roles/panels/:id/mappings/:mappingId",
-    { schema: { params: MappingIdParamsSchema } },
+    { schema: { params: MappingIdParamsSchema }, preHandler: requireFeature("reactionRoles.write") },
     async (request, reply) => {
       const id = parsePanelId(request.params.id, reply);
       if (id === null) return;
@@ -302,7 +303,7 @@ export function registerReactionRolePanelRoutes(app: ZodFastifyInstance, client:
 
   app.post(
     "/reaction-roles/panels/:id/mappings/reorder",
-    { schema: { params: IdParamsSchema, body: ReorderBodySchema } },
+    { schema: { params: IdParamsSchema, body: ReorderBodySchema }, preHandler: requireFeature("reactionRoles.write") },
     async (request, reply) => {
       const id = parsePanelId(request.params.id, reply);
       if (id === null) return;

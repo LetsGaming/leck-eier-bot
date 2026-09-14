@@ -29,6 +29,8 @@ import type {
   PanelInput,
   RoleOption,
   Status,
+  AccessControlFeature,
+  AuditLogResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -168,6 +170,18 @@ export const api = {
   generalSettings: () => request<GeneralSettings>("/settings/general"),
   updateGeneralSettings: (body: Partial<GeneralSettings>) =>
     request<GeneralSettings>("/settings/general", { method: "PATCH", ...json(body) }),
+
+  accessControlFeatures: () => request<AccessControlFeature[]>("/access-control"),
+  updateAccessControlOverride: (key: string, gate: PermissionGate | null) =>
+    request<AccessControlFeature>(`/access-control/${key}`, { method: "PATCH", ...json({ gate }) }),
+
+  auditLog: (opts: { limit?: number; offset?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (opts.limit !== undefined) search.set("limit", String(opts.limit));
+    if (opts.offset !== undefined) search.set("offset", String(opts.offset));
+    const qs = search.toString();
+    return request<AuditLogResponse>(`/audit-log${qs ? `?${qs}` : ""}`);
+  },
 };
 
 export type { Mapping };

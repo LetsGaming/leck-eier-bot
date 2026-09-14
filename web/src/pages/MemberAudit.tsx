@@ -7,7 +7,8 @@ import BaseTable, { type BaseTableColumn } from "../components/BaseTable";
 import { formatAbsolute, formatRelative } from "../dateFormat";
 import { useMemberAudit } from "../hooks/useMemberAudit";
 import { useRegistrations } from "../hooks/useRegistrations";
-import type { MemberAuditEntry, Registration, RegistrationStatus } from "../types";
+import { hasCapability } from "../types";
+import type { Me, MemberAuditEntry, Registration, RegistrationStatus } from "../types";
 
 const DEBOUNCE_MS = 300;
 
@@ -25,7 +26,8 @@ const STATUS_BADGE_CLASS: Record<RegistrationStatus, string> = {
   left: "error",
 };
 
-function RegistrationsCard({ query }: { query: string }) {
+function RegistrationsCard({ query, me }: { query: string; me: Me }) {
+  const canWrite = hasCapability(me, "registrations.write");
   const { data: entries, reload: load } = useRegistrations(query);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const { showError, showSuccess } = useToast();
@@ -183,32 +185,36 @@ function RegistrationsCard({ query }: { query: string }) {
   if (!entries) return null;
 
   const columns: BaseTableColumn<Registration>[] = [
-    {
-      key: "select",
-      label: (
-        <input
-          type="checkbox"
-          ref={selectAllRef}
-          aria-label="Alle ausstehenden Registrierungen auswählen"
-          checked={allSelected}
-          disabled={bulkBusy || pendingIds.length === 0}
-          onChange={(e) => toggleSelectAll(e.target.checked)}
-        />
-      ),
-      dataLabel: "Auswählen",
-      render: (e) =>
-        e.status === "pending" ? (
-          <input
-            type="checkbox"
-            aria-label={`${e.displayName} auswählen`}
-            checked={selected.has(e.userId)}
-            disabled={bulkBusy}
-            onChange={(ev) => toggleSelect(e.userId, ev.target.checked)}
-          />
-        ) : (
-          <span className="muted">—</span>
-        ),
-    },
+    ...(canWrite
+      ? [
+          {
+            key: "select",
+            label: (
+              <input
+                type="checkbox"
+                ref={selectAllRef}
+                aria-label="Alle ausstehenden Registrierungen auswählen"
+                checked={allSelected}
+                disabled={bulkBusy || pendingIds.length === 0}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+              />
+            ),
+            dataLabel: "Auswählen",
+            render: (e) =>
+              e.status === "pending" ? (
+                <input
+                  type="checkbox"
+                  aria-label={`${e.displayName} auswählen`}
+                  checked={selected.has(e.userId)}
+                  disabled={bulkBusy}
+                  onChange={(ev) => toggleSelect(e.userId, ev.target.checked)}
+                />
+              ) : (
+                <span className="muted">—</span>
+              ),
+          } satisfies BaseTableColumn<Registration>,
+        ]
+      : []),
     { key: "avatar", label: "", render: (e) => <img src={e.avatarUrl} alt="" width={28} height={28} className="avatar-round" />, className: "stack-plain" },
     {
       key: "displayName",
@@ -250,28 +256,32 @@ function RegistrationsCard({ query }: { query: string }) {
           <span className="muted">—</span>
         ),
     },
-    {
-      key: "actions",
-      label: "",
-      className: "stack-plain",
-      render: (e) =>
-        e.status === "pending" && (
-          <div className="actions-row">
-            <button disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleApprove(e)}>
-              Genehmigen
-            </button>
-            <button className="danger" disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleRemove(e)}>
-              Entfernen
-            </button>
-          </div>
-        ),
-    },
+    ...(canWrite
+      ? [
+          {
+            key: "actions",
+            label: "",
+            className: "stack-plain",
+            render: (e) =>
+              e.status === "pending" && (
+                <div className="actions-row">
+                  <button disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleApprove(e)}>
+                    Genehmigen
+                  </button>
+                  <button className="danger" disabled={busyUserId === e.userId || bulkBusy} onClick={() => handleRemove(e)}>
+                    Entfernen
+                  </button>
+                </div>
+              ),
+          } satisfies BaseTableColumn<Registration>,
+        ]
+      : []),
   ];
 
   return (
     <div className="card">
       <h2>Registrierungen ({entries.length})</h2>
-      {selected.size > 0 && (
+      {canWrite && selected.size > 0 && (
         <div className="bulk-bar">
           <span>{selected.size} ausgewählt</span>
           <div className="bulk-bar-actions">
@@ -362,7 +372,7 @@ function MemberTable({ entries, showLeft }: { entries: MemberAuditEntry[]; showL
   );
 }
 
-export default function MemberAudit() {
+export default function MemberAudit({ me }: { me: Me }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -423,7 +433,7 @@ export default function MemberAudit() {
         )
       )}
 
-      <RegistrationsCard query={debouncedQuery} />
+      <RegistrationsCard query={debouncedQuery} me={me} />
     </div>
   );
 }

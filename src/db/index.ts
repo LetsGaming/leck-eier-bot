@@ -843,6 +843,35 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE events ADD COLUMN use_font INTEGER NOT NULL DEFAULT 0;
     `);
   },
+  // v37: dashboard-own RBAC hardening — a fourth, lowest WebRole tier
+  // ('moderator', granted via a configurable Discord role, same pattern as
+  // registrationTierRoleId), per-feature access overrides for the
+  // dashboard's own write routes (dashboard_access_overrides — reuses the
+  // existing PermissionGate shape, stored as JSON exactly like
+  // command_settings.permission_gate already does), and a lightweight
+  // accountability log of every dashboard mutation (dashboard_audit_log).
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN dashboard_moderator_role_id TEXT;
+
+      CREATE TABLE dashboard_access_overrides (
+        feature_key TEXT PRIMARY KEY,
+        gate_json TEXT NOT NULL
+      );
+
+      CREATE TABLE dashboard_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        role TEXT NOT NULL,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        status_code INTEGER NOT NULL
+      );
+      CREATE INDEX idx_dashboard_audit_log_at ON dashboard_audit_log(at);
+    `);
+  },
 ];
 
 /**

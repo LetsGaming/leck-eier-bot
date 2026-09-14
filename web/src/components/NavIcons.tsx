@@ -99,3 +99,12 @@ export function IconSettings(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function IconAuditLog(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 8v4l3 3" />
+      <circle cx="12" cy="12" r="9" />
+    </Icon>
+  );
+}

@@ -13,8 +13,9 @@ import { useUnsavedChanges } from "../components/UnsavedChangesContext";
 import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
-import { WEB_ROLE_LABELS } from "../types";
-import type { Channel, GeneralSettings, Me, RoleOption } from "../types";
+import { useAccessControl } from "../hooks/useAccessControl";
+import { hasCapability, WEB_ROLE_LABELS } from "../types";
+import type { AccessControlFeature, Channel, GeneralSettings, Me, PermissionGate, RoleOption, WebRole } from "../types";
 
 /** Sample value shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` substitution exactly (see src/events/registerWatcher.ts). */
 const PREVIEW_REGISTER_NAME = "Beispielperson";
@@ -65,6 +66,7 @@ interface AllgemeinSectionProps {
   handleSaveFont: () => void;
   savingFont: boolean;
   fontMapDirty: boolean;
+  canWrite: boolean;
 }
 
 function AllgemeinSection({
@@ -75,6 +77,7 @@ function AllgemeinSection({
   handleSaveFont,
   savingFont,
   fontMapDirty,
+  canWrite,
 }: AllgemeinSectionProps) {
   const [showFontPreview, setShowFontPreview] = useState(false);
 
@@ -148,16 +151,18 @@ function AllgemeinSection({
             </>
           )}
         </div>
-        <div className="save-row">
-          <button
-            className="primary"
-            onClick={handleSaveFont}
-            disabled={savingFont || !fontMapDirty}
-          >
-            {savingFont ? "Wird gespeichert…" : "Speichern"}
-          </button>
-          {fontMapDirty && !savingFont && <span className="muted small">Ungespeicherte Änderungen</span>}
-        </div>
+        {canWrite && (
+          <div className="save-row">
+            <button
+              className="primary"
+              onClick={handleSaveFont}
+              disabled={savingFont || !fontMapDirty}
+            >
+              {savingFont ? "Wird gespeichert…" : "Speichern"}
+            </button>
+            {fontMapDirty && !savingFont && <span className="muted small">Ungespeicherte Änderungen</span>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -183,6 +188,7 @@ interface RegistrierungSectionProps {
   handleSaveAutoConfirmationTemplate: () => void;
   savingAutoConfirmationTemplate: boolean;
   autoConfirmationTemplateDirty: boolean;
+  canWrite: boolean;
 }
 
 function RegistrierungSection({
@@ -205,6 +211,7 @@ function RegistrierungSection({
   handleSaveAutoConfirmationTemplate,
   savingAutoConfirmationTemplate,
   autoConfirmationTemplateDirty,
+  canWrite,
 }: RegistrierungSectionProps) {
   const [showNicknamePreview, setShowNicknamePreview] = useState(false);
   const [showConfirmationPreview, setShowConfirmationPreview] = useState(false);
@@ -274,6 +281,24 @@ function RegistrierungSection({
                   abgeschlossen wird. Höhere Rollen, die ein Mitglied später
                   bekommt (Beförderungen), lösen dies nicht erneut aus — diese
                   Rolle bleibt für den Registrierungs-Abschluss reserviert.
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="dashboard-moderator-role">
+                  Dashboard-Moderator-Rolle
+                </label>
+                <SearchableSelect
+                  id="dashboard-moderator-role"
+                  value={settings.dashboardModeratorRoleId ?? ""}
+                  onChange={(v) => update({ dashboardModeratorRoleId: v || null })}
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— keine —"
+                  options={toRoleOptions(roles)}
+                />
+                <div className="hint">
+                  Mitglieder mit dieser Rolle erhalten die niedrigste
+                  Dashboard-Berechtigungsstufe (nur Lesezugriff, außer wo
+                  unten unter "Zugriff" explizit erlaubt).
                 </div>
               </div>
               <label className="switch">
@@ -381,18 +406,20 @@ function RegistrierungSection({
                   )}
                 </div>
               )}
-              <div className="save-row">
-                <button
-                  className="primary"
-                  onClick={handleSaveNicknameEmoji}
-                  disabled={savingNicknameEmoji || !nicknameEmojiDirty}
-                >
-                  {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
-                </button>
-                {nicknameEmojiDirty && !savingNicknameEmoji && (
-                  <span className="muted small">Ungespeicherte Änderungen</span>
-                )}
-              </div>
+              {canWrite && (
+                <div className="save-row">
+                  <button
+                    className="primary"
+                    onClick={handleSaveNicknameEmoji}
+                    disabled={savingNicknameEmoji || !nicknameEmojiDirty}
+                  >
+                    {savingNicknameEmoji ? "Wird gespeichert…" : "Speichern"}
+                  </button>
+                  {nicknameEmojiDirty && !savingNicknameEmoji && (
+                    <span className="muted small">Ungespeicherte Änderungen</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="card">
@@ -457,18 +484,20 @@ function RegistrierungSection({
                   />
                 </div>
               )}
-              <div className="save-row">
-                <button
-                  className="primary"
-                  onClick={handleSaveConfirmationTemplate}
-                  disabled={savingConfirmationTemplate || !confirmationTemplateDirty}
-                >
-                  {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
-                </button>
-                {confirmationTemplateDirty && !savingConfirmationTemplate && (
-                  <span className="muted small">Ungespeicherte Änderungen</span>
-                )}
-              </div>
+              {canWrite && (
+                <div className="save-row">
+                  <button
+                    className="primary"
+                    onClick={handleSaveConfirmationTemplate}
+                    disabled={savingConfirmationTemplate || !confirmationTemplateDirty}
+                  >
+                    {savingConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+                  </button>
+                  {confirmationTemplateDirty && !savingConfirmationTemplate && (
+                    <span className="muted small">Ungespeicherte Änderungen</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="card">
@@ -542,18 +571,20 @@ function RegistrierungSection({
                   />
                 </div>
               )}
-              <div className="save-row">
-                <button
-                  className="primary"
-                  onClick={handleSaveAutoConfirmationTemplate}
-                  disabled={savingAutoConfirmationTemplate || !autoConfirmationTemplateDirty}
-                >
-                  {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
-                </button>
-                {autoConfirmationTemplateDirty && !savingAutoConfirmationTemplate && (
-                  <span className="muted small">Ungespeicherte Änderungen</span>
-                )}
-              </div>
+              {canWrite && (
+                <div className="save-row">
+                  <button
+                    className="primary"
+                    onClick={handleSaveAutoConfirmationTemplate}
+                    disabled={savingAutoConfirmationTemplate || !autoConfirmationTemplateDirty}
+                  >
+                    {savingAutoConfirmationTemplate ? "Wird gespeichert…" : "Speichern"}
+                  </button>
+                  {autoConfirmationTemplateDirty && !savingAutoConfirmationTemplate && (
+                    <span className="muted small">Ungespeicherte Änderungen</span>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -635,6 +666,121 @@ function KontoSection({ me }: { me: Me }) {
   );
 }
 
+function accessGateLabel(gate: PermissionGate, roles: RoleOption[]): string {
+  switch (gate.mode) {
+    case "everyone":
+      return "Jeder (angemeldet)";
+    case "tier":
+      return WEB_ROLE_LABELS[gate.tier];
+    case "role": {
+      const role = roles.find((r) => r.id === gate.roleId);
+      return role ? `Rolle: ${role.name}` : "Rolle (unbekannt)";
+    }
+  }
+}
+
+/**
+ * Reconfigures which dashboard tier/role may use each gated write feature
+ * (see `FEATURES` in `src/web/accessControl.ts`) — the same `PermissionGate`
+ * shape (and same three modes) already used for slash-command permissions
+ * on the Commands page, applied to the dashboard's own routes instead.
+ * Bot-owner/guild-owner only — see `canManageAccess` above and
+ * `requireRole` on the backend route.
+ */
+function AccessControlSection() {
+  const { features, setFeatures } = useAccessControl();
+  const rolesRes = useRoles();
+  const roles = rolesRes.data ?? [];
+  const [pending, setPending] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
+
+  async function save(key: string, gate: PermissionGate | null) {
+    setPending(key);
+    try {
+      const updated = await api.updateAccessControlOverride(key, gate);
+      setFeatures((prev) => prev?.map((f) => (f.key === key ? updated : f)) ?? null);
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Zugriff</h2>
+      <p className="muted small">
+        Wer welche Dashboard-Aktion nutzen darf — unabhängig von den Discord-Slash-Befehlen oben. "Zurücksetzen"
+        stellt den Standardwert wieder her.
+      </p>
+      {!features.length ? (
+        <div className="loading">Wird geladen…</div>
+      ) : (
+        features.map((f: AccessControlFeature) => {
+          const effective = f.override ?? f.defaultGate;
+          const busy = pending === f.key;
+          return (
+            <div key={f.key} className="field">
+              <label htmlFor={`access-mode-${f.key}`}>{f.label}</label>
+              <select
+                id={`access-mode-${f.key}`}
+                value={effective.mode}
+                disabled={busy}
+                onChange={(e) => {
+                  const mode = e.target.value as PermissionGate["mode"];
+                  if (mode === "everyone") save(f.key, { mode: "everyone" });
+                  else if (mode === "tier") save(f.key, { mode: "tier", tier: "admin" });
+                  // "role" mode waits for an actual role pick below.
+                }}
+              >
+                <option value="everyone">Jeder (angemeldet)</option>
+                <option value="tier">Mindest-Berechtigungsstufe</option>
+                <option value="role">Bestimmte Rolle</option>
+              </select>
+              {effective.mode === "tier" && (
+                <select
+                  aria-label={`${f.label} Mindest-Berechtigungsstufe`}
+                  value={effective.tier}
+                  disabled={busy}
+                  onChange={(e) => save(f.key, { mode: "tier", tier: e.target.value as WebRole })}
+                >
+                  <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
+                  <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
+                  <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+                  <option value="moderator">{WEB_ROLE_LABELS.moderator}</option>
+                </select>
+              )}
+              {effective.mode === "role" && (
+                <SearchableSelect
+                  id={`access-role-${f.key}`}
+                  value={effective.roleId}
+                  onChange={(v) => v && save(f.key, { mode: "role", roleId: v })}
+                  placeholder="Rollen durchsuchen…"
+                  emptyLabel="— Rolle wählen —"
+                  options={roles.map((r) => ({ value: r.id, label: r.name }))}
+                  disabled={busy}
+                />
+              )}
+              <div className="hint">
+                Standard: {accessGateLabel(f.defaultGate, roles)}
+                {f.override && (
+                  <>
+                    {" · "}
+                    <button className="link-button" disabled={busy} onClick={() => save(f.key, null)}>
+                      Zurücksetzen
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export default function Settings({ me }: { me: Me }) {
   const settingsRes = useGeneralSettings();
   const rolesRes = useRoles();
@@ -674,8 +820,16 @@ export default function Settings({ me }: { me: Me }) {
   const { showError, showSuccess } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const canWrite = hasCapability(me, "settings.write");
+  // Managing the access-control overrides themselves is never delegable to
+  // admin/moderator — same reasoning as PATCH /api/access-control on the
+  // backend (see routes/accessControl.ts) — so the tab that edits them is
+  // hidden rather than merely disabled for anyone below guild-owner.
+  const canManageAccess = me.role === "bot-owner" || me.role === "guild-owner";
+  const sections = canManageAccess ? [...SECTIONS, { id: "zugriff", label: "Zugriff" }] : SECTIONS;
+
   const rawSection = searchParams.get("section");
-  const activeSection = SECTIONS.some((s) => s.id === rawSection)
+  const activeSection = sections.some((s) => s.id === rawSection)
     ? (rawSection as string)
     : DEFAULT_SECTION;
 
@@ -782,7 +936,7 @@ export default function Settings({ me }: { me: Me }) {
       <h2>Einstellungen</h2>
 
       <Tabs
-        tabs={SECTIONS}
+        tabs={sections}
         active={activeSection}
         onChange={setActiveSection}
       />
@@ -801,6 +955,7 @@ export default function Settings({ me }: { me: Me }) {
             handleSaveFont={handleSaveFont}
             savingFont={savingFont}
             fontMapDirty={fontMapDirty}
+            canWrite={canWrite}
           />
         )}
         {activeSection === "registrierung" && (
@@ -809,6 +964,7 @@ export default function Settings({ me }: { me: Me }) {
             update={update}
             roles={roles}
             channels={channels}
+            canWrite={canWrite}
             nicknameEmoji={nicknameEmoji}
             setNicknameEmoji={setNicknameEmoji}
             handleSaveNicknameEmoji={handleSaveNicknameEmoji}
@@ -837,6 +993,7 @@ export default function Settings({ me }: { me: Me }) {
           />
         )}
         {activeSection === "konto" && <KontoSection me={me} />}
+        {activeSection === "zugriff" && canManageAccess && <AccessControlSection />}
       </div>
     </div>
   );

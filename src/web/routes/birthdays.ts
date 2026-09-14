@@ -6,6 +6,7 @@ import {
   updateBirthdayEntry,
 } from "../../db/birthdaysRepository.js";
 import { daysUntil, getUpcomingBirthdays, isValidCalendarDate, syncAnchorMessage, toDateKey } from "../../services/birthdays.js";
+import { requireFeature } from "../accessControl.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 import type { BotClient } from "../../types.js";
 import type { ZodFastifyInstance } from "../utils.js";
@@ -38,7 +39,7 @@ export function registerBirthdaysRoutes(app: ZodFastifyInstance, client: BotClie
     })),
   );
 
-  app.post("/birthdays", { schema: { body: EntryBodySchema } }, async (request, reply) => {
+  app.post("/birthdays", { schema: { body: EntryBodySchema }, preHandler: requireFeature("birthdays.write") }, async (request, reply) => {
     const { day, month, userId, name } = request.body;
     if (!isValidCalendarDate(day, month)) return reply.code(400).send({ error: "Das ist kein gültiges Datum." });
 
@@ -59,7 +60,7 @@ export function registerBirthdaysRoutes(app: ZodFastifyInstance, client: BotClie
 
   app.patch(
     "/birthdays/:id",
-    { schema: { params: IdParamsSchema, body: EntryBodySchema } },
+    { schema: { params: IdParamsSchema, body: EntryBodySchema }, preHandler: requireFeature("birthdays.write") },
     async (request, reply) => {
       const id = Number(request.params.id);
       if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
@@ -81,7 +82,7 @@ export function registerBirthdaysRoutes(app: ZodFastifyInstance, client: BotClie
     },
   );
 
-  app.delete("/birthdays/:id", { schema: { params: IdParamsSchema } }, async (request, reply) => {
+  app.delete("/birthdays/:id", { schema: { params: IdParamsSchema }, preHandler: requireFeature("birthdays.write") }, async (request, reply) => {
     const id = Number(request.params.id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "Ungültige Geburtstags-ID" });
 

@@ -11,9 +11,10 @@ import type { CommandPermission } from "../constants.js";
  * passes when the resolved role's rank is >= the gate's tier's rank.
  */
 export const TIER_RANK: Record<WebRole, number> = {
-  admin: 0,
-  "guild-owner": 1,
-  "bot-owner": 2,
+  moderator: 0,
+  admin: 1,
+  "guild-owner": 2,
+  "bot-owner": 3,
 };
 
 /**

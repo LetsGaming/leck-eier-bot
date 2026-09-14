@@ -15,6 +15,7 @@ import MemberOverview from "./pages/MemberOverview";
 import Events from "./pages/Events";
 import EventAttendanceDetail from "./pages/EventAttendanceDetail";
 import Settings from "./pages/Settings";
+import AuditLog from "./pages/AuditLog";
 
 export default function App() {
   // undefined = still checking; null = logged out; Me = logged in.
@@ -43,12 +44,13 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/reaction-roles" element={<ReactionRoles />} />
           <Route path="/birthdays" element={<Birthdays />} />
-          <Route path="/commands" element={<Commands />} />
-          <Route path="/members" element={<MemberAudit />} />
+          <Route path="/commands" element={<Commands me={me} />} />
+          <Route path="/members" element={<MemberAudit me={me} />} />
           <Route path="/members/:userId" element={<MemberOverview />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:eventId" element={<EventAttendanceDetail />} />
           <Route path="/settings" element={<Settings me={me} />} />
+          {me.role === "bot-owner" && <Route path="/audit-log" element={<AuditLog />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
