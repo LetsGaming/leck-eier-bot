@@ -397,7 +397,7 @@ code {
 
 .stat-tile {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -627,7 +627,7 @@ th,
 td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-strong);
   font-size: var(--fs-body);
 }
 
@@ -1340,7 +1340,7 @@ input[type="checkbox"]:focus-visible {
 
 .preview-box {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 12px;
   white-space: pre-wrap;
@@ -1665,7 +1665,7 @@ input[type="checkbox"]:focus-visible {
 
 .mode-hint {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 10px 12px;
   font-size: var(--fs-small);
@@ -1682,7 +1682,7 @@ input[type="checkbox"]:focus-visible {
 
 .login-card {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
@@ -1770,7 +1770,7 @@ input[type="checkbox"]:focus-visible {
    background + border used for informational (non error/success) notices. */
 .alert.neutral {
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 /* A 28px round avatar image (member/signup tables) and its no-avatar
@@ -2031,7 +2031,7 @@ input[type="checkbox"]:focus-visible {
     padding: 0 16px;
     flex-shrink: 0;
     background: var(--bg-inset);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-strong);
     font-weight: 600;
     font-size: var(--fs-body);
   }
@@ -2240,7 +2240,7 @@ input[type="checkbox"]:focus-visible {
 
   table.stack-on-mobile tr {
     margin-bottom: 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     padding: 4px 12px;
   }
@@ -2251,7 +2251,7 @@ input[type="checkbox"]:focus-visible {
     align-items: center;
     gap: 12px;
     padding: 7px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-strong);
     text-align: right;
   }
 
