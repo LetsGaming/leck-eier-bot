@@ -872,6 +872,49 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX idx_dashboard_audit_log_at ON dashboard_audit_log(at);
     `);
   },
+  // v38: advanced dashboard RBAC — per-user access overrides (grant or block
+  // a specific Discord user regardless of their guild roles; see
+  // userAccessOverridesRepository.ts), time-boxed elevated-access grants (an
+  // auto-expiring tier bump, checked live via an expires_at filter — never
+  // needs a cron sweep for correctness; see temporaryGrantsRepository.ts),
+  // and read-only API tokens for non-interactive integrations (bearer-token
+  // access to the community snapshot only, hashed at rest; see
+  // apiTokensRepository.ts).
+  (d) => {
+    d.exec(`
+      CREATE TABLE dashboard_user_overrides (
+        user_id TEXT PRIMARY KEY,
+        mode TEXT NOT NULL CHECK (mode IN ('grant', 'block')),
+        role TEXT,
+        note TEXT,
+        set_by_user_id TEXT NOT NULL,
+        set_by_username TEXT NOT NULL,
+        set_at TEXT NOT NULL
+      );
+
+      CREATE TABLE dashboard_temporary_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        granted_by_user_id TEXT NOT NULL,
+        granted_by_username TEXT NOT NULL,
+        granted_at TEXT NOT NULL,
+        revoked_at TEXT
+      );
+      CREATE INDEX idx_dashboard_temporary_grants_user ON dashboard_temporary_grants(user_id, expires_at);
+
+      CREATE TABLE dashboard_api_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_by_user_id TEXT NOT NULL,
+        created_by_username TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+    `);
+  },
 ];
 
 /**

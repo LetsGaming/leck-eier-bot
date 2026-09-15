@@ -14,6 +14,9 @@ import type {
 import type { MemberOverview, MemberOverviewEventEntry } from "../../contracts/memberOverview";
 import type { AccessControlFeature } from "../../contracts/accessControl";
 import type { AuditLogEntry, AuditLogResponse } from "../../contracts/auditLog";
+import type { UserAccessOverride } from "../../contracts/userAccessOverrides";
+import type { TemporaryGrant } from "../../contracts/temporaryGrants";
+import type { ApiToken, ApiTokenCreated } from "../../contracts/apiTokens";
 import type {
   EventTemplateEntry,
   EventTemplateListResponse,
@@ -49,6 +52,10 @@ export type {
   AccessControlFeature,
   AuditLogEntry,
   AuditLogResponse,
+  UserAccessOverride,
+  TemporaryGrant,
+  ApiToken,
+  ApiTokenCreated,
 };
 
 export type SelectionType = "reactions" | "buttons" | "dropdown";

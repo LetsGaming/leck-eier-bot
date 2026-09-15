@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { FastifyRequest } from "fastify";
 import { createSession } from "../db/sessionsRepository.js";
 import { getSettings } from "../db/settingsRepository.js";
-import { FEATURES, checkFeatureGate, resolveFeatureGate, resolveLiveRole } from "./accessControl.js";
+import { getUserAccessOverride } from "../db/userAccessOverridesRepository.js";
+import { FEATURES, applyTemporaryGrant, checkFeatureGate, resolveFeatureGate, resolveLiveRole } from "./accessControl.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import { getSessionFromRequest, logout, setSessionCookie } from "./session.js";
 import type { ZodFastifyInstance } from "./utils.js";
@@ -91,12 +92,20 @@ function requestHostOrigin(request: FastifyRequest): string {
 
 /**
  * Resolves the dashboard RBAC role (see WebRole in types.ts) a logging-in
- * user gets, or null if none of the four ways in apply — strictly
- * hierarchical, checked highest first: the bot owner gets 'bot-owner'; the
- * configured guild's owner (if not also the bot owner) gets 'guild-owner';
- * anyone else who holds Administrator in that guild (directly or via
- * @everyone) gets 'admin'; anyone holding the configured
- * `dashboardModeratorRoleId` role gets the lowest tier, 'moderator'.
+ * user gets, or null if none of the ways in apply — strictly hierarchical,
+ * checked highest first: the bot owner always gets 'bot-owner' (never
+ * overridable); next, a `dashboard_user_overrides` row for this specific
+ * person (see `userAccessOverridesRepository.ts`) wins outright — 'grant'
+ * hands them its `role` regardless of their guild roles, 'block' denies them
+ * regardless of their guild roles; only once neither applies does the
+ * Discord-role-derived hierarchy run: the configured guild's owner (if not
+ * also the bot owner) gets 'guild-owner'; anyone else who holds Administrator
+ * in that guild (directly or via @everyone) gets 'admin'; anyone holding the
+ * configured `dashboardModeratorRoleId` role gets the lowest tier,
+ * 'moderator'. Finally, an active time-boxed grant (see
+ * `temporaryGrantsRepository.ts`) can still elevate whatever was resolved
+ * above — including a 'block' or "no role at all" — since that's a
+ * deliberate, explicit decision by whoever created the grant.
  *
  * Exported so `utils/commandPermissions.ts` can reuse it for tier-mode
  * command-permission enforcement instead of duplicating the owner/admin
@@ -104,21 +113,31 @@ function requestHostOrigin(request: FastifyRequest): string {
  * "tier" mode needs real guild-owner detection, not just isOwner()/isAdmin().
  */
 export function resolveDashboardRole(client: BotClient, config: Config, userId: string, roleIds: string[]): WebRole | null {
-  if (userId === config.botOwnerId) return "bot-owner";
-
-  const guild = client.guilds.cache.get(config.guildId);
-  if (!guild) return null;
-  if (guild.ownerId === userId) return "guild-owner";
-
-  if (guild.roles.everyone.permissions.has(PermissionsBitField.Flags.Administrator)) return "admin";
-  const hasAdminRole = roleIds.some((roleId) =>
-    guild.roles.cache.get(roleId)?.permissions.has(PermissionsBitField.Flags.Administrator),
-  );
-  if (hasAdminRole) return "admin";
-
-  const { dashboardModeratorRoleId } = getSettings();
-  if (dashboardModeratorRoleId && roleIds.includes(dashboardModeratorRoleId)) return "moderator";
-  return null;
+  let resolved: WebRole | null;
+  if (userId === config.botOwnerId) {
+    resolved = "bot-owner";
+  } else {
+    const override = getUserAccessOverride(userId);
+    if (override) {
+      resolved = override.mode === "block" ? null : override.role;
+    } else {
+      const guild = client.guilds.cache.get(config.guildId);
+      if (!guild) {
+        resolved = null;
+      } else if (guild.ownerId === userId) {
+        resolved = "guild-owner";
+      } else if (
+        guild.roles.everyone.permissions.has(PermissionsBitField.Flags.Administrator) ||
+        roleIds.some((roleId) => guild.roles.cache.get(roleId)?.permissions.has(PermissionsBitField.Flags.Administrator))
+      ) {
+        resolved = "admin";
+      } else {
+        const { dashboardModeratorRoleId } = getSettings();
+        resolved = dashboardModeratorRoleId && roleIds.includes(dashboardModeratorRoleId) ? "moderator" : null;
+      }
+    }
+  }
+  return applyTemporaryGrant(userId, resolved);
 }
 
 export function registerAuthRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {

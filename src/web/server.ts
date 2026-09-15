@@ -15,8 +15,10 @@ import {
 } from "fastify-type-provider-zod";
 import logger, { errorMessage } from "../utils/logger.js";
 import { sweepExpiredSessions } from "../db/sessionsRepository.js";
+import { verifyApiToken } from "../db/apiTokensRepository.js";
 import { registerAuthRoutes, resolveRequestOrigin } from "./auth.js";
 import { registerApiRoutes } from "./routes/index.js";
+import { buildCommunitySnapshot } from "./routes/status.js";
 import type { BotClient, Config } from "../types.js";
 
 // HTTP methods that never mutate server state — exempt from the
@@ -169,6 +171,26 @@ export async function startWebServer(client: BotClient, config: Config): Promise
       );
       return reply.code(403).send({ error: "Ungültige Anfrageherkunft" });
     }
+  });
+
+  // Bearer-token-authenticated, deliberately outside the cookie-session
+  // `/api/*` plugin registered by registerApiRoutes below — a service caller
+  // has no session cookie, so it must never go through
+  // createRequireDashboardUser or the dashboard-mutation audit-log hook
+  // (both cookie-session-only). GET-only, so the same-origin/CSRF onRequest
+  // hook above never applies to it either. Still covered by the global rate
+  // limiter registered above (it's on the same root `app`). Grants read
+  // access to exactly the community snapshot — see apiTokensRepository.ts's
+  // doc comment for why this is intentionally that narrow.
+  app.get("/api/public/status", async (request, reply) => {
+    const authHeader = request.headers.authorization ?? "";
+    const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    // Same generic response whether the header is missing or the token is
+    // simply wrong — no reason to help an attacker tell the two apart.
+    if (!rawToken || !verifyApiToken(rawToken)) {
+      return reply.code(401).send({ error: "Ungültiger oder fehlender Token" });
+    }
+    return buildCommunitySnapshot(client, config);
   });
 
   registerAuthRoutes(app, client, config);

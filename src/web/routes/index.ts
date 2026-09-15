@@ -15,6 +15,9 @@ import { registerCommandRoutes } from "./commands.js";
 import { registerGeneralSettingsRoutes } from "./generalSettings.js";
 import { registerAccessControlRoutes } from "./accessControl.js";
 import { registerAuditLogRoutes } from "./auditLog.js";
+import { registerUserAccessOverrideRoutes } from "./userAccessOverrides.js";
+import { registerTemporaryGrantRoutes } from "./temporaryGrants.js";
+import { registerApiTokenRoutes } from "./apiTokens.js";
 import type { BotClient, Config } from "../../types.js";
 
 const NON_MUTATING_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -79,6 +82,9 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       api.register(async (instance) => registerGeneralSettingsRoutes(instance));
       api.register(async (instance) => registerAccessControlRoutes(instance));
       api.register(async (instance) => registerAuditLogRoutes(instance));
+      api.register(async (instance) => registerUserAccessOverrideRoutes(instance));
+      api.register(async (instance) => registerTemporaryGrantRoutes(instance));
+      api.register(async (instance) => registerApiTokenRoutes(instance));
     },
     { prefix: "/api" },
   );

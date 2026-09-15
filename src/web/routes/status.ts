@@ -24,7 +24,7 @@ import type { CommunitySnapshot, Status } from "../../../contracts/status.js";
  * unconditional — every existing consumer of those two fields keeps working
  * unchanged.
  */
-function buildCommunitySnapshot(client: BotClient, config: Config): CommunitySnapshot {
+export function buildCommunitySnapshot(client: BotClient, config: Config): CommunitySnapshot {
   const guild = client.guilds.cache.get(config.guildId);
 
   const now = new Date();

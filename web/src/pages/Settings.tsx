@@ -14,8 +14,24 @@ import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useUserAccessOverrides } from "../hooks/useUserAccessOverrides";
+import { useTemporaryGrants } from "../hooks/useTemporaryGrants";
+import { useApiTokens } from "../hooks/useApiTokens";
+import { useMemberNames } from "../hooks/useMemberNames";
+import { formatAbsolute } from "../dateFormat";
 import { hasCapability, WEB_ROLE_LABELS } from "../types";
-import type { AccessControlFeature, Channel, GeneralSettings, Me, PermissionGate, RoleOption, WebRole } from "../types";
+import type {
+  AccessControlFeature,
+  ApiTokenCreated,
+  Channel,
+  GeneralSettings,
+  Me,
+  PermissionGate,
+  RoleOption,
+  TemporaryGrant,
+  UserAccessOverride,
+  WebRole,
+} from "../types";
 
 /** Sample value shown in the registration confirmation templates' live preview — matches renderConfirmation()'s `{name}` substitution exactly (see src/events/registerWatcher.ts). */
 const PREVIEW_REGISTER_NAME = "Beispielperson";
@@ -781,6 +797,277 @@ function AccessControlSection() {
   );
 }
 
+/**
+ * Grant or block a specific Discord user's dashboard access, independent of
+ * their guild roles — see the `resolveDashboardRole()` doc comment in
+ * `src/web/auth.ts`. Bot-owner-only (see `canManageAccess`'s caller): this
+ * is the single most powerful lever in the system, since it can grant or
+ * deny literally anyone, including a guild-owner.
+ */
+function UserAccessOverridesSection() {
+  const { overrides, setOverrides } = useUserAccessOverrides();
+  const names = useMemberNames(overrides.map((o) => o.userId));
+  const { showError, showSuccess } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [mode, setMode] = useState<"grant" | "block">("grant");
+  const [role, setRole] = useState<WebRole>("moderator");
+  const [note, setNote] = useState("");
+
+  async function add() {
+    if (!userId.trim()) return;
+    setBusy(true);
+    try {
+      const saved = await api.setUserAccessOverride(
+        userId.trim(),
+        mode === "grant" ? { mode: "grant", role } : { mode: "block", note: note.trim() || null },
+      );
+      setOverrides((prev) => [...(prev ?? []).filter((o) => o.userId !== saved.userId), saved]);
+      setUserId("");
+      setNote("");
+      showSuccess("Gespeichert.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(target: UserAccessOverride) {
+    setBusy(true);
+    try {
+      await api.clearUserAccessOverride(target.userId);
+      setOverrides((prev) => (prev ?? []).filter((o) => o.userId !== target.userId));
+      showSuccess("Entfernt.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Benutzer-Zugriff</h2>
+      <p className="muted small">
+        Erlaubt oder sperrt einzelne Discord-Nutzer unabhängig von ihren Server-Rollen — z. B. um jemandem ohne
+        passende Rolle Zugriff zu geben, oder um jemanden sofort auszuschließen, ohne Discord-Rollen anzufassen.
+      </p>
+      {overrides.map((o) => (
+        <div key={o.userId} className="field">
+          <div>
+            <strong>{names[o.userId] ?? o.userId}</strong> —{" "}
+            {o.mode === "grant" ? `Zugriff: ${WEB_ROLE_LABELS[o.role!]}` : `Gesperrt${o.note ? ` (${o.note})` : ""}`}
+          </div>
+          <div className="hint">
+            Gesetzt von {o.setByUsername} · {formatAbsolute(o.setAt)}{" "}
+            <button className="link-button" disabled={busy} onClick={() => remove(o)}>
+              Entfernen
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="field">
+        <label htmlFor="user-override-id">Discord-Nutzer-ID</label>
+        <input id="user-override-id" value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="123456789012345678" />
+        <select value={mode} onChange={(e) => setMode(e.target.value as "grant" | "block")}>
+          <option value="grant">Zugriff gewähren</option>
+          <option value="block">Sperren</option>
+        </select>
+        {mode === "grant" ? (
+          <select value={role} onChange={(e) => setRole(e.target.value as WebRole)}>
+            <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
+            <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
+            <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+            <option value="moderator">{WEB_ROLE_LABELS.moderator}</option>
+          </select>
+        ) : (
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Grund (optional)" />
+        )}
+        <button disabled={busy || !userId.trim()} onClick={add}>
+          Speichern
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** `expiresAt` is always in the future for a still-active grant (server-side filtered) — a static computed string is enough, no ticking timer. */
+function formatCountdown(expiresAt: string): string {
+  const remainingMs = new Date(expiresAt).getTime() - Date.now();
+  if (remainingMs <= 0) return "abgelaufen";
+  const hours = Math.floor(remainingMs / 3_600_000);
+  const minutes = Math.floor((remainingMs % 3_600_000) / 60_000);
+  if (hours >= 24) return `läuft ab in ${Math.floor(hours / 24)}T ${hours % 24}Std.`;
+  if (hours > 0) return `läuft ab in ${hours}Std. ${minutes}Min.`;
+  return `läuft ab in ${minutes}Min.`;
+}
+
+const GRANT_DURATION_PRESETS = [
+  { label: "1 Stunde", minutes: 60 },
+  { label: "4 Stunden", minutes: 240 },
+  { label: "24 Stunden", minutes: 1440 },
+  { label: "7 Tage", minutes: 10080 },
+];
+
+/** Time-boxed elevation to a higher tier — see `applyTemporaryGrant()` in `src/web/accessControl.ts`. Bot-owner/guild-owner. */
+function TemporaryGrantsSection() {
+  const { grants, setGrants } = useTemporaryGrants();
+  const names = useMemberNames(grants.map((g) => g.userId));
+  const { showError, showSuccess } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [role, setRole] = useState<WebRole>("admin");
+  const [durationMinutes, setDurationMinutes] = useState(GRANT_DURATION_PRESETS[0].minutes);
+
+  async function add() {
+    if (!userId.trim()) return;
+    setBusy(true);
+    try {
+      const grant = await api.createTemporaryGrant({ userId: userId.trim(), role, durationMinutes });
+      setGrants((prev) => [...(prev ?? []), grant]);
+      setUserId("");
+      showSuccess("Gewährt.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(grant: TemporaryGrant) {
+    setBusy(true);
+    try {
+      await api.revokeTemporaryGrant(grant.id);
+      setGrants((prev) => (prev ?? []).filter((g) => g.id !== grant.id));
+      showSuccess("Widerrufen.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Temporäre Berechtigungen</h2>
+      <p className="muted small">
+        Hebt einen Nutzer für eine begrenzte Zeit auf eine höhere Berechtigungsstufe an — läuft danach von selbst ab,
+        keine Gefahr eines vergessenen Dauerzugriffs.
+      </p>
+      {grants.map((g) => (
+        <div key={g.id} className="field">
+          <div>
+            <strong>{names[g.userId] ?? g.userId}</strong> — {WEB_ROLE_LABELS[g.role]}
+          </div>
+          <div className="hint">
+            {formatCountdown(g.expiresAt)} · gewährt von {g.grantedByUsername}{" "}
+            <button className="link-button" disabled={busy} onClick={() => revoke(g)}>
+              Widerrufen
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="field">
+        <label htmlFor="temp-grant-id">Discord-Nutzer-ID</label>
+        <input id="temp-grant-id" value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="123456789012345678" />
+        <select value={role} onChange={(e) => setRole(e.target.value as WebRole)}>
+          <option value="bot-owner">{WEB_ROLE_LABELS["bot-owner"]}</option>
+          <option value="guild-owner">{WEB_ROLE_LABELS["guild-owner"]}</option>
+          <option value="admin">{WEB_ROLE_LABELS.admin}</option>
+          <option value="moderator">{WEB_ROLE_LABELS.moderator}</option>
+        </select>
+        <select value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}>
+          {GRANT_DURATION_PRESETS.map((p) => (
+            <option key={p.minutes} value={p.minutes}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <button disabled={busy || !userId.trim()} onClick={add}>
+          Gewähren
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Read-only bearer tokens for non-interactive integrations — see `GET /api/public/status` in `src/web/server.ts`. Bot-owner-only. */
+function ApiTokensSection() {
+  const { tokens, setTokens } = useApiTokens();
+  const { showError, showSuccess } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [label, setLabel] = useState("");
+  const [created, setCreated] = useState<ApiTokenCreated | null>(null);
+
+  async function create() {
+    if (!label.trim()) return;
+    setBusy(true);
+    try {
+      const token = await api.createApiToken(label.trim());
+      setCreated(token);
+      setTokens((prev) => [{ ...token }, ...(prev ?? [])]);
+      setLabel("");
+      showSuccess("Erstellt.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(id: number) {
+    setBusy(true);
+    try {
+      await api.revokeApiToken(id);
+      setTokens((prev) => (prev ?? []).filter((t) => t.id !== id));
+      if (created?.id === id) setCreated(null);
+      showSuccess("Widerrufen.");
+    } catch (err) {
+      showError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>API-Token</h2>
+      <p className="muted small">
+        Lesezugriff für nicht-interaktive Integrationen (z. B. ein Status-Widget) — ohne menschliche Anmeldung, aber
+        beschränkt auf die öffentliche Community-Übersicht (<code>GET /api/public/status</code>).
+      </p>
+      {created && (
+        <div className="field">
+          <div className="hint">Dieser Token wird nicht erneut angezeigt — jetzt kopieren.</div>
+          <input readOnly value={created.rawToken} onFocus={(e) => e.currentTarget.select()} className="mono" />
+        </div>
+      )}
+      {tokens.map((t) => (
+        <div key={t.id} className="field">
+          <div>
+            <strong>{t.label}</strong>
+          </div>
+          <div className="hint">
+            Erstellt {formatAbsolute(t.createdAt)} von {t.createdByUsername} · zuletzt genutzt{" "}
+            {t.lastUsedAt ? formatAbsolute(t.lastUsedAt) : "nie"}{" "}
+            <button className="link-button" disabled={busy} onClick={() => revoke(t.id)}>
+              Widerrufen
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="field">
+        <label htmlFor="api-token-label">Bezeichnung</label>
+        <input id="api-token-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="z. B. Status-Widget" />
+        <button disabled={busy || !label.trim()} onClick={create}>
+          Erstellen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ me }: { me: Me }) {
   const settingsRes = useGeneralSettings();
   const rolesRes = useRoles();
@@ -993,7 +1280,14 @@ export default function Settings({ me }: { me: Me }) {
           />
         )}
         {activeSection === "konto" && <KontoSection me={me} />}
-        {activeSection === "zugriff" && canManageAccess && <AccessControlSection />}
+        {activeSection === "zugriff" && canManageAccess && (
+          <>
+            <AccessControlSection />
+            <TemporaryGrantsSection />
+            {me.role === "bot-owner" && <UserAccessOverridesSection />}
+            {me.role === "bot-owner" && <ApiTokensSection />}
+          </>
+        )}
       </div>
     </div>
   );

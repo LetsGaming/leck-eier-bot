@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getAccessOverride } from "../db/accessControlRepository.js";
+import { getActiveTemporaryGrantForUser } from "../db/temporaryGrantsRepository.js";
 import { TIER_RANK } from "../utils/commandPermissions.js";
 import { getCachedMembers, isCacheReady } from "../services/memberCache.js";
 import { resolveDashboardRole } from "./auth.js";
@@ -37,6 +38,23 @@ export const FEATURES: FeatureDescriptor[] = [
   // permission gate (including down to "everyone").
   { key: "commands.write", label: "Befehle – Berechtigungen ändern", defaultGate: { mode: "tier", tier: "guild-owner" } },
 ];
+
+/**
+ * Elevates `role` to an active temporary grant's tier if that ranks higher —
+ * never a restriction (a `null`/low `role` from a block-override or a
+ * left-guild member is deliberately still elevate-able, since a bot-owner
+ * explicitly chose to grant this specific person access — see
+ * `docs/DASHBOARD.md`'s RBAC section). Called from both `resolveDashboardRole`
+ * (login-time) and `resolveLiveRole` (every request) so a grant works
+ * immediately either way; harmless to apply twice in the same request
+ * (idempotent — the higher of two equal ranks is itself).
+ */
+export function applyTemporaryGrant(userId: string, role: WebRole | null): WebRole | null {
+  const grant = getActiveTemporaryGrantForUser(userId);
+  if (!grant) return role;
+  const baseRank = role ? TIER_RANK[role] : -1;
+  return TIER_RANK[grant.role] > baseRank ? grant.role : role;
+}
 
 export function resolveFeatureGate(featureKey: string): PermissionGate {
   return getAccessOverride(featureKey) ?? FEATURES.find((f) => f.key === featureKey)!.defaultGate;
@@ -84,17 +102,31 @@ export function requireFeature(featureKey: string) {
  * back to the stale snapshot.
  */
 export function resolveLiveRole(client: BotClient, config: Config, session: WebSession): WebRole | null {
-  if (session.userId === config.botOwnerId) return "bot-owner"; // never depends on guild membership
-  // Dev-mode's synthetic dashboard session (see /auth/dev-login in auth.ts)
-  // has no real gateway membership to re-verify against — createMockClient's
-  // guild never contains a "mock-admin-id" member — so there's nothing live
-  // to check here. Never reachable in production (config/index.ts hard-fails
-  // boot if devMockDiscord is set alongside NODE_ENV=production).
-  if (config.devMockDiscord) return session.role;
-  if (!isCacheReady()) return session.role; // cache still warming (e.g. right after a restart) — can't verify yet, don't wrongly lock everyone out
-  const cached = getCachedMembers().get(session.userId);
-  if (!cached) return null; // cache is ready and has no record for them — left the guild/lost membership
-  return resolveDashboardRole(client, config, session.userId, [...cached.roles.cache.keys()]);
+  let resolved: WebRole | null;
+  if (session.userId === config.botOwnerId) {
+    resolved = "bot-owner"; // never depends on guild membership
+  } else if (config.devMockDiscord) {
+    // Dev-mode's synthetic dashboard session (see /auth/dev-login in
+    // auth.ts) has no real gateway membership to re-verify against —
+    // createMockClient's guild never contains a "mock-admin-id" member — so
+    // there's nothing live to check here. Never reachable in production
+    // (config/index.ts hard-fails boot if devMockDiscord is set alongside
+    // NODE_ENV=production).
+    resolved = session.role;
+  } else if (!isCacheReady()) {
+    resolved = session.role; // cache still warming (e.g. right after a restart) — can't verify yet, don't wrongly lock everyone out
+  } else {
+    const cached = getCachedMembers().get(session.userId);
+    // cache is ready and has no record for them — left the guild/lost
+    // membership. Deliberately NOT run through resolveDashboardRole() with
+    // an empty roleIds list: some of its checks (guild-owner, @everyone-
+    // Administrator) don't depend on roleIds at all and would wrongly still
+    // match for someone who's actually gone. `null` here still passes
+    // through applyTemporaryGrant() below, so an explicit temporary grant
+    // can still override this — that's the one case allowed to.
+    resolved = cached ? resolveDashboardRole(client, config, session.userId, [...cached.roles.cache.keys()]) : null;
+  }
+  return applyTemporaryGrant(session.userId, resolved);
 }
 
 /**

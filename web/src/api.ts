@@ -31,6 +31,11 @@ import type {
   Status,
   AccessControlFeature,
   AuditLogResponse,
+  UserAccessOverride,
+  TemporaryGrant,
+  ApiToken,
+  ApiTokenCreated,
+  WebRole,
 } from "./types";
 
 export class ApiError extends Error {
@@ -182,6 +187,22 @@ export const api = {
     const qs = search.toString();
     return request<AuditLogResponse>(`/audit-log${qs ? `?${qs}` : ""}`);
   },
+
+  userAccessOverrides: () => request<UserAccessOverride[]>("/user-access-overrides"),
+  setUserAccessOverride: (
+    userId: string,
+    body: { mode: "grant"; role: WebRole } | { mode: "block"; note?: string | null },
+  ) => request<UserAccessOverride>(`/user-access-overrides/${userId}`, { method: "PUT", ...json(body) }),
+  clearUserAccessOverride: (userId: string) => request<void>(`/user-access-overrides/${userId}`, { method: "DELETE" }),
+
+  temporaryGrants: () => request<TemporaryGrant[]>("/temporary-grants"),
+  createTemporaryGrant: (body: { userId: string; role: WebRole; durationMinutes: number }) =>
+    request<TemporaryGrant>("/temporary-grants", { method: "POST", ...json(body) }),
+  revokeTemporaryGrant: (id: number) => request<void>(`/temporary-grants/${id}`, { method: "DELETE" }),
+
+  apiTokens: () => request<ApiToken[]>("/api-tokens"),
+  createApiToken: (label: string) => request<ApiTokenCreated>("/api-tokens", { method: "POST", ...json({ label }) }),
+  revokeApiToken: (id: number) => request<void>(`/api-tokens/${id}`, { method: "DELETE" }),
 };
 
 export type { Mapping };
