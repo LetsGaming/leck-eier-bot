@@ -12,6 +12,22 @@ This replaces an earlier version of this feature that scraped RSVP embeds posted
 4. **Editing/cancelling** — while an event is still `scheduled`, the dashboard can edit its title/description/time (re-renders and edits the message) or cancel it (message loses its buttons, shows a cancelled state).
 5. **Reminder** — 15 minutes before start (`EVENT_REMINDER_LEAD_MS`), everyone who RSVP'd `accepted` is pinged once in the event's own channel — see `sweepEvents()` in `services/eventAttendance.ts`.
 
+### Geplante Veröffentlichung (deferred publishing)
+
+Both the publish form and `/event create` can schedule the post for later instead of publishing
+immediately — "Später veröffentlichen" on the dashboard, or the modal's optional "Veröffentlichen
+am" field. Nothing is posted to Discord yet; the entry shows up under the `Event` → `Geplant` tab
+and stays freely editable (title, description, time, the publish moment itself) until it's actually
+posted. This is stored as its own `scheduled_event_publishes` row, not an `events` row with a draft
+status — it doesn't exist as an event yet, so it never shows up in the attendance list, month
+picker, or the RSVP/reminder sweeps.
+
+`publishDueScheduledEvents()` (`services/events.ts`) posts due entries, piggybacked onto the same
+30-second sweep tick as `sweepEvents()` (`eventWatcher.ts`) — worst case ~30s late, and a restart
+catches up immediately. An entry whose event start time has already passed by the time it's due is
+never posted (marked failed instead) rather than publishing an event that already started; any other
+failure is retried up to 3 times before being given up on.
+
 ## Setup
 
 Two settings on the dashboard's Settings page, under "Event-Anwesenheit":

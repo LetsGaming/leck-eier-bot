@@ -1,6 +1,6 @@
 import type { VoiceState } from "discord.js";
 import { listActiveEvents, appendVoiceLog } from "../db/eventAttendanceRepository.js";
-import { cancelEventByMessageId, handleEventRsvpButton } from "../services/events.js";
+import { cancelEventByMessageId, handleEventRsvpButton, publishDueScheduledEvents } from "../services/events.js";
 import { catchUpEvents, sweepEvents } from "../services/eventAttendance.js";
 import { handleCreateModalSubmit } from "../commands/general/event.js";
 import { EVENT_SWEEP_INTERVAL_MS } from "../constants.js";
@@ -60,8 +60,12 @@ export default function registerEventWatcher(client: BotClient): void {
   // until the gateway session and its voice states are up.
   client.once("clientReady", () => {
     catchUpEvents(client).catch((err) => logger.error(`Event Start-Abgleich fehlgeschlagen: ${errorMessage(err)}`));
+    publishDueScheduledEvents(client).catch((err) => logger.error(`Geplante Veröffentlichungen fehlgeschlagen: ${errorMessage(err)}`));
     setInterval(() => {
       sweepEvents(client).catch((err) => logger.error(`Event-Sweep fehlgeschlagen: ${errorMessage(err)}`));
+      // Piggybacked onto the same tick rather than its own timer — same
+      // convention as registerWatcher.ts's sweepExpiredSessions/archive pair.
+      publishDueScheduledEvents(client).catch((err) => logger.error(`Geplante Veröffentlichungen fehlgeschlagen: ${errorMessage(err)}`));
     }, EVENT_SWEEP_INTERVAL_MS);
   });
 }

@@ -2,10 +2,12 @@ import { useSearchParams } from "react-router-dom";
 import Tabs from "../components/Tabs";
 import EventAttendancePage from "./EventAttendance";
 import EventTemplatesTab from "./EventTemplates";
+import ScheduledEventsTab from "./ScheduledEvents";
 
 const TABS = [
   { id: "anwesenheit", label: "Anwesenheit" },
   { id: "vorlagen", label: "Vorlagen" },
+  { id: "geplant", label: "Geplant" },
 ];
 const DEFAULT_TAB = "anwesenheit";
 
@@ -30,6 +32,7 @@ export default function Events() {
       <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
         {activeTab === "anwesenheit" && <EventAttendancePage />}
         {activeTab === "vorlagen" && <EventTemplatesTab />}
+        {activeTab === "geplant" && <ScheduledEventsTab />}
       </div>
     </div>
   );

@@ -9,10 +9,13 @@ import { useRoles } from "../hooks/useRoles";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { api, errorMessage } from "../api";
 import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION, defaultChannelEmptyLabel } from "../utils/selectOptions";
-import type { EventTemplate } from "../types";
+import type { EventTemplate, ScheduledEventPublish } from "../types";
 
 export interface PublishEventFormProps {
-  template: EventTemplate;
+  /** Create flow: prefill from a template, publish immediately or schedule. */
+  template?: EventTemplate;
+  /** Edit flow: editing an already-pending scheduled publish (Geplant tab) — always stays deferred, only its payload/publishAt change. */
+  scheduledEdit?: ScheduledEventPublish;
   onDone: () => void;
   onCancel: () => void;
 }
@@ -49,22 +52,25 @@ function defaultOccurrence(template: EventTemplate): { startsAt: string; endsAt:
   return null; // unreachable — every weekday occurs at least once in 8 days
 }
 
-/** Fills in a template's default title/base description (both freely editable) plus channel/role/voice-channel/time, previews the resulting embed live, and publishes it. Used both from the Vorlagen tab's row action and the Anwesenheit tab's "Neues Event" flow. */
-export default function PublishEventForm({ template, onDone, onCancel }: PublishEventFormProps) {
+/** Fills in a template's default title/base description (both freely editable) plus channel/role/voice-channel/time, previews the resulting embed live, and publishes it (or, ticked "Später veröffentlichen", schedules it for later — see `useScheduledEventPublishes`). Used from the Vorlagen tab's row action, the Anwesenheit tab's "Neues Event" flow, and (via `scheduledEdit`) the Geplant tab's edit action. */
+export default function PublishEventForm({ template, scheduledEdit, onDone, onCancel }: PublishEventFormProps) {
   const { showError, showSuccess } = useToast();
   const channels = useChannels();
   const voiceChannels = useVoiceChannels();
   const roles = useRoles();
   const generalSettings = useGeneralSettings();
-  const occurrence = defaultOccurrence(template);
-  const [title, setTitle] = useState(template.defaultTitle);
-  const [description, setDescription] = useState(template.baseDescription);
-  const [channelId, setChannelId] = useState(template.defaultChannelId ?? "");
-  const [mentionRoleId, setMentionRoleId] = useState(template.defaultMentionRoleId ?? "");
-  const [voiceChannelId, setVoiceChannelId] = useState(template.defaultVoiceChannelId ?? "");
-  const [useFont, setUseFont] = useState(template.useFont);
-  const [startsAt, setStartsAt] = useState(occurrence?.startsAt ?? "");
-  const [endsAt, setEndsAt] = useState(occurrence?.endsAt ?? "");
+  const occurrence = template ? defaultOccurrence(template) : null;
+  const payload = scheduledEdit?.payload;
+  const [title, setTitle] = useState(payload?.title ?? template?.defaultTitle ?? "");
+  const [description, setDescription] = useState(payload?.description ?? template?.baseDescription ?? "");
+  const [channelId, setChannelId] = useState(payload?.channelId ?? template?.defaultChannelId ?? "");
+  const [mentionRoleId, setMentionRoleId] = useState(payload?.mentionRoleId ?? template?.defaultMentionRoleId ?? "");
+  const [voiceChannelId, setVoiceChannelId] = useState(payload?.voiceChannelId ?? template?.defaultVoiceChannelId ?? "");
+  const [useFont, setUseFont] = useState(payload?.useFont ?? template?.useFont ?? false);
+  const [startsAt, setStartsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.startsAt)) : (occurrence?.startsAt ?? ""));
+  const [endsAt, setEndsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.endsAt)) : (occurrence?.endsAt ?? ""));
+  const [deferred, setDeferred] = useState(!!scheduledEdit);
+  const [publishAt, setPublishAt] = useState(scheduledEdit ? toDatetimeLocalValue(new Date(scheduledEdit.publishAt)) : "");
   const [publishing, setPublishing] = useState(false);
 
   const startIso = startsAt ? new Date(startsAt).toISOString() : null;
@@ -79,19 +85,32 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return showError("Ungültiges Datum.");
     if (endDate <= startDate) return showError("Das Ende muss nach dem Start liegen.");
 
+    const body = {
+      title,
+      description,
+      channelId,
+      mentionRoleId: mentionRoleId || null,
+      voiceChannelId: voiceChannelId || null,
+      useFont,
+      startsAt: startDate.toISOString(),
+      endsAt: endDate.toISOString(),
+    };
+
     setPublishing(true);
     try {
-      await api.publishEvent({
-        title,
-        description,
-        channelId,
-        mentionRoleId: mentionRoleId || null,
-        voiceChannelId: voiceChannelId || null,
-        useFont,
-        startsAt: startDate.toISOString(),
-        endsAt: endDate.toISOString(),
-      });
-      showSuccess("Event veröffentlicht!");
+      if (deferred) {
+        if (!publishAt) return showError("Bitte einen Veröffentlichungszeitpunkt angeben.");
+        const publishDate = new Date(publishAt);
+        if (Number.isNaN(publishDate.getTime())) return showError("Ungültiger Veröffentlichungszeitpunkt.");
+        if (publishDate >= startDate) return showError("Die Veröffentlichung muss vor dem Start liegen.");
+        const scheduledBody = { ...body, publishAt: publishDate.toISOString() };
+        if (scheduledEdit) await api.updateScheduledEventPublish(scheduledEdit.id, scheduledBody);
+        else await api.scheduleEventPublish(scheduledBody);
+        showSuccess(scheduledEdit ? "Geplante Veröffentlichung gespeichert." : "Veröffentlichung geplant.");
+      } else {
+        await api.publishEvent(body);
+        showSuccess("Event veröffentlicht!");
+      }
       onDone();
     } catch (err) {
       showError(errorMessage(err));
@@ -102,7 +121,7 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
 
   return (
     <div className="card">
-      <h2>Event veröffentlichen: {template.name}</h2>
+      <h2>{scheduledEdit ? `Geplante Veröffentlichung bearbeiten: ${title}` : `Event veröffentlichen: ${template?.name}`}</h2>
       <div className="field">
         <label htmlFor="publish-title">Titel</label>
         <input id="publish-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -162,6 +181,20 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
         Formatiert Titel/Beschreibung mit der auf der <a href="/settings">Einstellungsseite</a> festgelegten Schrift, sofern konfiguriert.
       </div>
 
+      {!scheduledEdit && (
+        <label className="switch">
+          <input type="checkbox" checked={deferred} onChange={(e) => setDeferred(e.target.checked)} />
+          Später veröffentlichen
+        </label>
+      )}
+      {deferred && (
+        <div className="field">
+          <label htmlFor="publish-at">Veröffentlichen am</label>
+          <input id="publish-at" type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
+          <div className="hint">Bis dahin wird nichts auf Discord gepostet — Änderungen sind jederzeit möglich.</div>
+        </div>
+      )}
+
       <div className="card">
         <h2>Vorschau</h2>
         <EventEmbedPreview
@@ -177,7 +210,7 @@ export default function PublishEventForm({ template, onDone, onCancel }: Publish
 
       <div className="button-row">
         <button className="primary" disabled={publishing} onClick={publish}>
-          {publishing ? "Veröffentlicht…" : "Veröffentlichen"}
+          {publishing ? "Speichert…" : deferred ? "Planen" : "Veröffentlichen"}
         </button>
         <button onClick={onCancel}>Abbrechen</button>
       </div>

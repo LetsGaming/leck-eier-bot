@@ -24,6 +24,8 @@ import type {
   PublishEventBody,
   EditEventBody,
   PublishedEventEntry,
+  ScheduledEventPublishBody,
+  ScheduledEventPublishEntry,
 } from "../../contracts/eventTemplates";
 import type {
   EventAttendanceMonthsResponse,
@@ -322,6 +324,9 @@ export type Registration = RegistrationEntry;
 /** A reusable event template — canonical shape lives at `contracts/eventTemplates.ts` as `EventTemplateEntry`. */
 export type EventTemplate = EventTemplateEntry;
 export type { EventTemplateListResponse, EventTemplateBody, PublishEventBody, EditEventBody, PublishedEventEntry };
+/** A pending "publish later" entry — canonical shape lives at `contracts/eventTemplates.ts` as `ScheduledEventPublishEntry`. */
+export type ScheduledEventPublish = ScheduledEventPublishEntry;
+export type { ScheduledEventPublishBody };
 
 /** What a member clicked on a native event's RSVP buttons. */
 export type RsvpChoice = "accepted" | "declined" | "tentative";

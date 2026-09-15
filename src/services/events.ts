@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -16,12 +17,20 @@ import {
   listSignups,
   setEventCancelled,
 } from "../db/eventAttendanceRepository.js";
+import {
+  PublishEventInputSchema,
+  listDuePublishes,
+  markPublished,
+  markPublishFailed,
+} from "../db/scheduledEventPublishesRepository.js";
 import { createEmbed } from "../utils/embedUtils.js";
 import { applyFont } from "../utils/font.js";
 import { getSettings } from "../db/settingsRepository.js";
 import { EVENT_RSVP_CHOICES, EmbedColor } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { Event, RsvpChoice } from "../types.js";
+
+export { PublishEventInputSchema };
 
 const COMPONENT_ID_PREFIX = "event";
 
@@ -124,20 +133,7 @@ export function buildPreviewEmbed(input: PublishEventInput) {
   });
 }
 
-export interface PublishEventInput {
-  title: string;
-  description: string;
-  channelId: string;
-  /** A real role id, `EVERYONE_MENTION_SENTINEL`, or null for no mention. */
-  mentionRoleId: string | null;
-  /** Null = fall back to `settings.eventVoiceChannelId` at activation. */
-  voiceChannelId: string | null;
-  useFont: boolean;
-  /** ISO UTC. */
-  startsAt: string;
-  /** ISO UTC. */
-  endsAt: string;
-}
+export type PublishEventInput = z.infer<typeof PublishEventInputSchema>;
 
 /** Posts the event message with its three RSVP buttons and creates the `events` row — the single entry point both the dashboard and `/event` go through. */
 export async function publishEvent(client: Client, input: PublishEventInput): Promise<Event> {
@@ -256,5 +252,29 @@ export function cancelEventByMessageId(messageId: string): void {
   if (event && event.status === "scheduled") {
     setEventCancelled(event.id);
     logger.info(`Event "${event.title}" (#${event.id}) storniert: Nachricht wurde gelöscht.`);
+  }
+}
+
+// --- Deferred publishing ------------------------------------------------
+// A "scheduled publish" is a pending PublishEventInput, not an events row —
+// see the v39 migration comment in src/db/index.ts. Posted here, piggybacked
+// onto eventWatcher.ts's existing sweep tick; no separate timer.
+
+/** Posts every scheduled publish whose time has come. Never posts one whose event start already passed (gives up instead) — a late publish is fine, a pointless already-started event is not. */
+export async function publishDueScheduledEvents(client: Client): Promise<void> {
+  const now = new Date();
+  for (const due of listDuePublishes(now.toISOString())) {
+    if (new Date(due.payload.startsAt).getTime() <= now.getTime()) {
+      markPublishFailed(due.id, "Startzeit bereits vergangen.", { giveUp: true });
+      logger.warn(`Geplante Veröffentlichung #${due.id} übersprungen: Startzeit bereits vergangen.`);
+      continue;
+    }
+    try {
+      const event = await publishEvent(client, due.payload);
+      markPublished(due.id, event.id);
+    } catch (err) {
+      markPublishFailed(due.id, errorMessage(err));
+      logger.error(`Geplante Veröffentlichung #${due.id} fehlgeschlagen: ${errorMessage(err)}`);
+    }
   }
 }

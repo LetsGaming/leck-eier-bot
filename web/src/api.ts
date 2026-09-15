@@ -15,6 +15,8 @@ import type {
   EventTemplateListResponse,
   PublishEventBody,
   PublishedEventEntry,
+  ScheduledEventPublish,
+  ScheduledEventPublishBody,
   GeneralSettings,
   InGuildMembersResponse,
   Mapping,
@@ -138,6 +140,13 @@ export const api = {
   publishEvent: (body: PublishEventBody) => request<PublishedEventEntry>("/events/publish", { method: "POST", ...json(body) }),
   editEvent: (id: number, body: EditEventBody) => request<PublishedEventEntry>(`/events/${id}`, { method: "PATCH", ...json(body) }),
   cancelEvent: (id: number) => request<void>(`/events/${id}/cancel`, { method: "POST" }),
+
+  scheduledEventPublishes: () => request<ScheduledEventPublish[]>("/events/scheduled"),
+  scheduleEventPublish: (body: ScheduledEventPublishBody) =>
+    request<ScheduledEventPublish>("/events/scheduled", { method: "POST", ...json(body) }),
+  updateScheduledEventPublish: (id: number, body: ScheduledEventPublishBody) =>
+    request<ScheduledEventPublish>(`/events/scheduled/${id}`, { method: "PATCH", ...json(body) }),
+  deleteScheduledEventPublish: (id: number) => request<void>(`/events/scheduled/${id}`, { method: "DELETE" }),
 
   panels: () => request<Panel[]>("/reaction-roles/panels"),
   createPanel: (body: CreatePanelInput) => request<Panel>("/reaction-roles/panels", { method: "POST", ...json(body) }),

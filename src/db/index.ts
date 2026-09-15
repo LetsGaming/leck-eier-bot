@@ -915,6 +915,28 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       );
     `);
   },
+  // v39: deferred event publishing — a pending "publish this event later"
+  // entry is its own row, not an `events` row with some draft status. An
+  // `events` row means a posted Discord message (RSVP buttons, sweep
+  // eligibility); a not-yet-posted event has neither, so keeping it separate
+  // avoids leaking placeholders into the attendance list, month picker, or
+  // sweepEvents()'s status='scheduled' queries. See
+  // scheduledEventPublishesRepository.ts / publishDueScheduledEvents().
+  (d) => {
+    d.exec(`
+      CREATE TABLE scheduled_event_publishes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        publish_at TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        published_event_id INTEGER,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_scheduled_event_publishes_due ON scheduled_event_publishes(publish_at);
+    `);
+  },
 ];
 
 /**

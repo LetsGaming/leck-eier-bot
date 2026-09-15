@@ -74,6 +74,30 @@ export interface EditEventBody {
   endsAt: string;
 }
 
+/** Body of `POST`/`PATCH /api/events/scheduled(/:id)` — a `PublishEventBody` plus when to post it. Rejected server-side if `publishAt` isn't before `startsAt`. */
+export interface ScheduledEventPublishBody extends PublishEventBody {
+  /** ISO UTC. */
+  publishAt: string;
+}
+
+/**
+ * A pending (or resolved) deferred publish — not an event yet. See the v39
+ * migration comment in `src/db/index.ts`: this is intentionally its own
+ * entity, not an `events` row with a draft status.
+ */
+export interface ScheduledEventPublishEntry {
+  id: number;
+  /** ISO UTC. */
+  publishAt: string;
+  payload: PublishEventBody;
+  /** Set once posted; null while still pending or failed. */
+  publishedEventId: number | null;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Response shape of `POST /api/events/publish` and `PATCH /api/events/:id`. */
 export interface PublishedEventEntry {
   id: number;

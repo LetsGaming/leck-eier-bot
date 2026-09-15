@@ -16,6 +16,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { listEventTemplates, getEventTemplateByName } from "../../db/eventTemplatesRepository.js";
+import { createScheduledPublish } from "../../db/scheduledEventPublishesRepository.js";
 import { getSettings } from "../../db/settingsRepository.js";
 import { publishEvent, buildPreviewEmbed, type PublishEventInput } from "../../services/events.js";
 import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
@@ -92,6 +93,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         .setTextInputComponent(
           new TextInputBuilder().setCustomId("endsAt").setStyle(TextInputStyle.Short).setRequired(true).setValue(occurrence?.endsAt ?? ""),
         ),
+      new LabelBuilder()
+        .setLabel("Veröffentlichen am (ISO, leer = sofort)")
+        .setTextInputComponent(
+          new TextInputBuilder().setCustomId("publishAt").setStyle(TextInputStyle.Short).setRequired(false),
+        ),
     );
 
   await interaction.showModal(modal);
@@ -121,6 +127,17 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
   const endsAt = new Date(endsAtRaw);
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
     await interaction.reply({ content: "Start/Ende konnten nicht als Datum gelesen werden — bitte ISO-Format verwenden.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const publishAtRaw = interaction.fields.getTextInputValue("publishAt").trim();
+  const publishAt = publishAtRaw ? new Date(publishAtRaw) : null;
+  if (publishAt && Number.isNaN(publishAt.getTime())) {
+    await interaction.reply({ content: "Veröffentlichungszeitpunkt konnte nicht als Datum gelesen werden — bitte ISO-Format verwenden.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (publishAt && publishAt.getTime() >= startsAt.getTime()) {
+    await interaction.reply({ content: "Die Veröffentlichung muss vor dem Start liegen.", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -164,11 +181,13 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
 
   try {
     const previewMessage = await thread.send({
-      content: `${interaction.user}, so sieht das Event aus. Veröffentlichen?`,
+      content: publishAt
+        ? `${interaction.user}, so sieht das Event aus. Für <t:${Math.floor(publishAt.getTime() / 1000)}:F> einplanen?`
+        : `${interaction.user}, so sieht das Event aus. Veröffentlichen?`,
       embeds: [buildPreviewEmbed(input)],
       components: [
         new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId("confirm").setLabel("Veröffentlichen").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId("confirm").setLabel(publishAt ? "Einplanen" : "Veröffentlichen").setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId("cancel").setLabel("Abbrechen").setStyle(ButtonStyle.Danger),
         ),
       ],
@@ -185,8 +204,13 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
       await buttonInteraction.deferUpdate();
 
       if (buttonInteraction.customId === "confirm") {
-        await publishEvent(interaction.client, input);
-        await interaction.editReply({ content: "Event veröffentlicht!" });
+        if (publishAt) {
+          createScheduledPublish({ publishAt: publishAt.toISOString(), payload: input });
+          await interaction.editReply({ content: "Veröffentlichung eingeplant!" });
+        } else {
+          await publishEvent(interaction.client, input);
+          await interaction.editReply({ content: "Event veröffentlicht!" });
+        }
       } else {
         await interaction.editReply({ content: "Abgebrochen." });
       }
@@ -194,7 +218,7 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
       await interaction.editReply({ content: "Zeit abgelaufen — Event wurde nicht veröffentlicht." }).catch(() => undefined);
     }
   } catch (err) {
-    await interaction.editReply({ content: `Event konnte nicht veröffentlicht werden: ${errorMessage(err)}` }).catch(() => undefined);
+    await interaction.editReply({ content: `Event konnte nicht veröffentlicht/eingeplant werden: ${errorMessage(err)}` }).catch(() => undefined);
   } finally {
     await thread.delete().catch(() => undefined);
   }
