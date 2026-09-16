@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
+import { useClickOutside } from "../hooks/useClickOutside";
 import type { Channel } from "../types";
 
 export interface TemplatePlaceholder {
@@ -67,16 +68,7 @@ export default function TemplateEditor({ value, onChange, channels, placeholder,
     setHighlighted((h) => Math.min(h, Math.max(filtered.length - 1, 0)));
   }, [filtered.length]);
 
-  useEffect(() => {
-    if (!trigger) return;
-    function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setTrigger(null);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [trigger]);
+  useClickOutside(rootRef, () => setTrigger(null), trigger !== null);
 
   /**
    * Looks backward from the cursor to see whether it's currently sitting

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 /**
  * Month navigation for the Event-Anwesenheit list page:
@@ -65,21 +66,7 @@ export default function MonthPicker({ month, monthCounts, currentMonth, onChange
     if (!open) setViewYear(yearOf(month));
   }, [month, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  useClickOutside(rootRef, () => setOpen(false), open, true);
 
   function go(target: string): void {
     onChange(target === currentMonth ? null : target);

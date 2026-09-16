@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { STANDARD_EMOJI } from "../emojiData";
+import { useClickOutside } from "../hooks/useClickOutside";
 import type { EmojiOption } from "../types";
 
 export interface EmojiValue {
@@ -32,21 +33,7 @@ export default function EmojiPicker({ value, onChange, customEmojis, allowEmpty 
     if (document.activeElement !== triggerRef.current) triggerRef.current?.focus();
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closePopover();
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") closePopover();
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  useClickOutside(rootRef, closePopover, open, true);
 
   const filteredCustom = useMemo(() => {
     const q = search.trim().toLowerCase();

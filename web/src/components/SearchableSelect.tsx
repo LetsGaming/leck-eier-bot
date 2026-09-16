@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useClickOutside } from "../hooks/useClickOutside";
 import type { KeyboardEvent } from "react";
 
 export interface SearchableSelectOption {
@@ -68,17 +69,7 @@ export default function SearchableSelect({
     if (document.activeElement !== triggerRef.current) triggerRef.current?.focus();
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (rootRef.current?.contains(target)) return;
-      if (popoverRef.current?.contains(target)) return;
-      closePopover();
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
+  useClickOutside([rootRef, popoverRef], closePopover, open);
 
   // Popover renders through a portal (see below) so it's positioned against
   // the viewport instead of the nearest CSS-positioned ancestor — a
