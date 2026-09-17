@@ -101,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setValue(occurrence ? formatLocalDateTime(occurrence.endsAt, tz) : ""),
         ),
       new LabelBuilder()
-        .setLabel("Veröffentlichen am (TT.MM.JJJJ HH:MM, leer = sofort)")
+        .setLabel("Veröffentlichen am (leer = sofort)")
         .setTextInputComponent(
           new TextInputBuilder()
             .setCustomId("publishAt")
