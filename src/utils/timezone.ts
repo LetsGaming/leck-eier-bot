@@ -186,6 +186,56 @@ export function nextWeekdayOccurrenceUtc(
   throw new Error(`nextWeekdayOccurrenceUtc: no occurrence of weekday ${weekday} found`);
 }
 
+const LOCAL_DATETIME_PATTERN = /^(\d{1,2})\.(\d{1,2})\.(\d{4})[ T](\d{1,2}):(\d{2})$/;
+
+/**
+ * Parses a "TT.MM.JJJJ HH:MM" wall-clock string — the format the `/event`
+ * modal asks users for instead of raw ISO, matching the dashboard's de-DE
+ * date display — as a time in `tz`, returning the UTC instant. Returns
+ * `null` for anything that doesn't match the pattern or names a calendar
+ * date that doesn't exist (e.g. 31.02.), rather than silently rolling over
+ * the way `Date.UTC` normally would. Same naive-UTC-guess + `tzOffsetMs`
+ * correction as `nextWeekdayOccurrenceUtc`.
+ */
+export function parseLocalDateTime(raw: string, tz: string): Date | null {
+  const match = LOCAL_DATETIME_PATTERN.exec(raw.trim());
+  if (!match) return null;
+  const [, dayStr, monthStr, yearStr, hourStr, minuteStr] = match;
+  const day = Number(dayStr);
+  const month = Number(monthStr);
+  const year = Number(yearStr);
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59) return null;
+
+  const naiveMs = Date.UTC(year, month - 1, day, hour, minute);
+  const naiveDate = new Date(naiveMs);
+  if (naiveDate.getUTCFullYear() !== year || naiveDate.getUTCMonth() !== month - 1 || naiveDate.getUTCDate() !== day) return null;
+
+  return new Date(naiveMs - tzOffsetMs(naiveMs, tz));
+}
+
+/**
+ * Formats `iso` (a UTC timestamp) as "TT.MM.JJJJ HH:MM" wall-clock time in
+ * `tz` — the inverse of `parseLocalDateTime`, used to prefill the `/event`
+ * modal's date fields with a value users can read and re-type without
+ * consulting a UTC offset.
+ */
+export function formatLocalDateTime(iso: string, tz: string): string {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const lookup: Record<string, string> = {};
+  for (const part of parts) if (part.type !== "literal") lookup[part.type] = part.value;
+  return `${lookup.day}.${lookup.month}.${lookup.year} ${lookup.hour}:${lookup.minute}`;
+}
+
 /**
  * Shifts a `"YYYY-MM"` calendar month key by `delta` calendar months
  * (positive or negative), e.g. `shiftMonthKey("2026-01", -1) === "2025-12"`.

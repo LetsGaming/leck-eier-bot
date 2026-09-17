@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextWeekdayOccurrenceUtc } from "../../src/utils/timezone.js";
+import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime } from "../../src/utils/timezone.js";
 
 const TZ = "Europe/Berlin";
 
@@ -34,4 +34,28 @@ test("nextWeekdayOccurrenceUtc: an end time before the start time crosses midnig
   // 01:00 CEST on Sept 15 is 23:00 UTC on Sept 14 — the UTC calendar day
   // doesn't roll over even though the wall-clock date (in Berlin) did.
   assert.equal(endsAt, "2026-09-14T23:00:00.000Z");
+});
+
+test("parseLocalDateTime: parses TT.MM.JJJJ HH:MM as the given timezone's wall-clock time", () => {
+  // 20.09.2026 19:00 Europe/Berlin (CEST, UTC+2) = 17:00 UTC.
+  const parsed = parseLocalDateTime("20.09.2026 19:00", TZ);
+  assert.equal(parsed?.toISOString(), "2026-09-20T17:00:00.000Z");
+});
+
+test("parseLocalDateTime: accepts single-digit day/month and trims whitespace", () => {
+  const parsed = parseLocalDateTime("  5.9.2026 09:05  ", TZ);
+  assert.equal(parsed?.toISOString(), "2026-09-05T07:05:00.000Z");
+});
+
+test("parseLocalDateTime: rejects a nonexistent calendar date instead of rolling over", () => {
+  assert.equal(parseLocalDateTime("31.02.2026 12:00", TZ), null);
+});
+
+test("parseLocalDateTime: rejects a value that doesn't match the pattern", () => {
+  assert.equal(parseLocalDateTime("2026-09-20T19:00:00+02:00", TZ), null);
+  assert.equal(parseLocalDateTime("20.09.2026", TZ), null);
+});
+
+test("formatLocalDateTime: is the inverse of parseLocalDateTime", () => {
+  assert.equal(formatLocalDateTime("2026-09-20T17:00:00.000Z", TZ), "20.09.2026 19:00");
 });

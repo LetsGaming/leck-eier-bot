@@ -19,7 +19,7 @@ import { listEventTemplates, getEventTemplateByName } from "../../db/eventTempla
 import { createScheduledPublish } from "../../db/scheduledEventPublishesRepository.js";
 import { getSettings } from "../../db/settingsRepository.js";
 import { publishEvent, buildPreviewEmbed, type PublishEventInput } from "../../services/events.js";
-import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
+import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime } from "../../utils/timezone.js";
 import { loadConfig } from "../../config/index.js";
 import { errorMessage } from "../../utils/logger.js";
 import { CommandName, CommandPermission } from "../../constants.js";
@@ -60,6 +60,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 
   const occurrence = defaultOccurrence(template);
+  const tz = loadConfig().timezone;
 
   const modal = new ModalBuilder()
     .setCustomId(`${MODAL_ID_PREFIX}:${template.id}`)
@@ -80,23 +81,33 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setRequired(false),
         ),
       new LabelBuilder()
-        .setLabel("Start (ISO, z.B. 2026-09-20T19:00:00+02:00)")
+        .setLabel("Start (TT.MM.JJJJ HH:MM)")
         .setTextInputComponent(
           new TextInputBuilder()
             .setCustomId("startsAt")
             .setStyle(TextInputStyle.Short)
+            .setPlaceholder("20.09.2026 19:00")
             .setRequired(true)
-            .setValue(occurrence?.startsAt ?? ""),
+            .setValue(occurrence ? formatLocalDateTime(occurrence.startsAt, tz) : ""),
         ),
       new LabelBuilder()
-        .setLabel("Ende (ISO)")
+        .setLabel("Ende (TT.MM.JJJJ HH:MM)")
         .setTextInputComponent(
-          new TextInputBuilder().setCustomId("endsAt").setStyle(TextInputStyle.Short).setRequired(true).setValue(occurrence?.endsAt ?? ""),
+          new TextInputBuilder()
+            .setCustomId("endsAt")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("20.09.2026 21:00")
+            .setRequired(true)
+            .setValue(occurrence ? formatLocalDateTime(occurrence.endsAt, tz) : ""),
         ),
       new LabelBuilder()
-        .setLabel("Veröffentlichen am (ISO, leer = sofort)")
+        .setLabel("Veröffentlichen am (TT.MM.JJJJ HH:MM, leer = sofort)")
         .setTextInputComponent(
-          new TextInputBuilder().setCustomId("publishAt").setStyle(TextInputStyle.Short).setRequired(false),
+          new TextInputBuilder()
+            .setCustomId("publishAt")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("20.09.2026 09:00")
+            .setRequired(false),
         ),
     );
 
@@ -121,19 +132,26 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     return;
   }
 
+  const tz = loadConfig().timezone;
   const startsAtRaw = interaction.fields.getTextInputValue("startsAt");
   const endsAtRaw = interaction.fields.getTextInputValue("endsAt");
-  const startsAt = new Date(startsAtRaw);
-  const endsAt = new Date(endsAtRaw);
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-    await interaction.reply({ content: "Start/Ende konnten nicht als Datum gelesen werden — bitte ISO-Format verwenden.", flags: MessageFlags.Ephemeral });
+  const startsAt = parseLocalDateTime(startsAtRaw, tz);
+  const endsAt = parseLocalDateTime(endsAtRaw, tz);
+  if (!startsAt || !endsAt) {
+    await interaction.reply({
+      content: "Start/Ende konnten nicht gelesen werden — bitte im Format TT.MM.JJJJ HH:MM angeben (z.B. 20.09.2026 19:00).",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const publishAtRaw = interaction.fields.getTextInputValue("publishAt").trim();
-  const publishAt = publishAtRaw ? new Date(publishAtRaw) : null;
-  if (publishAt && Number.isNaN(publishAt.getTime())) {
-    await interaction.reply({ content: "Veröffentlichungszeitpunkt konnte nicht als Datum gelesen werden — bitte ISO-Format verwenden.", flags: MessageFlags.Ephemeral });
+  const publishAt = publishAtRaw ? parseLocalDateTime(publishAtRaw, tz) : null;
+  if (publishAtRaw && !publishAt) {
+    await interaction.reply({
+      content: "Veröffentlichungszeitpunkt konnte nicht gelesen werden — bitte im Format TT.MM.JJJJ HH:MM angeben.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
   if (publishAt && publishAt.getTime() >= startsAt.getTime()) {
