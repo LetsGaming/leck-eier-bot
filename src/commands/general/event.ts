@@ -4,6 +4,7 @@ import {
   LabelBuilder,
   TextInputBuilder,
   TextInputStyle,
+  StringSelectMenuBuilder,
   MessageFlags,
   ActionRowBuilder,
   ButtonBuilder,
@@ -109,6 +110,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setPlaceholder("20.09.2026 09:00")
             .setRequired(false),
         ),
+      new LabelBuilder()
+        .setLabel("Sonderschrift verwenden")
+        .setStringSelectMenuComponent(
+          new StringSelectMenuBuilder()
+            .setCustomId("useFont")
+            .setRequired(true)
+            .addOptions(
+              { label: "Ja", value: "true", default: template.useFont },
+              { label: "Nein", value: "false", default: !template.useFont },
+            ),
+        ),
     );
 
   await interaction.showModal(modal);
@@ -171,7 +183,7 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     channelId,
     mentionRoleId: template.defaultMentionRoleId,
     voiceChannelId: template.defaultVoiceChannelId,
-    useFont: template.useFont,
+    useFont: interaction.fields.getStringSelectValues("useFont")[0] === "true",
     startsAt: startsAt.toISOString(),
     endsAt: endsAt.toISOString(),
   };
