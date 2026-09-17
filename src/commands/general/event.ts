@@ -4,7 +4,6 @@ import {
   LabelBuilder,
   TextInputBuilder,
   TextInputStyle,
-  StringSelectMenuBuilder,
   MessageFlags,
   ActionRowBuilder,
   ButtonBuilder,
@@ -22,7 +21,7 @@ import { getSettings } from "../../db/settingsRepository.js";
 import { publishEvent, buildPreviewEmbed, type PublishEventInput } from "../../services/events.js";
 import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime } from "../../utils/timezone.js";
 import { loadConfig } from "../../config/index.js";
-import { errorMessage } from "../../utils/logger.js";
+import logger, { errorMessage } from "../../utils/logger.js";
 import { CommandName, CommandPermission } from "../../constants.js";
 import type { EventTemplate } from "../../types.js";
 
@@ -51,6 +50,18 @@ export const data = new SlashCommandBuilder()
   );
 
 const MODAL_ID_PREFIX = "event:create-modal";
+
+/** Buttons under the preview thread's embed: a font toggle (re-renders the embed in place, see `handleCreateModalSubmit`) plus confirm/cancel. Kept out of the modal itself — Discord caps a modal at 5 components, already spent on title/description/start/end/publishAt — so the font choice is made here instead, with the benefit of a live preview exactly like the dashboard's own useFont checkbox. */
+function buildPreviewButtons(useFont: boolean, scheduling: boolean): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("toggle-font")
+      .setLabel(useFont ? "Sonderschrift: An" : "Sonderschrift: Aus")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("confirm").setLabel(scheduling ? "Einplanen" : "Veröffentlichen").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("cancel").setLabel("Abbrechen").setStyle(ButtonStyle.Danger),
+  );
+}
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const templateName = interaction.options.getString("vorlage", true);
@@ -109,17 +120,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setStyle(TextInputStyle.Short)
             .setPlaceholder("20.09.2026 09:00")
             .setRequired(false),
-        ),
-      new LabelBuilder()
-        .setLabel("Sonderschrift verwenden")
-        .setStringSelectMenuComponent(
-          new StringSelectMenuBuilder()
-            .setCustomId("useFont")
-            .setRequired(true)
-            .addOptions(
-              { label: "Ja", value: "true", default: template.useFont },
-              { label: "Nein", value: "false", default: !template.useFont },
-            ),
         ),
     );
 
@@ -183,7 +183,7 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     channelId,
     mentionRoleId: template.defaultMentionRoleId,
     voiceChannelId: template.defaultVoiceChannelId,
-    useFont: interaction.fields.getStringSelectValues("useFont")[0] === "true",
+    useFont: template.useFont,
     startsAt: startsAt.toISOString(),
     endsAt: endsAt.toISOString(),
   };
@@ -210,41 +210,53 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
   }
 
   try {
+    // Mutated by the "toggle-font" button below — publish/schedule uses
+    // whatever this holds when the user finally confirms.
+    let current = input;
+
     const previewMessage = await thread.send({
       content: publishAt
         ? `${interaction.user}, so sieht das Event aus. Für <t:${Math.floor(publishAt.getTime() / 1000)}:F> einplanen?`
         : `${interaction.user}, so sieht das Event aus. Veröffentlichen?`,
-      embeds: [buildPreviewEmbed(input)],
-      components: [
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId("confirm").setLabel(publishAt ? "Einplanen" : "Veröffentlichen").setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId("cancel").setLabel("Abbrechen").setStyle(ButtonStyle.Danger),
-        ),
-      ],
+      embeds: [buildPreviewEmbed(current)],
+      components: [buildPreviewButtons(current.useFont, !!publishAt)],
     });
 
     await interaction.editReply({ content: `Vorschau erstellt: ${thread}` });
 
-    try {
-      const buttonInteraction = await previewMessage.awaitMessageComponent({
+    const outcome = await new Promise<"confirm" | "cancel" | "time">((resolve) => {
+      const collector = previewMessage.createMessageComponentCollector({
         componentType: ComponentType.Button,
         time: 5 * 60 * 1000,
         filter: (i) => i.user.id === interaction.user.id,
       });
-      await buttonInteraction.deferUpdate();
-
-      if (buttonInteraction.customId === "confirm") {
-        if (publishAt) {
-          createScheduledPublish({ publishAt: publishAt.toISOString(), payload: input });
-          await interaction.editReply({ content: "Veröffentlichung eingeplant!" });
-        } else {
-          await publishEvent(interaction.client, input);
-          await interaction.editReply({ content: "Event veröffentlicht!" });
+      collector.on("collect", async (btnInteraction) => {
+        try {
+          await btnInteraction.deferUpdate();
+          if (btnInteraction.customId === "toggle-font") {
+            current = { ...current, useFont: !current.useFont };
+            await previewMessage.edit({ embeds: [buildPreviewEmbed(current)], components: [buildPreviewButtons(current.useFont, !!publishAt)] });
+            return;
+          }
+          collector.stop(btnInteraction.customId);
+        } catch (err) {
+          logger.error(`Event-Vorschau-Interaktion fehlgeschlagen: ${errorMessage(err)}`);
         }
+      });
+      collector.on("end", (_collected, reason) => resolve(reason === "confirm" || reason === "cancel" ? reason : "time"));
+    });
+
+    if (outcome === "confirm") {
+      if (publishAt) {
+        createScheduledPublish({ publishAt: publishAt.toISOString(), payload: current });
+        await interaction.editReply({ content: "Veröffentlichung eingeplant!" });
       } else {
-        await interaction.editReply({ content: "Abgebrochen." });
+        await publishEvent(interaction.client, current);
+        await interaction.editReply({ content: "Event veröffentlicht!" });
       }
-    } catch {
+    } else if (outcome === "cancel") {
+      await interaction.editReply({ content: "Abgebrochen." });
+    } else {
       await interaction.editReply({ content: "Zeit abgelaufen — Event wurde nicht veröffentlicht." }).catch(() => undefined);
     }
   } catch (err) {
