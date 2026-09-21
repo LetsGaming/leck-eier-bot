@@ -16,23 +16,29 @@ import {
   type TextChannel,
 } from "discord.js";
 import { listEventTemplates, getEventTemplateByName } from "../../db/eventTemplatesRepository.js";
-import { createScheduledPublish } from "../../db/scheduledEventPublishesRepository.js";
+import { createScheduledPublish, listPendingPublishes, MAX_ATTEMPTS } from "../../db/scheduledEventPublishesRepository.js";
 import { getSettings } from "../../db/settingsRepository.js";
 import { publishEvent, buildPreviewEmbed, type PublishEventInput } from "../../services/events.js";
+import { occupiedEventDates, findEventConflicts } from "../../services/eventConflicts.js";
 import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime } from "../../utils/timezone.js";
 import { loadConfig } from "../../config/index.js";
+import { createEmbed, createErrorEmbed } from "../../utils/embedUtils.js";
 import logger, { errorMessage } from "../../utils/logger.js";
-import { CommandName, CommandPermission } from "../../constants.js";
+import { CommandName, CommandPermission, EmbedColor } from "../../constants.js";
 import type { EventTemplate } from "../../types.js";
 
-/** `template`'s recurring-time default (if set), as ISO strings in the server's configured timezone — prefilled into the modal's start/end fields, still editable. Null if the template has no default. */
+/** `template`'s recurring-time default (if set), as ISO strings in the server's configured timezone — prefilled into the modal's start/end fields, still editable. Skips a date that already has an event or pending publish in favor of the next occurrence (see `occupiedEventDates`). Null if the template has no default. */
 function defaultOccurrence(template: EventTemplate): { startsAt: string; endsAt: string } | null {
   if (template.defaultWeekday === null || template.defaultStartTime === null || template.defaultEndTime === null) return null;
+  const tz = loadConfig().timezone;
+  const taken = occupiedEventDates(tz);
   const { startsAt, endsAt } = nextWeekdayOccurrenceUtc(
     template.defaultWeekday,
     template.defaultStartTime,
     template.defaultEndTime,
-    loadConfig().timezone,
+    tz,
+    Date.now(),
+    { isDateTaken: (key) => taken.has(key) },
   );
   return { startsAt, endsAt };
 }
@@ -47,7 +53,8 @@ export const data = new SlashCommandBuilder()
       .setName("create")
       .setDescription("Erstellt und veröffentlicht ein Event aus einer Vorlage")
       .addStringOption((opt) => opt.setName("vorlage").setDescription("Name der Event-Vorlage").setRequired(true).setAutocomplete(true)),
-  );
+  )
+  .addSubcommand((sub) => sub.setName("planned").setDescription("Zeigt alle geplanten Veröffentlichungen"));
 
 const MODAL_ID_PREFIX = "event:create-modal";
 
@@ -63,7 +70,57 @@ function buildPreviewButtons(useFont: boolean, scheduling: boolean): ActionRowBu
   );
 }
 
+/** Discord's `<t:epoch:STYLE>` mention-style timestamp token — renders in each viewer's own timezone/locale. */
+function discordTimestamp(iso: string, style: "F" | "t" = "F"): string {
+  return `<t:${Math.floor(new Date(iso).getTime() / 1000)}:${style}>`;
+}
+
+const MAX_EMBED_FIELDS = 25;
+
+/** `/event planned` — lists not-yet-posted `scheduled_event_publishes` entries, including retry-exhausted ones with their error. Discord has no built-in view of these; the dashboard's "Geplant" tab is the only other place to see them. */
+async function executePlanned(interaction: ChatInputCommandInteraction): Promise<void> {
+  const pending = listPendingPublishes();
+  if (pending.length === 0) {
+    await interaction.reply({
+      embeds: [createErrorEmbed("Keine geplanten Veröffentlichungen.")],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const shown = pending.slice(0, MAX_EMBED_FIELDS);
+  const fields = shown.map((entry) => {
+    const lines = [
+      `Veröffentlichung: ${discordTimestamp(entry.publishAt)}`,
+      `Start: ${discordTimestamp(entry.payload.startsAt)}`,
+      `<#${entry.payload.channelId}>`,
+    ];
+    if (entry.attempts > 0) {
+      const status = entry.attempts >= MAX_ATTEMPTS ? "aufgegeben" : `${entry.attempts}/${MAX_ATTEMPTS} Versuche`;
+      lines.push(`⚠️ Fehlgeschlagen (${status}): ${entry.lastError ?? "unbekannter Fehler"}`);
+    }
+    return { name: `#${entry.id} — ${entry.payload.title}`, value: lines.join("\n") };
+  });
+
+  await interaction.reply({
+    embeds: [
+      createEmbed({
+        title: "Geplante Veröffentlichungen",
+        color: EmbedColor.Info,
+        fields,
+        footer: pending.length > shown.length ? { text: `+${pending.length - shown.length} weitere` } : undefined,
+      }),
+    ],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (interaction.options.getSubcommand() === "planned") {
+    await executePlanned(interaction);
+    return;
+  }
+
   const templateName = interaction.options.getString("vorlage", true);
   const template = getEventTemplateByName(templateName);
   if (!template) {
@@ -127,6 +184,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 }
 
 export async function autocomplete(interaction: AutocompleteInteraction): Promise<void> {
+  if (interaction.options.getSubcommand() !== "create") {
+    await interaction.respond([]);
+    return;
+  }
+
   const focused = interaction.options.getFocused().toLowerCase();
   const choices = listEventTemplates()
     .filter((t) => t.name.toLowerCase().includes(focused))
@@ -170,6 +232,23 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     await interaction.reply({ content: "Die Veröffentlichung muss vor dem Start liegen.", flags: MessageFlags.Ephemeral });
     return;
   }
+
+  // Warn (don't block) if this date already has something planned — see services/eventConflicts.ts.
+  const conflicts = findEventConflicts(startsAt.toISOString(), tz);
+  const conflictWarning =
+    conflicts.length === 0
+      ? ""
+      : `⚠️ Für diesen Tag ist bereits etwas geplant:\n` +
+        conflicts
+          .map((c) => {
+            if (c.kind === "event" && c.channelId && c.messageId) {
+              const link = `https://discord.com/channels/${interaction.guildId}/${c.channelId}/${c.messageId}`;
+              return `• **${c.title}** — ${discordTimestamp(c.startsAt)} · [Zur Nachricht springen](${link})`;
+            }
+            return `• **${c.title}** — Start ${discordTimestamp(c.startsAt)}, Veröffentlichung ${discordTimestamp(c.publishAt ?? c.startsAt)} (noch nicht veröffentlicht)`;
+          })
+          .join("\n") +
+        "\n\n";
 
   const channelId = template.defaultChannelId ?? getSettings().defaultEventChannelId;
   if (!channelId) {
@@ -215,9 +294,11 @@ export async function handleCreateModalSubmit(interaction: ModalSubmitInteractio
     let current = input;
 
     const previewMessage = await thread.send({
-      content: publishAt
-        ? `${interaction.user}, so sieht das Event aus. Für <t:${Math.floor(publishAt.getTime() / 1000)}:F> einplanen?`
-        : `${interaction.user}, so sieht das Event aus. Veröffentlichen?`,
+      content:
+        conflictWarning +
+        (publishAt
+          ? `${interaction.user}, so sieht das Event aus. Für <t:${Math.floor(publishAt.getTime() / 1000)}:F> einplanen?`
+          : `${interaction.user}, so sieht das Event aus. Veröffentlichen?`),
       embeds: [buildPreviewEmbed(current)],
       components: [buildPreviewButtons(current.useFont, !!publishAt)],
     });

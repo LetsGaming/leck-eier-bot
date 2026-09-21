@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime } from "../../src/utils/timezone.js";
+import { nextWeekdayOccurrenceUtc, parseLocalDateTime, formatLocalDateTime, dateKeyInTimezone } from "../../src/utils/timezone.js";
 
 const TZ = "Europe/Berlin";
 
@@ -58,4 +58,30 @@ test("parseLocalDateTime: rejects a value that doesn't match the pattern", () =>
 
 test("formatLocalDateTime: is the inverse of parseLocalDateTime", () => {
   assert.equal(formatLocalDateTime("2026-09-20T17:00:00.000Z", TZ), "20.09.2026 19:00");
+});
+
+test("dateKeyInTimezone: keys an instant by its local calendar date, not UTC's", () => {
+  // 23:30 Berlin time (CEST, UTC+2) on the 20th is 21:30 UTC — still the 20th locally.
+  assert.equal(dateKeyInTimezone("2026-09-20T21:30:00.000Z", TZ), "2026-09-20");
+});
+
+test("nextWeekdayOccurrenceUtc: isDateTaken skips a taken week for the next one", () => {
+  // The user's own example: weekday Wednesday, 23.09.2026 is already taken → 30.09.2026.
+  // 2026-09-14 is a Monday, so weekday 3 (Wednesday) first lands on 2026-09-16, then 23rd, then 30th.
+  const now = Date.parse("2026-09-14T10:00:00.000Z");
+  const taken = new Set(["2026-09-16", "2026-09-23"]);
+  const { startsAt } = nextWeekdayOccurrenceUtc(3, "20:00", "22:00", TZ, now, {
+    isDateTaken: (key) => taken.has(key),
+  });
+  assert.equal(dateKeyInTimezone(startsAt, TZ), "2026-09-30");
+});
+
+test("nextWeekdayOccurrenceUtc: falls back to the first candidate if every week in the horizon is taken", () => {
+  const now = Date.parse("2026-09-14T10:00:00.000Z");
+  const { startsAt } = nextWeekdayOccurrenceUtc(3, "20:00", "22:00", TZ, now, {
+    isDateTaken: () => true,
+    maxWeeks: 2,
+  });
+  // First candidate would have been 2026-09-16 — returned anyway rather than throwing.
+  assert.equal(dateKeyInTimezone(startsAt, TZ), "2026-09-16");
 });

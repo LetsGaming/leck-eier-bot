@@ -3,7 +3,7 @@ import { db } from "./index.js";
 import logger from "../utils/logger.js";
 
 /** Retries left before a scheduled publish is given up on for good — see `markPublishFailed`. */
-const MAX_ATTEMPTS = 3;
+export const MAX_ATTEMPTS = 3;
 
 /**
  * Single source of truth for a publish payload's shape — validates the JSON
@@ -76,6 +76,10 @@ const selectByIdStmt = db.prepare<[number], ScheduledPublishRow>(
 const selectAllStmt = db.prepare<[], ScheduledPublishRow>(
   `SELECT ${COLUMNS} FROM scheduled_event_publishes ORDER BY publish_at DESC`,
 );
+/** Not yet posted (regardless of attempts) — includes retry-exhausted entries, unlike `selectDueStmt`. */
+const selectPendingStmt = db.prepare<[], ScheduledPublishRow>(
+  `SELECT ${COLUMNS} FROM scheduled_event_publishes WHERE published_event_id IS NULL ORDER BY publish_at ASC`,
+);
 /** Not yet posted, not yet given up on, and due — see MAX_ATTEMPTS. */
 const selectDueStmt = db.prepare<[string], ScheduledPublishRow>(
   `SELECT ${COLUMNS} FROM scheduled_event_publishes
@@ -104,6 +108,16 @@ export function getScheduledPublish(id: number): ScheduledEventPublish | null {
 /** Pending and already-resolved (posted/failed) entries, newest publish time first. */
 export function listScheduledPublishes(): ScheduledEventPublish[] {
   return selectAllStmt.all().map(rowToScheduledPublish);
+}
+
+/**
+ * Not-yet-posted entries — includes ones that have exhausted their retries
+ * (`attempts >= MAX_ATTEMPTS`) and will never post, unlike `listDuePublishes`.
+ * Soonest publish time first. Backs `/event planned` and, filtered to
+ * `attempts < MAX_ATTEMPTS`, `services/eventConflicts.ts`'s occupied-date set.
+ */
+export function listPendingPublishes(): ScheduledEventPublish[] {
+  return selectPendingStmt.all().map(rowToScheduledPublish);
 }
 
 export function listDuePublishes(nowIso: string): ScheduledEventPublish[] {

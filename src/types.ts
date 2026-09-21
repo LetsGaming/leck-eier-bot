@@ -320,7 +320,7 @@ export interface EventTemplate {
   defaultChannelId: string | null;
   defaultMentionRoleId: string | null;
   defaultVoiceChannelId: string | null;
-  /** Recurring-time default ("this event is always Tuesdays at 8pm") — all three null means no default; the publish form starts with empty start/end fields. 0=Sunday..6=Saturday. See `nextOccurrence()` in `services/events.ts`. */
+  /** Recurring-time default ("this event is always Tuesdays at 8pm") — all three null means no default; the publish form starts with empty start/end fields. 0=Sunday..6=Saturday. See `nextWeekdayOccurrenceUtc()` in `utils/timezone.ts`. */
   defaultWeekday: number | null;
   /** "HH:MM", server timezone. */
   defaultStartTime: string | null;

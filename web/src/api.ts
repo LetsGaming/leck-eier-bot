@@ -17,6 +17,8 @@ import type {
   PublishedEventEntry,
   ScheduledEventPublish,
   ScheduledEventPublishBody,
+  EventConflict,
+  NextOccurrenceResponse,
   GeneralSettings,
   InGuildMembersResponse,
   Mapping,
@@ -136,6 +138,13 @@ export const api = {
   updateEventTemplate: (id: number, body: EventTemplateBody) =>
     request<EventTemplate>(`/event-templates/${id}`, { method: "PUT", ...json(body) }),
   deleteEventTemplate: (id: number) => request<void>(`/event-templates/${id}`, { method: "DELETE" }),
+  nextTemplateOccurrence: (id: number) => request<NextOccurrenceResponse>(`/event-templates/${id}/next-occurrence`),
+
+  eventConflicts: (startsAt: string, ignoreScheduledId?: number) => {
+    const search = new URLSearchParams({ startsAt });
+    if (ignoreScheduledId !== undefined) search.set("ignoreScheduledId", String(ignoreScheduledId));
+    return request<{ conflicts: EventConflict[] }>(`/events/conflicts?${search.toString()}`).then((res) => res.conflicts);
+  },
 
   publishEvent: (body: PublishEventBody) => request<PublishedEventEntry>("/events/publish", { method: "POST", ...json(body) }),
   editEvent: (id: number, body: EditEventBody) => request<PublishedEventEntry>(`/events/${id}`, { method: "PATCH", ...json(body) }),

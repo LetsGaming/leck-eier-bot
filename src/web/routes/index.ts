@@ -73,8 +73,8 @@ export function registerApiRoutes(app: FastifyInstance, client: BotClient, confi
       api.register(async (instance) => registerMemberAuditRoutes(instance));
       api.register(async (instance) => registerRegistrationRoutes(instance, client, config));
       api.register(async (instance) => registerEventAttendanceRoutes(instance, config));
-      api.register(async (instance) => registerEventRoutes(instance, client));
-      api.register(async (instance) => registerEventTemplateRoutes(instance));
+      api.register(async (instance) => registerEventRoutes(instance, client, config));
+      api.register(async (instance) => registerEventTemplateRoutes(instance, config));
       api.register(async (instance) => registerReactionRolePanelRoutes(instance, client));
       api.register(async (instance) => registerBirthdaySettingsRoutes(instance, client));
       api.register(async (instance) => registerBirthdaysRoutes(instance, client));

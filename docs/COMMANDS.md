@@ -25,6 +25,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | [`/clear`](#clear) | Admin | yes | Bulk-delete a given number of messages in the current channel, batching past Discord's 100-per-request limit. |
 | [`/finduser`](#finduser) | Admin | yes | Search cached guild members by name (handles fancy/unicode names). |
 | [`/reactionroles`](#reactionroles) | Admin | yes | List reaction-role panels, or re-sync them with Discord. Full editing lives on the [dashboard](DASHBOARD.md). |
+| [`/event`](#event) | Admin | yes | Create/publish (or schedule) an event from a template, or list pending scheduled publishes. |
 
 "Guild-only by default" means the command only works inside `guildId` unless overridden from the dashboard's Commands page.
 
@@ -98,3 +99,12 @@ Searches username, global display name, server nickname, and server display name
 | `sync` | Re-posts/edits every panel's message and reconciles its seed reactions with Discord. |
 
 Panels themselves (selection type, channel, allow-multiple/removable, `removeReaction`, allowed roles, and their mappings) are created and edited on the [dashboard](DASHBOARD.md#reaction-roles) — see [REACTION_ROLES.md](REACTION_ROLES.md) for the feature itself.
+
+### `/event`
+
+| Subcommand | Description |
+| --- | --- |
+| `create` | Publishes (or schedules) an event from a template — opens a modal (title/description/start/end/publish-at), then a private preview thread with a font toggle and confirm/cancel buttons. Templates themselves are managed on the [dashboard](DASHBOARD.md#events). |
+| `planned` | Ephemeral embed listing every not-yet-posted scheduled publish (title, publish time, start, target channel), including ones that have exhausted their retries (shown with their error) — the Discord-side view of the dashboard's *Geplant* tab. |
+
+A template with a recurring-time default ("always Wednesdays 19:00–21:00") prefills `create`'s start/end fields with the *next free* occurrence — skipping a date that already has a non-cancelled event or a still-pending scheduled publish, in favor of the following week's occurrence. If the date you enter (or the prefilled one) already has something else planned, the preview thread shows a non-blocking warning naming it — publishing/scheduling still works, it's a heads-up rather than a hard stop.

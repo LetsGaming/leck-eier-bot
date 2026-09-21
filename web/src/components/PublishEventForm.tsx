@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SearchableSelect from "./SearchableSelect";
 import TemplateEditor from "./TemplateEditor";
 import EventEmbedPreview from "./EventEmbedPreview";
@@ -7,6 +7,7 @@ import { useChannels } from "../hooks/useChannels";
 import { useVoiceChannels } from "../hooks/useVoiceChannels";
 import { useRoles } from "../hooks/useRoles";
 import { useGeneralSettings } from "../hooks/useGeneralSettings";
+import { useEventConflicts } from "../hooks/useEventConflicts";
 import { api, errorMessage } from "../api";
 import { toChannelOptions, toRoleOptions, EVERYONE_MENTION_OPTION, defaultChannelEmptyLabel } from "../utils/selectOptions";
 import type { EventTemplate, ScheduledEventPublish } from "../types";
@@ -26,32 +27,6 @@ function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/**
- * Next occurrence of `template`'s recurring-time default, in the *browser's*
- * local time — matching how the datetime-local fields below are already
- * interpreted (`new Date(startsAt)` on a naive string reads browser-local),
- * so a manually-typed time and an auto-prefilled one behave identically.
- * Null if the template has no default.
- */
-function defaultOccurrence(template: EventTemplate): { startsAt: string; endsAt: string } | null {
-  if (template.defaultWeekday === null || template.defaultStartTime === null || template.defaultEndTime === null) return null;
-  const [startHour, startMinute] = template.defaultStartTime.split(":").map(Number);
-  const [endHour, endMinute] = template.defaultEndTime.split(":").map(Number);
-  const now = new Date();
-
-  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
-    const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, startHour, startMinute, 0, 0);
-    if (candidate.getDay() !== template.defaultWeekday) continue;
-    if (candidate.getTime() < now.getTime()) continue;
-
-    let end = new Date(candidate.getFullYear(), candidate.getMonth(), candidate.getDate(), endHour, endMinute, 0, 0);
-    if (end.getTime() < candidate.getTime()) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
-
-    return { startsAt: toDatetimeLocalValue(candidate), endsAt: toDatetimeLocalValue(end) };
-  }
-  return null; // unreachable — every weekday occurs at least once in 8 days
-}
-
 /** Fills in a template's default title/base description (both freely editable) plus channel/role/voice-channel/time, previews the resulting embed live, and publishes it (or, ticked "Später veröffentlichen", schedules it for later — see `useScheduledEventPublishes`). Used from the Vorlagen tab's row action, the Anwesenheit tab's "Neues Event" flow, and (via `scheduledEdit`) the Geplant tab's edit action. */
 export default function PublishEventForm({ template, scheduledEdit, onDone, onCancel }: PublishEventFormProps) {
   const { showError, showSuccess } = useToast();
@@ -59,7 +34,6 @@ export default function PublishEventForm({ template, scheduledEdit, onDone, onCa
   const voiceChannels = useVoiceChannels();
   const roles = useRoles();
   const generalSettings = useGeneralSettings();
-  const occurrence = template ? defaultOccurrence(template) : null;
   const payload = scheduledEdit?.payload;
   const [title, setTitle] = useState(payload?.title ?? template?.defaultTitle ?? "");
   const [description, setDescription] = useState(payload?.description ?? template?.baseDescription ?? "");
@@ -67,14 +41,38 @@ export default function PublishEventForm({ template, scheduledEdit, onDone, onCa
   const [mentionRoleId, setMentionRoleId] = useState(payload?.mentionRoleId ?? template?.defaultMentionRoleId ?? "");
   const [voiceChannelId, setVoiceChannelId] = useState(payload?.voiceChannelId ?? template?.defaultVoiceChannelId ?? "");
   const [useFont, setUseFont] = useState(payload?.useFont ?? template?.useFont ?? false);
-  const [startsAt, setStartsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.startsAt)) : (occurrence?.startsAt ?? ""));
-  const [endsAt, setEndsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.endsAt)) : (occurrence?.endsAt ?? ""));
+  const [startsAt, setStartsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.startsAt)) : "");
+  const [endsAt, setEndsAt] = useState(payload ? toDatetimeLocalValue(new Date(payload.endsAt)) : "");
   const [deferred, setDeferred] = useState(!!scheduledEdit);
   const [publishAt, setPublishAt] = useState(scheduledEdit ? toDatetimeLocalValue(new Date(scheduledEdit.publishAt)) : "");
   const [publishing, setPublishing] = useState(false);
 
+  // Create mode only (not editing a pending publish): prefill from the
+  // template's recurring-time default, server-computed so it already skips
+  // a date that's taken (see services/eventConflicts.ts) — replaces a former
+  // client-side reimplementation that couldn't see the database. Only fills
+  // in while both fields are still empty, so it never clobbers a value the
+  // user already typed while this was in flight.
+  useEffect(() => {
+    if (!template || scheduledEdit) return;
+    let cancelled = false;
+    api
+      .nextTemplateOccurrence(template.id)
+      .then((occurrence) => {
+        if (cancelled || !occurrence) return;
+        setStartsAt((current) => current || toDatetimeLocalValue(new Date(occurrence.startsAt)));
+        setEndsAt((current) => current || toDatetimeLocalValue(new Date(occurrence.endsAt)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template?.id, scheduledEdit]);
+
   const startIso = startsAt ? new Date(startsAt).toISOString() : null;
   const endIso = endsAt ? new Date(endsAt).toISOString() : null;
+  const conflicts = useEventConflicts(startIso, scheduledEdit?.id);
 
   async function publish() {
     if (!title.trim()) return showError("Bitte einen Titel angeben.");
@@ -162,6 +160,21 @@ export default function PublishEventForm({ template, scheduledEdit, onDone, onCa
           <input id="publish-end" type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
         </div>
       </div>
+      {conflicts.length > 0 && (
+        <div className="card attention-card">
+          <h2>Für diesen Tag ist bereits etwas geplant</h2>
+          <ul className="attention-list">
+            {conflicts.map((c) => (
+              <li key={`${c.kind}-${c.id}`}>
+                <strong>{c.title}</strong> — {c.kind === "event" ? "Start" : "Start (geplant)"}{" "}
+                {new Date(c.startsAt).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}
+                {c.kind === "scheduledPublish" && " — noch nicht veröffentlicht"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="field">
         <label htmlFor="publish-voice">Anwesenheits-Sprachkanal</label>
         <SearchableSelect

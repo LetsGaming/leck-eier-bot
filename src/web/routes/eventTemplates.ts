@@ -8,8 +8,10 @@ import {
   deleteEventTemplate,
 } from "../../db/eventTemplatesRepository.js";
 import { requireFeature } from "../accessControl.js";
+import { occupiedEventDates } from "../../services/eventConflicts.js";
+import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
 import type { EventTemplateListResponse, EventTemplateEntry } from "../../../contracts/eventTemplates.js";
-import type { EventTemplate } from "../../types.js";
+import type { EventTemplate, Config } from "../../types.js";
 
 const TIME_HHMM_REGEX = /^\d{2}:\d{2}$/;
 
@@ -41,11 +43,36 @@ function parseIdParam(id: string): number | null {
 }
 
 /** CRUD for reusable event templates — filling one out and publishing it happens via `/api/events/publish` (see `events.ts`), not here. */
-export function registerEventTemplateRoutes(app: ZodFastifyInstance): void {
+export function registerEventTemplateRoutes(app: ZodFastifyInstance, config: Config): void {
   app.get("/event-templates", async () => {
     const response: EventTemplateListResponse = { templates: listEventTemplates().map(serialize) };
     return response;
   });
+
+  // Next free occurrence of a template's recurring-time default — server-side twin of
+  // `defaultOccurrence()` in src/commands/general/event.ts, so both surfaces skip a
+  // date that already has an event/pending publish (see services/eventConflicts.ts)
+  // instead of the dashboard's old browser-local reimplementation.
+  app.get(
+    "/event-templates/:id/next-occurrence",
+    { schema: { params: IdParamsSchema }, preHandler: requireFeature("events.write") },
+    async (request, reply) => {
+      const id = parseIdParam(request.params.id);
+      if (id === null) return reply.code(400).send({ error: "Ungültige Vorlagen-ID" });
+
+      const template = getEventTemplateById(id);
+      if (!template) return reply.code(404).send({ error: "Vorlage nicht gefunden." });
+      if (template.defaultWeekday === null || template.defaultStartTime === null || template.defaultEndTime === null) {
+        return null;
+      }
+
+      const tz = config.timezone;
+      const taken = occupiedEventDates(tz);
+      return nextWeekdayOccurrenceUtc(template.defaultWeekday, template.defaultStartTime, template.defaultEndTime, tz, Date.now(), {
+        isDateTaken: (key) => taken.has(key),
+      });
+    },
+  );
 
   app.post("/event-templates", { schema: { body: TemplateBodySchema }, preHandler: requireFeature("eventTemplates.write") }, async (request, reply) => {
     const template = createEventTemplate(request.body);

@@ -9,9 +9,10 @@ import {
   listScheduledPublishes,
 } from "../../db/scheduledEventPublishesRepository.js";
 import { publishEvent, editEvent, cancelEvent, PublishEventInputSchema } from "../../services/events.js";
+import { findEventConflicts } from "../../services/eventConflicts.js";
 import { requireFeature } from "../accessControl.js";
 import { errorMessage } from "../../utils/logger.js";
-import type { BotClient } from "../../types.js";
+import type { BotClient, Config } from "../../types.js";
 
 const PublishBodySchema = PublishEventInputSchema;
 const EditBodySchema = z.object({
@@ -25,6 +26,10 @@ const ScheduledPublishBodySchema = PublishEventInputSchema.extend({ publishAt: z
   (body) => new Date(body.publishAt).getTime() < new Date(body.startsAt).getTime(),
   { message: "Der Veröffentlichungszeitpunkt muss vor dem Start liegen.", path: ["publishAt"] },
 );
+const ConflictsQuerySchema = z.object({
+  startsAt: z.string().min(1),
+  ignoreScheduledId: z.string().optional(),
+});
 
 function parseIdParam(id: string): number | null {
   const numericId = Number(id);
@@ -32,7 +37,22 @@ function parseIdParam(id: string): number | null {
 }
 
 /** Create/edit/cancel a native event — read/list/attendance history lives in `eventAttendance.ts`. */
-export function registerEventRoutes(app: ZodFastifyInstance, client: BotClient): void {
+export function registerEventRoutes(app: ZodFastifyInstance, client: BotClient, config: Config): void {
+  // Read-only, non-blocking: "does this date already have something planned?" — see
+  // services/eventConflicts.ts. Never rejects a publish; PublishEventForm renders a
+  // warning banner from this and lets the user proceed anyway.
+  app.get(
+    "/events/conflicts",
+    { schema: { querystring: ConflictsQuerySchema }, preHandler: requireFeature("events.write") },
+    async (request) => {
+      const { startsAt, ignoreScheduledId } = request.query;
+      const conflicts = findEventConflicts(startsAt, config.timezone, {
+        ignoreScheduledPublishId: ignoreScheduledId ? Number(ignoreScheduledId) : undefined,
+      });
+      return { conflicts };
+    },
+  );
+
   app.post("/events/publish", { schema: { body: PublishBodySchema }, preHandler: requireFeature("events.write") }, async (request, reply) => {
     try {
       const event = await publishEvent(client, request.body);

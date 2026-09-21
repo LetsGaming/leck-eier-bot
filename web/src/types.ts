@@ -26,6 +26,9 @@ import type {
   PublishedEventEntry,
   ScheduledEventPublishBody,
   ScheduledEventPublishEntry,
+  EventConflict,
+  EventConflictsResponse,
+  NextOccurrenceResponse,
 } from "../../contracts/eventTemplates";
 import type {
   EventAttendanceMonthsResponse,
@@ -323,7 +326,16 @@ export type Registration = RegistrationEntry;
 
 /** A reusable event template — canonical shape lives at `contracts/eventTemplates.ts` as `EventTemplateEntry`. */
 export type EventTemplate = EventTemplateEntry;
-export type { EventTemplateListResponse, EventTemplateBody, PublishEventBody, EditEventBody, PublishedEventEntry };
+export type {
+  EventTemplateListResponse,
+  EventTemplateBody,
+  PublishEventBody,
+  EditEventBody,
+  PublishedEventEntry,
+  EventConflict,
+  EventConflictsResponse,
+  NextOccurrenceResponse,
+};
 /** A pending "publish later" entry — canonical shape lives at `contracts/eventTemplates.ts` as `ScheduledEventPublishEntry`. */
 export type ScheduledEventPublish = ScheduledEventPublishEntry;
 export type { ScheduledEventPublishBody };

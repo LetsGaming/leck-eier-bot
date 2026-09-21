@@ -98,6 +98,33 @@ export interface ScheduledEventPublishEntry {
   updatedAt: string;
 }
 
+/**
+ * Something already occupying a calendar date — an already-posted event or a
+ * not-yet-posted pending publish. See `src/services/eventConflicts.ts`.
+ * Response shape of `GET /api/events/conflicts` (as `{ conflicts: EventConflict[] }`).
+ */
+export interface EventConflict {
+  kind: "event" | "scheduledPublish";
+  id: number;
+  title: string;
+  /** ISO UTC. */
+  startsAt: string;
+  /** ISO UTC — `scheduledPublish` only. */
+  publishAt?: string;
+  /** `event` only — lets a caller build a "jump to message" link. */
+  channelId?: string;
+  /** `event` only. */
+  messageId?: string;
+}
+
+/** Response shape of `GET /api/events/conflicts`. */
+export interface EventConflictsResponse {
+  conflicts: EventConflict[];
+}
+
+/** Response shape of `GET /api/event-templates/:id/next-occurrence` — `null` if the template has no recurring-time default. */
+export type NextOccurrenceResponse = { startsAt: string; endsAt: string } | null;
+
 /** Response shape of `POST /api/events/publish` and `PATCH /api/events/:id`. */
 export interface PublishedEventEntry {
   id: number;

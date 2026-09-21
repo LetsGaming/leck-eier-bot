@@ -81,3 +81,42 @@ test("due-publishes SQL: an entry that exhausted its attempts is not returned", 
   const rows = db.prepare(SELECT_DUE_SQL).all(NOW) as { id: number }[];
   assert.deepEqual(rows, []);
 });
+
+// listPendingPublishes() backs /event planned — unlike the "due" query above,
+// it must still surface an entry that has exhausted its retries (so the
+// command can show the user its error), and it isn't filtered by publish_at.
+const SELECT_PENDING_SQL = `
+  SELECT id FROM scheduled_event_publishes WHERE published_event_id IS NULL ORDER BY publish_at ASC
+`;
+
+test("pending-publishes SQL: includes a not-yet-due future entry", () => {
+  const db = makeDb();
+  const id = insert(db, { publishAt: "2027-01-01T00:00:00.000Z" });
+  const rows = db.prepare(SELECT_PENDING_SQL).all() as { id: number }[];
+  assert.deepEqual(rows.map((r) => r.id), [id]);
+});
+
+test("pending-publishes SQL: includes a retry-exhausted entry (unlike the due query)", () => {
+  const db = makeDb();
+  const id = insert(db, { publishAt: "2026-05-01T00:00:00.000Z", attempts: MAX_ATTEMPTS });
+  const rows = db.prepare(SELECT_PENDING_SQL).all() as { id: number }[];
+  assert.deepEqual(rows.map((r) => r.id), [id]);
+});
+
+test("pending-publishes SQL: excludes an already-published entry", () => {
+  const db = makeDb();
+  insert(db, { publishAt: "2026-05-01T00:00:00.000Z", publishedEventId: 42 });
+  const rows = db.prepare(SELECT_PENDING_SQL).all() as { id: number }[];
+  assert.deepEqual(rows, []);
+});
+
+test("pending-publishes SQL: orders soonest publish_at first", () => {
+  const db = makeDb();
+  const later = insert(db, { publishAt: "2026-08-01T00:00:00.000Z" });
+  const sooner = insert(db, { publishAt: "2026-07-01T00:00:00.000Z" });
+  const rows = db.prepare(SELECT_PENDING_SQL).all() as { id: number }[];
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    [sooner, later],
+  );
+});

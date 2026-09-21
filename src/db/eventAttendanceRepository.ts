@@ -147,6 +147,10 @@ const selectEventsWithUnresolvedSignupsStmt = db.prepare<{ query: string; limit:
    LIMIT @limit`,
 );
 const selectEventStartTimesStmt = db.prepare<[], { starts_at: string }>(`SELECT starts_at FROM events`);
+/** Still-relevant (non-cancelled) events starting at or after `fromIso` — see `listNonCancelledEventsFrom`. Served by `idx_events_status_starts`. */
+const selectNonCancelledEventsFromStmt = db.prepare<[string], EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM events WHERE status != 'cancelled' AND starts_at >= ? ORDER BY starts_at ASC`,
+);
 const selectEventByIdStmt = db.prepare<[number], EventRow>(`SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`);
 const selectEventByMessageIdStmt = db.prepare<[string], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM events WHERE message_id = ?`,
@@ -384,6 +388,15 @@ export function listEventsWithUnresolvedSignups({ query, limit }: EventsAllMonth
 /** Every event's `starts_at`, unfiltered — raw data for building a month picker (e.g. "which months have events"). Not paginated; caller derives distinct months in JS. */
 export function listEventStartTimes(): string[] {
   return selectEventStartTimesStmt.all().map((row) => row.starts_at);
+}
+
+/**
+ * Non-cancelled events starting at or after `fromIso`, earliest first —
+ * "still relevant" events for `services/eventConflicts.ts` to check a new
+ * event's date against. A cancelled event no longer occupies its slot.
+ */
+export function listNonCancelledEventsFrom(fromIso: string): Event[] {
+  return selectNonCancelledEventsFromStmt.all(fromIso).map(rowToEvent);
 }
 
 export interface EventSignupCounts {

@@ -127,6 +127,41 @@ export function currentMonthKey(tz: string): string {
 }
 
 /**
+ * Returns the `"YYYY-MM-DD"` calendar date that `iso` (a UTC timestamp)
+ * falls on when rendered in `tz` — the "which day does this instant occupy"
+ * key used to detect two events landing on the same calendar day (see
+ * `services/eventConflicts.ts`), independent of the exact time of day.
+ */
+export function dateKeyInTimezone(iso: string, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+
+  const lookup: Record<string, string> = {};
+  for (const part of parts) {
+    if (part.type !== "literal") lookup[part.type] = part.value;
+  }
+
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+}
+
+/** Options for `nextWeekdayOccurrenceUtc` — see its doc comment. */
+export interface NextWeekdayOccurrenceOptions {
+  /**
+   * Called with each candidate occurrence's local (`tz`) `"YYYY-MM-DD"` date
+   * key; returning true skips that week and moves on to the next one — used
+   * to keep a recurring template from prefilling a date that already has an
+   * event (see `services/eventConflicts.ts`'s `occupiedEventDates`).
+   */
+  isDateTaken?: (localDateKey: string) => boolean;
+  /** How many weeks ahead to search before giving up on finding a free date (default 8). */
+  maxWeeks?: number;
+}
+
+/**
  * Finds the next UTC instant, at or after `nowMs`, that falls on calendar
  * weekday `weekday` (0=Sunday..6=Saturday, `Date#getUTCDay()` convention) at
  * `startTimeHHMM`/`endTimeHHMM` ("HH:MM") wall-clock time in `tz` — the
@@ -140,6 +175,13 @@ export function currentMonthKey(tz: string): string {
  * weekday itself is checked on the plain calendar date (a pure Gregorian
  * property, independent of timezone), only the actual start/end instants
  * need the DST-aware conversion.
+ *
+ * With `options.isDateTaken`, a candidate whose date is already taken is
+ * skipped in favor of the following week's occurrence (e.g. weekday
+ * Wednesday, 23.09.2026 taken → returns 30.09.2026) — searching up to
+ * `options.maxWeeks` weeks ahead (default 8). If every candidate in that
+ * horizon is taken, falls back to the first (untaken-check) candidate rather
+ * than failing, since prefilling *some* date is still better than none.
  */
 export function nextWeekdayOccurrenceUtc(
   weekday: number,
@@ -147,9 +189,11 @@ export function nextWeekdayOccurrenceUtc(
   endTimeHHMM: string,
   tz: string,
   nowMs: number = Date.now(),
+  options?: NextWeekdayOccurrenceOptions,
 ): { startsAt: string; endsAt: string } {
   const [startHour, startMinute] = startTimeHHMM.split(":").map(Number);
   const [endHour, endMinute] = endTimeHHMM.split(":").map(Number);
+  const maxWeeks = options?.maxWeeks ?? 8;
 
   const todayParts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
@@ -163,7 +207,9 @@ export function nextWeekdayOccurrenceUtc(
   const todayMonthIndex = Number(lookup.month) - 1;
   const todayDay = Number(lookup.day);
 
-  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+  let firstCandidate: { startsAt: string; endsAt: string } | null = null;
+
+  for (let dayOffset = 0; dayOffset < maxWeeks * 7; dayOffset++) {
     const candidateDate = new Date(Date.UTC(todayYear, todayMonthIndex, todayDay + dayOffset));
     if (candidateDate.getUTCDay() !== weekday) continue;
 
@@ -179,8 +225,17 @@ export function nextWeekdayOccurrenceUtc(
     let endMs = naiveEndMs - tzOffsetMs(naiveEndMs, tz);
     if (endMs < startMs) endMs += 24 * 60 * 60 * 1000; // end time-of-day is before start's — crosses midnight
 
-    return { startsAt: new Date(startMs).toISOString(), endsAt: new Date(endMs).toISOString() };
+    const occurrence = { startsAt: new Date(startMs).toISOString(), endsAt: new Date(endMs).toISOString() };
+    if (!firstCandidate) firstCandidate = occurrence;
+
+    if (options?.isDateTaken?.(dateKeyInTimezone(occurrence.startsAt, tz))) continue;
+
+    return occurrence;
   }
+
+  // Every candidate in the horizon is taken — fall back to the first one
+  // rather than refusing to prefill anything.
+  if (firstCandidate) return firstCandidate;
 
   // Unreachable: every weekday occurs at least once in any 8-day window.
   throw new Error(`nextWeekdayOccurrenceUtc: no occurrence of weekday ${weekday} found`);
