@@ -117,8 +117,8 @@ export const EVENT_REMINDER_LEAD_MS = 15 * 60 * 1000;
 export type EventRsvpChoice = "accepted" | "declined" | "tentative";
 export const EVENT_RSVP_CHOICES: { choice: EventRsvpChoice; emoji: string; label: string }[] = [
   { choice: "accepted", emoji: "✅", label: "Zusagen" },
-  { choice: "tentative", emoji: "❓", label: "Vielleicht" },
   { choice: "declined", emoji: "❌", label: "Absagen" },
+  { choice: "tentative", emoji: "❓", label: "Vielleicht" },
 ];
 
 // --- Reaction roles ---

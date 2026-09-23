@@ -2,6 +2,7 @@ import type { VoiceState } from "discord.js";
 import { listActiveEvents, appendVoiceLog } from "../db/eventAttendanceRepository.js";
 import { cancelEventByMessageId, handleEventRsvpButton, publishDueScheduledEvents } from "../services/events.js";
 import { catchUpEvents, sweepEvents } from "../services/eventAttendance.js";
+import { cleanupFinishedEventChannels } from "../services/eventChannelCleanup.js";
 import { handleCreateModalSubmit } from "../commands/general/event.js";
 import { EVENT_SWEEP_INTERVAL_MS } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
@@ -66,6 +67,7 @@ export default function registerEventWatcher(client: BotClient): void {
       // Piggybacked onto the same tick rather than its own timer — same
       // convention as registerWatcher.ts's sweepExpiredSessions/archive pair.
       publishDueScheduledEvents(client).catch((err) => logger.error(`Geplante Veröffentlichungen fehlgeschlagen: ${errorMessage(err)}`));
+      cleanupFinishedEventChannels(client).catch((err) => logger.error(`Event-Kanal-Aufräumen fehlgeschlagen: ${errorMessage(err)}`));
     }, EVENT_SWEEP_INTERVAL_MS);
   });
 }

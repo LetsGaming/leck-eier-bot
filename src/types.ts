@@ -122,6 +122,10 @@ export interface Settings {
   eventVoiceChannelId: string | null;
   /** Discord role granting the `moderator` dashboard tier (see WebRole) — the lowest tier, read-only by default (see `web/accessControl.ts`'s FEATURES). Null = the moderator tier is disabled; nobody resolves to it. */
   dashboardModeratorRoleId: string | null;
+  /** Off by default. When on, an event's channel is auto-cleared (every message except those of still-scheduled/active events) once `eventChannelCleanupDelayHours` has passed since the event completed — see `services/eventChannelCleanup.ts`. */
+  eventChannelCleanupEnabled: boolean;
+  /** How long after an event completes before its channel is auto-cleared. Only relevant when `eventChannelCleanupEnabled` is on. */
+  eventChannelCleanupDelayHours: number;
 }
 
 export interface CommandSetting {
@@ -275,6 +279,8 @@ export interface Event {
   useFont: boolean;
   createdAt: string;
   updatedAt: string;
+  /** ISO UTC — set once this event's channel has been swept by `cleanupFinishedEventChannels()`, so a completed event is never re-cleared. Null before that (including for events that never complete). */
+  channelClearedAt: string | null;
 }
 
 /** One signed-up member on an `Event`. Two independent field groups — see migration v28's doc comment in `db/index.ts` for why they're never written by the same code path. */

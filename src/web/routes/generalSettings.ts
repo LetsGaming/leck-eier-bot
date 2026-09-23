@@ -22,6 +22,8 @@ const PatchBodySchema = z.object({
   autoRegisterConfirmationUseFont: z.boolean().optional(),
   defaultEventChannelId: z.string().nullable().optional(),
   eventVoiceChannelId: z.string().nullable().optional(),
+  eventChannelCleanupEnabled: z.boolean().optional(),
+  eventChannelCleanupDelayHours: z.number().int().min(0).max(720).optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -42,6 +44,8 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     autoRegisterConfirmationUseFont: settings.autoRegisterConfirmationUseFont,
     defaultEventChannelId: settings.defaultEventChannelId,
     eventVoiceChannelId: settings.eventVoiceChannelId,
+    eventChannelCleanupEnabled: settings.eventChannelCleanupEnabled,
+    eventChannelCleanupDelayHours: settings.eventChannelCleanupDelayHours,
   };
 }
 
@@ -66,6 +70,8 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
       autoRegisterConfirmationUseFont,
       defaultEventChannelId,
       eventVoiceChannelId,
+      eventChannelCleanupEnabled,
+      eventChannelCleanupDelayHours,
     } = request.body;
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
@@ -97,6 +103,8 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
         autoRegisterConfirmationUseFont,
         defaultEventChannelId: defaultEventChannelId !== undefined ? defaultEventChannelId || null : undefined,
         eventVoiceChannelId: eventVoiceChannelId !== undefined ? eventVoiceChannelId || null : undefined,
+        eventChannelCleanupEnabled,
+        eventChannelCleanupDelayHours,
       }),
     );
     return serialize(settings);

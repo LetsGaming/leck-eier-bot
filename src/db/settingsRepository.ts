@@ -28,6 +28,8 @@ interface SettingsRow {
   apollo_event_channel_id: string | null;
   event_voice_channel_id: string | null;
   dashboard_moderator_role_id: string | null;
+  event_channel_cleanup_enabled: 0 | 1;
+  event_channel_cleanup_delay_hours: number;
 }
 
 function rowToSettings(row: SettingsRow): Settings {
@@ -57,6 +59,8 @@ function rowToSettings(row: SettingsRow): Settings {
     defaultEventChannelId: row.apollo_event_channel_id,
     eventVoiceChannelId: row.event_voice_channel_id,
     dashboardModeratorRoleId: row.dashboard_moderator_role_id,
+    eventChannelCleanupEnabled: row.event_channel_cleanup_enabled === 1,
+    eventChannelCleanupDelayHours: row.event_channel_cleanup_delay_hours,
   };
 }
 
@@ -70,7 +74,8 @@ const selectStmt = db.prepare<[], SettingsRow>(
           register_confirmation_use_font,
           register_nickname_use_font, register_nickname_emoji, register_auto_complete, auto_register_confirmation_template,
           auto_register_confirmation_use_font,
-          apollo_event_channel_id, event_voice_channel_id, dashboard_moderator_role_id
+          apollo_event_channel_id, event_voice_channel_id, dashboard_moderator_role_id,
+          event_channel_cleanup_enabled, event_channel_cleanup_delay_hours
    FROM settings WHERE id = 1`,
 );
 const updateStmt = db.prepare<{
@@ -99,6 +104,8 @@ const updateStmt = db.prepare<{
   defaultEventChannelId: string | null;
   eventVoiceChannelId: string | null;
   dashboardModeratorRoleId: string | null;
+  eventChannelCleanupEnabled: 0 | 1;
+  eventChannelCleanupDelayHours: number;
 }>(
   `UPDATE settings SET
      birthday_template = @birthdayTemplate,
@@ -125,7 +132,9 @@ const updateStmt = db.prepare<{
      auto_register_confirmation_use_font = @autoRegisterConfirmationUseFont,
      apollo_event_channel_id = @defaultEventChannelId,
      event_voice_channel_id = @eventVoiceChannelId,
-     dashboard_moderator_role_id = @dashboardModeratorRoleId
+     dashboard_moderator_role_id = @dashboardModeratorRoleId,
+     event_channel_cleanup_enabled = @eventChannelCleanupEnabled,
+     event_channel_cleanup_delay_hours = @eventChannelCleanupDelayHours
    WHERE id = 1`,
 );
 
@@ -186,6 +195,8 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     defaultEventChannelId: next.defaultEventChannelId,
     eventVoiceChannelId: next.eventVoiceChannelId,
     dashboardModeratorRoleId: next.dashboardModeratorRoleId,
+    eventChannelCleanupEnabled: next.eventChannelCleanupEnabled ? 1 : 0,
+    eventChannelCleanupDelayHours: next.eventChannelCleanupDelayHours,
   });
   settingsBus.emit(SettingsEvent.Settings);
   return next;

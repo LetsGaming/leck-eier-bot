@@ -27,6 +27,7 @@ interface EventRow {
   use_font: 0 | 1;
   created_at: string;
   updated_at: string;
+  channel_cleared_at: string | null;
 }
 
 interface SignupRow {
@@ -72,6 +73,7 @@ function rowToEvent(row: EventRow): Event {
     useFont: row.use_font === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    channelClearedAt: row.channel_cleared_at,
   };
 }
 
@@ -105,7 +107,7 @@ function rowToVoiceLog(row: VoiceLogRow): EventVoiceLogRow {
 
 const EVENT_COLUMNS = `id, message_id, channel_id, title, description, starts_at, ends_at, status,
   configured_voice_channel_id, voice_channel_id, activated_at, completed_at, tracking_incomplete, reminded_at,
-  use_font, created_at, updated_at`;
+  use_font, created_at, updated_at, channel_cleared_at`;
 const SIGNUP_COLUMNS = `id, event_id, raw_name, normalized_name, choice, user_id, match_source, withdrawn_at,
   attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes`;
 const VOICE_LOG_COLUMNS = "id, event_id, user_id, action, at";
@@ -168,6 +170,14 @@ const selectActiveEventsStmt = db.prepare<[], EventRow>(
 const selectDueRemindersStmt = db.prepare<[string], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM events WHERE status = 'scheduled' AND reminded_at IS NULL AND starts_at <= ?`,
 );
+/** `completed` events not yet swept by `cleanupFinishedEventChannels()`, whose completion is old enough per the configured delay. */
+const selectEventsDueForChannelCleanupStmt = db.prepare<[string], EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM events WHERE status = 'completed' AND channel_cleared_at IS NULL AND completed_at <= ?`,
+);
+/** `scheduled`/`active` events in one channel — their messages must survive a channel cleanup. */
+const selectProtectedEventsInChannelStmt = db.prepare<[string], EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM events WHERE channel_id = ? AND status IN ('scheduled', 'active')`,
+);
 
 const insertEventStmt = db.prepare<{
   messageId: string;
@@ -208,6 +218,9 @@ const markTrackingIncompleteStmt = db.prepare<{ id: number; updatedAt: string }>
 );
 const setEventRemindedStmt = db.prepare<{ id: number; remindedAt: string }>(
   `UPDATE events SET reminded_at = @remindedAt WHERE id = @id`,
+);
+const setEventChannelClearedStmt = db.prepare<{ id: number; clearedAt: string }>(
+  `UPDATE events SET channel_cleared_at = @clearedAt WHERE id = @id`,
 );
 const deleteEventStmt = db.prepare<[number]>("DELETE FROM events WHERE id = ?");
 
@@ -524,6 +537,20 @@ export function listDueReminders(nowPlusLeadIso: string): Event[] {
 
 export function setEventReminded(id: number): void {
   setEventRemindedStmt.run({ id, remindedAt: new Date().toISOString() });
+}
+
+/** `completed` events whose channel hasn't been auto-cleared yet and whose completion is at or before `cutoffIso` (now minus the configured delay). See `cleanupFinishedEventChannels()`. */
+export function listEventsDueForChannelCleanup(cutoffIso: string): Event[] {
+  return selectEventsDueForChannelCleanupStmt.all(cutoffIso).map(rowToEvent);
+}
+
+/** `scheduled`/`active` events in `channelId` — their messages must be protected from a channel cleanup. */
+export function listProtectedEventsInChannel(channelId: string): Event[] {
+  return selectProtectedEventsInChannelStmt.all(channelId).map(rowToEvent);
+}
+
+export function setEventChannelCleared(id: number, clearedAt: string): void {
+  setEventChannelClearedStmt.run({ id, clearedAt });
 }
 
 export function setEventActive(id: number, voiceChannelId: string | null, activatedAt: string): void {

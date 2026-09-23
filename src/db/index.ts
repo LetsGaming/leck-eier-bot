@@ -937,6 +937,18 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       CREATE INDEX idx_scheduled_event_publishes_due ON scheduled_event_publishes(publish_at);
     `);
   },
+  // v40: opt-in automatic cleanup of an event's channel once the event has
+  // been completed for a while. channel_cleared_at marks an event row as
+  // already handled so the sweep doesn't re-clear the same channel forever;
+  // it's per-event (not per-channel) because several completed events can
+  // share a channel.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN event_channel_cleanup_enabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE settings ADD COLUMN event_channel_cleanup_delay_hours INTEGER NOT NULL DEFAULT 24;
+      ALTER TABLE events ADD COLUMN channel_cleared_at TEXT;
+    `);
+  },
 ];
 
 /**

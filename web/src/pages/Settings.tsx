@@ -664,6 +664,39 @@ function EventsSection({
               ihn sehen können.
             </div>
           </div>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.eventChannelCleanupEnabled}
+              onChange={(e) =>
+                update({ eventChannelCleanupEnabled: e.target.checked })
+              }
+            />
+            Event-Kanal nach Event-Ende automatisch leeren
+          </label>
+          {settings.eventChannelCleanupEnabled && (
+            <div className="field">
+              <label htmlFor="event-channel-cleanup-delay">
+                Wartezeit nach Event-Ende (Stunden)
+              </label>
+              <input
+                id="event-channel-cleanup-delay"
+                type="number"
+                min={0}
+                max={720}
+                value={settings.eventChannelCleanupDelayHours}
+                onChange={(e) =>
+                  update({
+                    eventChannelCleanupDelayHours: Number(e.target.value),
+                  })
+                }
+              />
+              <div className="hint">
+                Nachrichten noch geplanter oder laufender Events bleiben
+                erhalten.
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

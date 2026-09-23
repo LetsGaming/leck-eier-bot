@@ -296,6 +296,10 @@ export interface GeneralSettings {
   defaultEventChannelId: string | null;
   /** Fallback voice channel for attendance tracking when an event's template doesn't specify its own. Null = tracking never activates for such an event. */
   eventVoiceChannelId: string | null;
+  /** Off by default. When on, an event's channel is auto-cleared (every message except those of still-scheduled/active events) once `eventChannelCleanupDelayHours` has passed since the event completed. */
+  eventChannelCleanupEnabled: boolean;
+  /** How long after an event completes before its channel is auto-cleared. Only relevant when `eventChannelCleanupEnabled` is on. */
+  eventChannelCleanupDelayHours: number;
 }
 
 export interface MemberAuditResponse {
