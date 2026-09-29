@@ -949,6 +949,33 @@ const MIGRATIONS: Array<(d: Database.Database) => void> = [
       ALTER TABLE events ADD COLUMN channel_cleared_at TEXT;
     `);
   },
+  // v41: temporary, event-scoped group voice channels created by
+  // `/voice-channel create`. One row per live bot-created channel — the row
+  // is the only record that a channel is bot-owned, so it's written
+  // immediately after each successful create, never batched at the end (a
+  // crash mid-create would otherwise orphan a real channel with no DB
+  // trace). `event_id` deliberately carries NO foreign key: with
+  // `foreign_keys = ON`, an `ON DELETE SET NULL` would silently turn a bound
+  // set into an unbound (manual-clear-only) one the moment its event row is
+  // deleted — exactly backwards, since a vanished event should make its
+  // channels due for cleanup, not immortal. `isTempChannelDue()` treats a
+  // missing event row as "due", which requires the dangling id to survive.
+  (d) => {
+    d.exec(`
+      ALTER TABLE settings ADD COLUMN temp_voice_category_id TEXT;
+      ALTER TABLE settings ADD COLUMN temp_voice_max_amount INTEGER NOT NULL DEFAULT 15;
+      ALTER TABLE settings ADD COLUMN temp_voice_name_format TEXT NOT NULL DEFAULT 'Gruppe {n}';
+
+      CREATE TABLE temporary_voice_channels (
+        channel_id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        event_id INTEGER,
+        created_at TEXT NOT NULL,
+        created_by_user_id TEXT NOT NULL
+      );
+      CREATE INDEX idx_temporary_voice_channels_event ON temporary_voice_channels(event_id);
+    `);
+  },
 ];
 
 /**

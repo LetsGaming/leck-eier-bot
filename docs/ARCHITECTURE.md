@@ -37,6 +37,9 @@ src/
                                    /finduser (historical event-signup rows also carry this normalization)
     events.ts                     Renders templates, publishes events, handles RSVP button clicks (see EVENT_ATTENDANCE.md)
     eventAttendance.ts            deriveAttendance() + the scheduled/active/completed/reminder sweep + startup catch-up
+    eventChannelCleanup.ts        Opt-in auto-clear of a completed event's channel (see EVENT_ATTENDANCE.md)
+    temporaryVoiceChannels.ts     /voice-channel's create/clear/sweep — throwaway group voice channels, event-scoped
+                                    but never tracked (see EVENT_ATTENDANCE.md § Temporary voice channels)
 
   loaders/
     commandLoader.ts            Recursively discovers command modules and registers them on the client
@@ -53,6 +56,7 @@ src/
                                    setbirthdaymessage, testbirthdaymessage, setmybirthday
     general/                     cleardm, finduser
     roles/                       reactionroles (list/sync — full editing is on the dashboard)
+    voice/                       voice-channel (create/clear temporary group voice channels)
 
   web/                        Dashboard backend (Fastify) — see DASHBOARD.md
     server.ts                   Bootstraps Fastify, static file serving + SPA fallback

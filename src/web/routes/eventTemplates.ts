@@ -8,6 +8,7 @@ import {
   deleteEventTemplate,
 } from "../../db/eventTemplatesRepository.js";
 import { requireFeature } from "../accessControl.js";
+import { isTemporaryVoiceChannel } from "../../db/temporaryVoiceChannelsRepository.js";
 import { occupiedEventDates } from "../../services/eventConflicts.js";
 import { nextWeekdayOccurrenceUtc } from "../../utils/timezone.js";
 import type { EventTemplateListResponse, EventTemplateEntry } from "../../../contracts/eventTemplates.js";
@@ -75,6 +76,9 @@ export function registerEventTemplateRoutes(app: ZodFastifyInstance, config: Con
   );
 
   app.post("/event-templates", { schema: { body: TemplateBodySchema }, preHandler: requireFeature("eventTemplates.write") }, async (request, reply) => {
+    if (request.body.defaultVoiceChannelId && isTemporaryVoiceChannel(request.body.defaultVoiceChannelId)) {
+      return reply.code(400).send({ error: "Ein temporärer Gruppen-Sprachkanal kann nicht als Event-Sprachkanal festgelegt werden." });
+    }
     const template = createEventTemplate(request.body);
     return reply.code(201).send(serialize(template));
   });
@@ -83,6 +87,9 @@ export function registerEventTemplateRoutes(app: ZodFastifyInstance, config: Con
     const id = parseIdParam(request.params.id);
     if (id === null) return reply.code(400).send({ error: "Ungültige Vorlagen-ID" });
     if (!getEventTemplateById(id)) return reply.code(404).send({ error: "Vorlage nicht gefunden." });
+    if (request.body.defaultVoiceChannelId && isTemporaryVoiceChannel(request.body.defaultVoiceChannelId)) {
+      return reply.code(400).send({ error: "Ein temporärer Gruppen-Sprachkanal kann nicht als Event-Sprachkanal festgelegt werden." });
+    }
 
     return serialize(updateEventTemplate(id, request.body));
   });

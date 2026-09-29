@@ -83,6 +83,7 @@ export const api = {
 
   channels: () => request<Channel[]>("/discord/channels"),
   voiceChannels: () => request<Channel[]>("/discord/voice-channels"),
+  categories: () => request<Channel[]>("/discord/categories"),
   roles: () => request<RoleOption[]>("/discord/roles"),
   emojis: () => request<EmojiOption[]>("/discord/emojis"),
 

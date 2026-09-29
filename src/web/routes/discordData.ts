@@ -1,6 +1,7 @@
 import { ChannelType, type Guild } from "discord.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { canManageRole } from "../../services/reactionRoles.js";
+import { listTemporaryVoiceChannelIds } from "../../db/temporaryVoiceChannelsRepository.js";
 import type { BotClient, Config } from "../../types.js";
 
 const TEXT_CHANNEL_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
@@ -29,8 +30,22 @@ export function registerDiscordDataRoutes(app: FastifyInstance, client: BotClien
   app.get("/discord/voice-channels", async (_request, reply) => {
     const guild = requireGuild(reply);
     if (!guild) return;
+    // Bot-managed temporary group voice channels are throwaway event
+    // infrastructure, not a channel an admin should ever be offered as an
+    // attendance-tracking or template default — see `services/events.ts`'s
+    // and `generalSettings.ts`'s matching write-side rejection.
+    const tempIds = new Set(listTemporaryVoiceChannelIds());
     return guild.channels.cache
-      .filter((c) => VOICE_CHANNEL_TYPES.has(c.type))
+      .filter((c) => VOICE_CHANNEL_TYPES.has(c.type) && !tempIds.has(c.id))
+      .map((c) => ({ id: c.id, name: c.name, position: "position" in c ? c.position : 0 }))
+      .sort((a, b) => a.position - b.position);
+  });
+
+  app.get("/discord/categories", async (_request, reply) => {
+    const guild = requireGuild(reply);
+    if (!guild) return;
+    return guild.channels.cache
+      .filter((c) => c.type === ChannelType.GuildCategory)
       .map((c) => ({ id: c.id, name: c.name, position: "position" in c ? c.position : 0 }))
       .sort((a, b) => a.position - b.position);
   });

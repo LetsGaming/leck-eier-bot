@@ -166,6 +166,10 @@ const selectDueActiveEventsStmt = db.prepare<[string], EventRow>(
 const selectActiveEventsStmt = db.prepare<[], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM events WHERE status = 'active' ORDER BY starts_at ASC`,
 );
+/** Still-`scheduled` events, soonest first — used by `/voice-channel create` to pick a binding event when nothing is currently active. */
+const selectUpcomingScheduledEventsStmt = db.prepare<[], EventRow>(
+  `SELECT ${EVENT_COLUMNS} FROM events WHERE status = 'scheduled' ORDER BY starts_at ASC`,
+);
 /** `starts_at <= ?` events still `scheduled`, not yet reminded — see `sweepEvents()`'s reminder step. */
 const selectDueRemindersStmt = db.prepare<[string], EventRow>(
   `SELECT ${EVENT_COLUMNS} FROM events WHERE status = 'scheduled' AND reminded_at IS NULL AND starts_at <= ?`,
@@ -528,6 +532,11 @@ export function listDueActiveEvents(nowIso: string): Event[] {
 /** All currently-'active' events, earliest first. Events are assumed never to overlap (one fixed voice channel) — a caller seeing more than one should warn and use the first. */
 export function listActiveEvents(): Event[] {
   return selectActiveEventsStmt.all().map(rowToEvent);
+}
+
+/** All still-'scheduled' events, soonest first. */
+export function listUpcomingScheduledEvents(): Event[] {
+  return selectUpcomingScheduledEventsStmt.all().map(rowToEvent);
 }
 
 /** 'scheduled' events at or past their reminder lead time that haven't been reminded yet — see `EVENT_REMINDER_LEAD_MS` and `sweepEvents()`. */

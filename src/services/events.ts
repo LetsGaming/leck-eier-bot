@@ -26,6 +26,7 @@ import {
 import { createEmbed } from "../utils/embedUtils.js";
 import { applyFont } from "../utils/font.js";
 import { getSettings } from "../db/settingsRepository.js";
+import { isTemporaryVoiceChannel } from "../db/temporaryVoiceChannelsRepository.js";
 import { EVENT_RSVP_CHOICES, EmbedColor } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
 import type { Event, RsvpChoice } from "../types.js";
@@ -140,6 +141,11 @@ export async function publishEvent(client: Client, input: PublishEventInput): Pr
   const channel = await client.channels.fetch(input.channelId);
   if (!channel || !channel.isTextBased() || !("send" in channel)) {
     throw new Error(`Kanal ${input.channelId} ist kein Textkanal oder wurde nicht gefunden.`);
+  }
+  // A temporary voice channel is bot-owned throwaway infrastructure — it can
+  // vanish mid-event, so it must never become an event's tracked channel.
+  if (input.voiceChannelId && isTemporaryVoiceChannel(input.voiceChannelId)) {
+    throw new Error("Ein temporärer Gruppen-Sprachkanal kann nicht als Event-Sprachkanal festgelegt werden.");
   }
 
   // A placeholder id (0) is fine for the first render — the message doesn't

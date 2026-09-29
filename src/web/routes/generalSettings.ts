@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getSettings, updateSettings } from "../../db/settingsRepository.js";
 import { isValidFontMap } from "../../utils/font.js";
+import { isTemporaryVoiceChannel } from "../../db/temporaryVoiceChannelsRepository.js";
+import { TEMP_VOICE_HARD_MAX_AMOUNT, DISCORD_CHANNEL_NAME_MAX_LENGTH } from "../../constants.js";
 import { requireFeature } from "../accessControl.js";
 import { pickDefined, type ZodFastifyInstance } from "../utils.js";
 import type { Settings } from "../../types.js";
@@ -24,6 +26,9 @@ const PatchBodySchema = z.object({
   eventVoiceChannelId: z.string().nullable().optional(),
   eventChannelCleanupEnabled: z.boolean().optional(),
   eventChannelCleanupDelayHours: z.number().int().min(0).max(720).optional(),
+  tempVoiceCategoryId: z.string().nullable().optional(),
+  tempVoiceMaxAmount: z.number().int().min(1).max(TEMP_VOICE_HARD_MAX_AMOUNT).optional(),
+  tempVoiceNameFormat: z.string().min(1).max(DISCORD_CHANNEL_NAME_MAX_LENGTH).optional(),
 });
 
 function serialize(settings: ReturnType<typeof getSettings>) {
@@ -46,6 +51,9 @@ function serialize(settings: ReturnType<typeof getSettings>) {
     eventVoiceChannelId: settings.eventVoiceChannelId,
     eventChannelCleanupEnabled: settings.eventChannelCleanupEnabled,
     eventChannelCleanupDelayHours: settings.eventChannelCleanupDelayHours,
+    tempVoiceCategoryId: settings.tempVoiceCategoryId,
+    tempVoiceMaxAmount: settings.tempVoiceMaxAmount,
+    tempVoiceNameFormat: settings.tempVoiceNameFormat,
   };
 }
 
@@ -72,7 +80,16 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
       eventVoiceChannelId,
       eventChannelCleanupEnabled,
       eventChannelCleanupDelayHours,
+      tempVoiceCategoryId,
+      tempVoiceMaxAmount,
+      tempVoiceNameFormat,
     } = request.body;
+    // A temporary voice channel must never become the configured attendance
+    // channel — it can vanish mid-event, and doing so would also blur the
+    // isolation between event tracking and this ephemeral infrastructure.
+    if (eventVoiceChannelId && isTemporaryVoiceChannel(eventVoiceChannelId)) {
+      return reply.code(400).send({ error: "Ein temporärer Gruppen-Sprachkanal kann nicht als Event-Sprachkanal festgelegt werden." });
+    }
     if (fontMap !== undefined && fontMap !== null && fontMap !== "" && !isValidFontMap(fontMap)) {
       return reply
         .code(400)
@@ -105,6 +122,9 @@ export function registerGeneralSettingsRoutes(app: ZodFastifyInstance): void {
         eventVoiceChannelId: eventVoiceChannelId !== undefined ? eventVoiceChannelId || null : undefined,
         eventChannelCleanupEnabled,
         eventChannelCleanupDelayHours,
+        tempVoiceCategoryId: tempVoiceCategoryId !== undefined ? tempVoiceCategoryId || null : undefined,
+        tempVoiceMaxAmount,
+        tempVoiceNameFormat,
       }),
     );
     return serialize(settings);

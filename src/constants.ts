@@ -26,6 +26,8 @@ export const COMMUNITY_SNAPSHOT_UPCOMING_EVENTS_LIMIT = 5;
 export const COMMUNITY_SNAPSHOT_RECENT_ACTIVITY_LIMIT = 10;
 /** Discord error code for "message is too old to bulk delete". */
 export const DISCORD_ERROR_CODE_TOO_OLD_TO_DELETE = 50034;
+/** Discord error code for "this channel/resource no longer exists" — treated as an already-successful delete. */
+export const DISCORD_ERROR_CODE_UNKNOWN_CHANNEL = 10003;
 
 /**
  * Upper bound for `/clear`'s `amount` option. `bulkDelete` handles most of
@@ -121,6 +123,25 @@ export const EVENT_RSVP_CHOICES: { choice: EventRsvpChoice; emoji: string; label
   { choice: "tentative", emoji: "❓", label: "Vielleicht" },
 ];
 
+// --- Temporary group voice channels ---
+/**
+ * Absolute ceiling for `/voice-channel create`'s `amount` option, baked into
+ * its `SlashCommandBuilder.setMaxValue()`. A builder's option limits are
+ * static at command-registration time, so the *configured*
+ * `settings.tempVoiceMaxAmount` (which can only ever be `<=` this) is
+ * re-checked at runtime in `validateTempVoiceRequest()` — this constant is
+ * the one thing an admin can never raise past from the dashboard.
+ */
+export const TEMP_VOICE_HARD_MAX_AMOUNT = 25;
+/** Seed default for `settings.tempVoiceMaxAmount`. */
+export const DEFAULT_TEMP_VOICE_MAX_AMOUNT = 15;
+/** Discord's own cap on a voice channel's `userLimit`. */
+export const TEMP_VOICE_GROUP_SIZE_MAX = 99;
+/** Seed default for `settings.tempVoiceNameFormat` — see `buildTempVoiceChannelName()`. */
+export const DEFAULT_TEMP_VOICE_NAME_FORMAT = "Gruppe {n}";
+/** Discord's hard cap on a channel name's length. */
+export const DISCORD_CHANNEL_NAME_MAX_LENGTH = 100;
+
 // --- Reaction roles ---
 /**
  * How long a bot-initiated reaction removal (unique-mode swaps,
@@ -172,6 +193,7 @@ export const CommandName = {
   FindUser: "finduser",
   ReactionRoles: "reactionroles",
   Event: "event",
+  VoiceChannel: "voice-channel",
 } as const;
 export type CommandName = (typeof CommandName)[keyof typeof CommandName];
 

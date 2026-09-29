@@ -119,6 +119,12 @@ export function createMockClient(config: Config): BotClient {
     type: ChannelType.GuildVoice,
     position: 0,
   });
+  channels.set("mock-category-events", {
+    id: "mock-category-events",
+    name: "Events",
+    type: ChannelType.GuildCategory,
+    position: 0,
+  });
 
   const botMember = {
     permissions: new PermissionsBitField([

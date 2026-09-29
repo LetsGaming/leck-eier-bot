@@ -11,6 +11,7 @@ import { useGeneralSettings } from "../hooks/useGeneralSettings";
 import { useRoles } from "../hooks/useRoles";
 import { useUnsavedChanges } from "../components/UnsavedChangesContext";
 import { useVoiceChannels } from "../hooks/useVoiceChannels";
+import { useCategories } from "../hooks/useCategories";
 import { applyFont, FONT_REFERENCE } from "../utils/font";
 import { toChannelOptions, toRoleOptions } from "../utils/selectOptions";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -703,6 +704,78 @@ function EventsSection({
   );
 }
 
+interface TempVoiceSectionProps {
+  settings: GeneralSettings | null;
+  update: (patch: Partial<GeneralSettings>) => Promise<void>;
+  categories: Channel[];
+}
+
+function TempVoiceSection({ settings, update, categories }: TempVoiceSectionProps) {
+  return (
+    <div className="card">
+      <h2>Temporäre Gruppen-Sprachkanäle</h2>
+      <p className="muted small">
+        Einstellungen für <code>/voice-channel create</code> — erstellt eine
+        Gruppe temporärer Sprachkanäle für ein Event, die automatisch
+        entfernt werden, sobald das gebundene Event endet (oder sofort per{" "}
+        <code>/voice-channel clear</code>).
+      </p>
+      {!settings ? (
+        <div className="loading">Wird geladen…</div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="temp-voice-category">Kategorie</label>
+            <SearchableSelect
+              id="temp-voice-category"
+              value={settings.tempVoiceCategoryId ?? ""}
+              onChange={(v) => update({ tempVoiceCategoryId: v || null })}
+              placeholder="Kategorien durchsuchen…"
+              emptyLabel="— keine, Kategorie des aktuellen Kanals verwenden —"
+              options={toChannelOptions(categories, "📁 ")}
+            />
+            <div className="hint">
+              Kategorie, in der die Kanäle erstellt werden. Ohne Auswahl wird
+              die Kategorie des Kanals verwendet, in dem der Befehl
+              ausgeführt wird (oder die Server-Root, falls auch dieser
+              keine hat).
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="temp-voice-max-amount">Maximale Kanalanzahl</label>
+            <input
+              id="temp-voice-max-amount"
+              type="number"
+              min={1}
+              max={25}
+              value={settings.tempVoiceMaxAmount}
+              onChange={(e) => update({ tempVoiceMaxAmount: Number(e.target.value) })}
+            />
+            <div className="hint">
+              Obergrenze für <code>amount</code> bei <code>/voice-channel create</code> (maximal 25).
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="temp-voice-name-format">Namensformat</label>
+            <input
+              id="temp-voice-name-format"
+              type="text"
+              value={settings.tempVoiceNameFormat}
+              onChange={(e) => update({ tempVoiceNameFormat: e.target.value })}
+            />
+            <div className="hint">
+              <code>{"{n}"}</code> wird durch die Kanalnummer ersetzt (wird
+              automatisch angehängt, falls im Format nicht vorhanden),{" "}
+              <code>{"{event}"}</code> durch den Titel des gebundenen Events
+              (leer, falls kein Event gebunden ist).
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function KontoSection({ me }: { me: Me }) {
   return (
     <div className="card">
@@ -1106,10 +1179,12 @@ export default function Settings({ me }: { me: Me }) {
   const rolesRes = useRoles();
   const channelsRes = useChannels();
   const voiceChannelsRes = useVoiceChannels();
+  const categoriesRes = useCategories();
   const settings = settingsRes.data;
   const roles = rolesRes.data ?? [];
   const channels = channelsRes.data ?? [];
   const voiceChannels = voiceChannelsRes.data ?? [];
+  const categories = categoriesRes.data ?? [];
 
   const [fontMap, setFontMap] = useState("");
   const [savingFont, setSavingFont] = useState(false);
@@ -1305,12 +1380,15 @@ export default function Settings({ me }: { me: Me }) {
           />
         )}
         {activeSection === "events" && (
-          <EventsSection
-            settings={settings}
-            update={update}
-            channels={channels}
-            voiceChannels={voiceChannels}
-          />
+          <>
+            <EventsSection
+              settings={settings}
+              update={update}
+              channels={channels}
+              voiceChannels={voiceChannels}
+            />
+            <TempVoiceSection settings={settings} update={update} categories={categories} />
+          </>
         )}
         {activeSection === "konto" && <KontoSection me={me} />}
         {activeSection === "zugriff" && canManageAccess && (
