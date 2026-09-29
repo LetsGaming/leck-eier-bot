@@ -126,6 +126,12 @@ export interface Settings {
   eventChannelCleanupEnabled: boolean;
   /** How long after an event completes before its channel is auto-cleared. Only relevant when `eventChannelCleanupEnabled` is on. */
   eventChannelCleanupDelayHours: number;
+  /** Discord category `/voice-channel create`'s channels are placed in. Null = fall back to the invoking channel's own category, or the guild root if that has none either — see `services/temporaryVoiceChannels.ts`. */
+  tempVoiceCategoryId: string | null;
+  /** Dashboard-configurable ceiling on `/voice-channel create`'s `amount` option, always `<= TEMP_VOICE_HARD_MAX_AMOUNT`. */
+  tempVoiceMaxAmount: number;
+  /** Format string for generated channel names — `{n}` (1-based index) and `{event}` (bound event's title) are the only placeholders; `{n}` is appended automatically if the format omits it. See `buildTempVoiceChannelName()`. */
+  tempVoiceNameFormat: string;
 }
 
 export interface CommandSetting {

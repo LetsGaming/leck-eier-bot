@@ -163,6 +163,12 @@ Backs [EVENT_ATTENDANCE.md](EVENT_ATTENDANCE.md) — see that doc for the full c
 
 `event_templates` — reusable `{token}`-templated title/description plus optional default channel/mention-role/voice-channel, added in migration v36. See `src/db/eventTemplatesRepository.ts`.
 
+### `temporary_voice_channels`
+
+Backs `/voice-channel` — see [EVENT_ATTENDANCE.md § Temporary voice channels](EVENT_ATTENDANCE.md#temporary-voice-channels-do-not-affect-attendance). Added in migration v41, alongside three more `settings` columns: `temp_voice_category_id` (Discord category new channels are placed in, `null` = fall back to the invoking channel's own category, then the guild root), `temp_voice_max_amount` (dashboard-configurable ceiling on `/voice-channel create`'s `amount`, always `<= TEMP_VOICE_HARD_MAX_AMOUNT`), and `temp_voice_name_format` (the `{n}`/`{event}` naming format).
+
+One row per live, bot-created temporary voice channel — the row is the only record that a channel is bot-owned, so it's written immediately after each successful create, never batched. `channel_id` is the primary key (idempotent inserts, O(1) "is this a temp channel?" lookup — used to keep these channels out of every voice-channel picker and out of attendance tracking). `event_id` is the event the set is bound to, or `null` for an unbound set (cleared only by `/voice-channel clear`) — it deliberately carries **no foreign key**: with `foreign_keys = ON`, an `ON DELETE SET NULL` would silently turn a bound set into an unbound one the moment its event row was deleted, which is backwards (a vanished event should make its channels due for cleanup, not immortal). See `src/db/temporaryVoiceChannelsRepository.ts` and `src/services/temporaryVoiceChannels.ts`.
+
 ## Access pattern
 
 Raw SQL lives in `src/db/`:
@@ -176,6 +182,7 @@ Raw SQL lives in `src/db/`:
 - `src/db/memberRecordsRepository.ts` — `getMemberRecord`, `getMemberRecordsByIds` (bounded batch lookup), `listFormerMembers`/`listRegistrations` (SQL-side search + pagination via `MemberSearchOptions`), `upsertJoin`, `updateProfile`, `recordRulesAccepted`, `recordLeave`.
 - `src/db/eventAttendanceRepository.ts` — event/signup/voice-log CRUD (`createEvent`/`updateEventFields`, `listEventsInRange`/`listEventsAllMonths`, `listDueScheduledEvents`/`listDueActiveEvents`/`listActiveEvents`/`listDueReminders`, `setEventActive`/`setEventCompleted`/`setEventCancelled`/`setEventReminded`, `upsertSignupByUser` (intent only), `linkSignupToUser`, `setSignupAttendance` (attendance only), `appendVoiceLog`, `listVoiceLog`/`listVoiceLogForUser`).
 - `src/db/eventTemplatesRepository.ts` — template CRUD (`listEventTemplates`, `getEventTemplateById`/`getEventTemplateByName`, `createEventTemplate`/`updateEventTemplate`/`deleteEventTemplate`).
+- `src/db/temporaryVoiceChannelsRepository.ts` — bot-owned temporary voice channel CRUD (`insertTemporaryVoiceChannel`, `listTemporaryVoiceChannels`/`listTemporaryVoiceChannelIds`, `countTemporaryVoiceChannels`, `isTemporaryVoiceChannel`, `deleteTemporaryVoiceChannel`).
 
 `src/services/*.ts` (business logic) and `src/web/routes/*.ts` (dashboard API handlers) are the only consumers of these repositories; nothing outside `src/db/` writes SQL directly. Repository writes that other parts of the app need to react to live (settings, command overrides, reaction-role panels/mappings) emit an event on the shared `settingsBus` (`src/services/settingsBus.ts`) after writing.
 

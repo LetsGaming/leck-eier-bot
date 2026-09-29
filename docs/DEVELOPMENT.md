@@ -21,11 +21,12 @@ You'll need a real (or disposable test) Discord application/bot token to actuall
 | `npm run build` | Type-check and compile `src/` → `dist/` (`tsc`), then install and build `web/` too |
 | `npm start` | Run the compiled bot (`node dist/index.js`) — requires `npm run build` first |
 | `npm run typecheck` | Type-check only, no output (`tsc --noEmit`) — fast, useful in CI or before committing. Bot-only; run `npm --prefix web run build` to type-check the dashboard. |
+| `npm test` | Runs the `node:test` suite (`tests/bot/**`, `tests/db/**`, `tests/seam/**`) via `tsx --test` |
 | `npm run env:example` | Regenerate `.env.example` from `src/config/schema.ts` |
 | `npm run dev:up -- --id <name>` | Start an isolated mock backend + dashboard, seeded with realistic data — see [Isolated dev sessions & mock data](#isolated-dev-sessions--mock-data) |
 | `npm run dev:down -- --id <name>` | Stop that session and wipe its database/logs |
 
-There is currently no automated test suite. Verify changes with `npm run typecheck`, `npm run build`, and manual testing against a test bot/server.
+Verify changes with `npm test`, `npm run typecheck`, `npm run build`, and manual testing against a test bot/server.
 
 ## Isolated dev sessions & mock data
 
