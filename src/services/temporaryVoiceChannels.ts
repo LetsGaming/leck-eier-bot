@@ -9,11 +9,17 @@ import {
 import { listActiveEvents, listUpcomingScheduledEvents, getEventById } from "../db/eventAttendanceRepository.js";
 import { getSettings } from "../db/settingsRepository.js";
 import {
+  replacePendingVoiceChannelMove,
+  listDuePendingVoiceChannelMoves,
+  deletePendingVoiceChannelMove,
+} from "../db/pendingVoiceChannelMovesRepository.js";
+import {
   buildTempVoiceChannelName,
   validateTempVoiceRequest,
   resolveCategoryId,
   selectBindingEvent,
   isTempChannelDue,
+  resolveMoveTargetChannelId,
 } from "../shared/temporaryVoiceChannels.js";
 import { DISCORD_ERROR_CODE_UNKNOWN_CHANNEL } from "../constants.js";
 import logger, { errorMessage } from "../utils/logger.js";
@@ -163,6 +169,83 @@ export async function clearTemporaryVoiceChannels(client: Client): Promise<Clear
     else result.failed++;
   }
   return result;
+}
+
+export type MoveMembersBackResult =
+  | { ok: true; moved: number; alreadyThere: number; failed: number; targetChannelId: string }
+  | { ok: false; message: string };
+
+/**
+ * Moves every member currently connected to any managed temporary voice
+ * channel into the bound event's main voice channel. Best-effort per member
+ * — one member's `setChannel()` failing (e.g. they left mid-loop, or a
+ * permission issue) doesn't abort the rest; it's just counted as `failed`.
+ */
+export async function moveMembersBackToMainChannel(guild: Guild): Promise<MoveMembersBackResult> {
+  const rows = listTemporaryVoiceChannels();
+  const boundEventId = rows[0]?.eventId ?? null;
+  const event = boundEventId === null ? null : getEventById(boundEventId);
+  const resolved = resolveMoveTargetChannelId(
+    rows.map((r) => r.eventId),
+    event,
+  );
+  if (!resolved.ok) return resolved;
+
+  const targetChannel = guild.channels.cache.get(resolved.channelId);
+  if (!targetChannel || targetChannel.type !== ChannelType.GuildVoice) {
+    return { ok: false, message: "Der Haupt-Sprachkanal des Events wurde nicht gefunden." };
+  }
+
+  let moved = 0;
+  let alreadyThere = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const channel = guild.channels.cache.get(row.channelId);
+    if (!channel || channel.type !== ChannelType.GuildVoice) continue;
+    for (const member of channel.members.values()) {
+      if (member.voice.channelId === resolved.channelId) {
+        alreadyThere++;
+        continue;
+      }
+      try {
+        await member.voice.setChannel(resolved.channelId);
+        moved++;
+      } catch (err) {
+        logger.warn(`/voice-channel move: Verschieben von Mitglied ${member.id} fehlgeschlagen: ${errorMessage(err)}`);
+        failed++;
+      }
+    }
+  }
+  return { ok: true, moved, alreadyThere, failed, targetChannelId: resolved.channelId };
+}
+
+export type ScheduleMoveResult = { ok: true; dueAt: string } | { ok: false; message: string };
+
+/** Replaces any existing pending schedule — see `pendingVoiceChannelMovesRepository.ts`. */
+export function scheduleMoveMembersBackToMainChannel(guildId: string, delayMinutes: number, actorId: string): ScheduleMoveResult {
+  if (countTemporaryVoiceChannels() === 0) {
+    return { ok: false, message: "Es gibt aktuell keine temporären Sprachkanäle." };
+  }
+  const dueAt = new Date(Date.now() + delayMinutes * 60_000).toISOString();
+  replacePendingVoiceChannelMove({ guildId, dueAt, requestedByUserId: actorId });
+  return { ok: true, dueAt };
+}
+
+/** Runs any due scheduled move-back, then drops its row regardless of outcome — a permanently-failing move (event gone, channel gone) must not retry forever. */
+export async function sweepPendingVoiceChannelMoves(client: Client): Promise<void> {
+  const due = listDuePendingVoiceChannelMoves(new Date().toISOString());
+  if (due.length === 0) return;
+
+  for (const row of due) {
+    const guild = client.guilds.cache.get(row.guildId);
+    if (guild) {
+      const result = await moveMembersBackToMainChannel(guild);
+      if (!result.ok) logger.warn(`Geplantes Zurückholen der Sprachkanal-Mitglieder fehlgeschlagen: ${result.message}`);
+    } else {
+      logger.warn(`Geplantes Zurückholen der Sprachkanal-Mitglieder: Server ${row.guildId} nicht im Cache.`);
+    }
+    deletePendingVoiceChannelMove(row.id);
+  }
 }
 
 /**

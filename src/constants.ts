@@ -141,6 +141,8 @@ export const TEMP_VOICE_GROUP_SIZE_MAX = 99;
 export const DEFAULT_TEMP_VOICE_NAME_FORMAT = "Gruppe {n}";
 /** Discord's hard cap on a channel name's length. */
 export const DISCORD_CHANNEL_NAME_MAX_LENGTH = 100;
+/** Upper bound on `/voice-channel move`'s `time_m` delay — 24h. */
+export const TEMP_VOICE_MOVE_MAX_DELAY_MINUTES = 1440;
 
 // --- Reaction roles ---
 /**

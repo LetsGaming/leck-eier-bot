@@ -18,8 +18,16 @@ const { createEvent, setEventActive, setEventCompleted, setEventCancelled } = aw
 const { listTemporaryVoiceChannels, countTemporaryVoiceChannels, insertTemporaryVoiceChannel } = await import(
   "../../src/db/temporaryVoiceChannelsRepository.js"
 );
-const { createTemporaryVoiceChannels, clearTemporaryVoiceChannels, sweepTemporaryVoiceChannels } = await import(
-  "../../src/services/temporaryVoiceChannels.js"
+const {
+  createTemporaryVoiceChannels,
+  clearTemporaryVoiceChannels,
+  sweepTemporaryVoiceChannels,
+  moveMembersBackToMainChannel,
+  scheduleMoveMembersBackToMainChannel,
+  sweepPendingVoiceChannelMoves,
+} = await import("../../src/services/temporaryVoiceChannels.js");
+const { listPendingVoiceChannelMoves, clearPendingVoiceChannelMoves } = await import(
+  "../../src/db/pendingVoiceChannelMovesRepository.js"
 );
 
 const GUILD_ID = "guild-1";

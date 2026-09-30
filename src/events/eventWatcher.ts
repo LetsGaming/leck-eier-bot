@@ -3,7 +3,7 @@ import { listActiveEvents, appendVoiceLog } from "../db/eventAttendanceRepositor
 import { cancelEventByMessageId, handleEventRsvpButton, publishDueScheduledEvents } from "../services/events.js";
 import { catchUpEvents, sweepEvents } from "../services/eventAttendance.js";
 import { cleanupFinishedEventChannels } from "../services/eventChannelCleanup.js";
-import { sweepTemporaryVoiceChannels } from "../services/temporaryVoiceChannels.js";
+import { sweepTemporaryVoiceChannels, sweepPendingVoiceChannelMoves } from "../services/temporaryVoiceChannels.js";
 import { isTemporaryVoiceChannel } from "../db/temporaryVoiceChannelsRepository.js";
 import { handleCreateModalSubmit } from "../commands/general/event.js";
 import { EVENT_SWEEP_INTERVAL_MS } from "../constants.js";
@@ -82,6 +82,7 @@ export default function registerEventWatcher(client: BotClient): void {
       publishDueScheduledEvents(client).catch((err) => logger.error(`Geplante Veröffentlichungen fehlgeschlagen: ${errorMessage(err)}`));
       cleanupFinishedEventChannels(client).catch((err) => logger.error(`Event-Kanal-Aufräumen fehlgeschlagen: ${errorMessage(err)}`));
       sweepTemporaryVoiceChannels(client).catch((err) => logger.error(`Temporäre-Sprachkanäle-Aufräumen fehlgeschlagen: ${errorMessage(err)}`));
+      sweepPendingVoiceChannelMoves(client).catch((err) => logger.error(`Geplantes Zurückholen der Sprachkanal-Mitglieder fehlgeschlagen: ${errorMessage(err)}`));
     }, EVENT_SWEEP_INTERVAL_MS);
   });
 }

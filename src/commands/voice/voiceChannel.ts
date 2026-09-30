@@ -1,7 +1,18 @@
 import { SlashCommandBuilder, MessageFlags, PermissionsBitField, type ChatInputCommandInteraction } from "discord.js";
-import { createTemporaryVoiceChannels, clearTemporaryVoiceChannels } from "../../services/temporaryVoiceChannels.js";
+import {
+  createTemporaryVoiceChannels,
+  clearTemporaryVoiceChannels,
+  moveMembersBackToMainChannel,
+  scheduleMoveMembersBackToMainChannel,
+} from "../../services/temporaryVoiceChannels.js";
 import { createErrorEmbed, createSuccessEmbed } from "../../utils/embedUtils.js";
-import { CommandName, CommandPermission, TEMP_VOICE_HARD_MAX_AMOUNT, TEMP_VOICE_GROUP_SIZE_MAX } from "../../constants.js";
+import {
+  CommandName,
+  CommandPermission,
+  TEMP_VOICE_HARD_MAX_AMOUNT,
+  TEMP_VOICE_GROUP_SIZE_MAX,
+  TEMP_VOICE_MOVE_MAX_DELAY_MINUTES,
+} from "../../constants.js";
 import logger, { errorMessage } from "../../utils/logger.js";
 
 export const permission = CommandPermission.Admin;
@@ -30,7 +41,20 @@ export const data = new SlashCommandBuilder()
           .setMaxValue(TEMP_VOICE_GROUP_SIZE_MAX),
       ),
   )
-  .addSubcommand((sub) => sub.setName("clear").setDescription("Löscht alle aktuell verwalteten temporären Sprachkanäle"));
+  .addSubcommand((sub) => sub.setName("clear").setDescription("Löscht alle aktuell verwalteten temporären Sprachkanäle"))
+  .addSubcommand((sub) =>
+    sub
+      .setName("move")
+      .setDescription("Holt alle Mitglieder aus den temporären Sprachkanälen in den Haupt-Sprachkanal des Events zurück")
+      .addIntegerOption((opt) =>
+        opt
+          .setName("time_m")
+          .setDescription("Verzögerung in Minuten, bevor automatisch zurückgeholt wird (weglassen für sofort)")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(TEMP_VOICE_MOVE_MAX_DELAY_MINUTES),
+      ),
+  );
 
 async function executeCreate(interaction: ChatInputCommandInteraction): Promise<void> {
   const amount = interaction.options.getInteger("amount", true);
@@ -77,6 +101,32 @@ async function executeClear(interaction: ChatInputCommandInteraction): Promise<v
   await interaction.editReply({ embeds: [createSuccessEmbed(parts.join(", ") + ".")] });
 }
 
+async function executeMove(interaction: ChatInputCommandInteraction): Promise<void> {
+  const timeM = interaction.options.getInteger("time_m", false);
+
+  if (timeM === null) {
+    const result = await moveMembersBackToMainChannel(interaction.guild!);
+    if (!result.ok) {
+      await interaction.editReply({ embeds: [createErrorEmbed(result.message)] });
+      return;
+    }
+    const parts = [`**${result.moved}** Mitglied/-er verschoben`];
+    if (result.alreadyThere > 0) parts.push(`${result.alreadyThere} bereits im Zielkanal`);
+    if (result.failed > 0) parts.push(`${result.failed} konnten nicht verschoben werden`);
+    await interaction.editReply({ embeds: [createSuccessEmbed(parts.join(", ") + ".")] });
+    return;
+  }
+
+  const result = scheduleMoveMembersBackToMainChannel(interaction.guild!.id, timeM, interaction.user.id);
+  if (!result.ok) {
+    await interaction.editReply({ embeds: [createErrorEmbed(result.message)] });
+    return;
+  }
+  await interaction.editReply({
+    embeds: [createSuccessEmbed(`Mitglieder werden in **${timeM}** Minute${timeM === 1 ? "" : "n"} automatisch zurückgeholt (<t:${Math.floor(new Date(result.dueAt).getTime() / 1000)}:R>).`)],
+  });
+}
+
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guild) {
     await interaction.reply({
@@ -86,10 +136,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
+  const subcommand = interaction.options.getSubcommand();
   const me = interaction.guild.members.me;
-  if (!me?.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+  const requiredPermission = subcommand === "move" ? PermissionsBitField.Flags.MoveMembers : PermissionsBitField.Flags.ManageChannels;
+  const requiredPermissionLabel = subcommand === "move" ? "Mitglieder verschieben" : "Kanäle verwalten";
+  if (!me?.permissions.has(requiredPermission)) {
     await interaction.reply({
-      embeds: [createErrorEmbed('Ich benötige die Berechtigung "Kanäle verwalten", um das zu tun.')],
+      embeds: [createErrorEmbed(`Ich benötige die Berechtigung "${requiredPermissionLabel}", um das zu tun.`)],
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -98,9 +151,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const subcommand = interaction.options.getSubcommand();
     if (subcommand === "create") {
       await executeCreate(interaction);
+    } else if (subcommand === "move") {
+      await executeMove(interaction);
     } else {
       await executeClear(interaction);
     }

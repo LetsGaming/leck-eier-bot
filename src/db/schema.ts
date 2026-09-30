@@ -357,3 +357,18 @@ export const temporaryVoiceChannels = sqliteTable(
   },
   (table) => [index("idx_temporary_voice_channels_event").on(table.eventId)],
 );
+
+// At most one row ever exists — `/voice-channel move <time_m>` replaces
+// rather than appends, since only one set of temporary voice channels can
+// exist at a time (see temporaryVoiceChannels' create-rejects-while-live rule).
+export const pendingVoiceChannelMoves = sqliteTable(
+  "pending_voice_channel_moves",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    guildId: text("guild_id").notNull(),
+    dueAt: text("due_at").notNull(),
+    requestedByUserId: text("requested_by_user_id").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("idx_pending_voice_channel_moves_due").on(table.dueAt)],
+);

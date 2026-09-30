@@ -85,3 +85,24 @@ export function isTempChannelDue(event: Event | null, boundEventId: number | nul
   if (event === null) return true;
   return event.status === "completed" || event.status === "cancelled";
 }
+
+export type ResolveMoveTargetResult = { ok: true; channelId: string } | { ok: false; message: string };
+
+/**
+ * Which channel `/voice-channel move` moves members into: the bound event's
+ * resolved main voice channel. Every row in a temp-channel set shares the
+ * same `eventId` (set once at creation — see `selectBindingEvent`), so a
+ * mismatch here would mean data corruption rather than a normal user state;
+ * still checked defensively since this table carries no foreign key.
+ */
+export function resolveMoveTargetChannelId(boundEventIds: (number | null)[], event: Event | null): ResolveMoveTargetResult {
+  if (boundEventIds.length === 0) return { ok: false, message: "Es gibt aktuell keine temporären Sprachkanäle." };
+  const eventId = boundEventIds[0]!;
+  if (eventId === null || boundEventIds.some((id) => id !== eventId)) {
+    return { ok: false, message: "Die temporären Sprachkanäle sind keinem einzelnen Event eindeutig zugeordnet — automatisches Zurückholen ist nicht möglich." };
+  }
+  if (event === null || event.status !== "active" || !event.voiceChannelId) {
+    return { ok: false, message: "Für das gebundene Event ist aktuell kein aktiver Haupt-Sprachkanal bekannt." };
+  }
+  return { ok: true, channelId: event.voiceChannelId };
+}
