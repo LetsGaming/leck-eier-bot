@@ -1,42 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 import { dateKeyInTimezone } from "../../src/utils/timezone.js";
 
 // services/eventConflicts.ts can't be imported directly here — it pulls in
-// src/db/eventAttendanceRepository.ts, which pulls in src/db/index.ts, which
-// opens the real data/bot.sqlite file as a top-level import side effect
-// (same constraint documented in eventAttendanceRepository.test.ts). This
-// mirrors listNonCancelledEventsFrom()'s exact SQL against a throwaway
-// in-memory database, and exercises dateKeyInTimezone() (no DB side effect,
+// src/db/eventAttendanceRepository.ts, which pulls in src/db/index.ts, which opens the real
+// data/bot.sqlite file as a top-level import side effect. This runs listNonCancelledEventsFrom()'s
+// exact SQL against a real migrated schema, and exercises dateKeyInTimezone() (no DB side effect,
 // safe to import directly) as findEventConflicts() itself uses it.
 
 const TZ = "Europe/Berlin";
 
 function makeEventsDb(): Database.Database {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      starts_at TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'scheduled'
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_NON_CANCELLED_FROM_SQL = `
   SELECT id, title, starts_at FROM events WHERE status != 'cancelled' AND starts_at >= ? ORDER BY starts_at ASC
 `;
 
+let nextMessageId = 1;
+
 function insert(db: Database.Database, overrides: Partial<{ title: string; startsAt: string; status: string }>): number {
   return Number(
     db
-      .prepare(`INSERT INTO events (title, starts_at, status) VALUES (@title, @startsAt, @status)`)
+      .prepare(
+        `INSERT INTO events (message_id, channel_id, title, starts_at, ends_at, status, created_at, updated_at)
+         VALUES (@messageId, 'chan-1', @title, @startsAt, @endsAt, @status, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      )
       .run({
+        messageId: `msg-${nextMessageId++}`,
         title: overrides.title ?? "Event",
         startsAt: overrides.startsAt ?? "2026-09-23T18:00:00.000Z",
+        endsAt: overrides.startsAt ?? "2026-09-23T18:00:00.000Z",
         status: overrides.status ?? "scheduled",
       }).lastInsertRowid,
   );

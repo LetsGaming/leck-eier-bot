@@ -1,30 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// scheduledEventPublishesRepository.ts can't be imported directly — it pulls
-// in src/db/index.ts, which opens the real data/bot.sqlite file as a
-// top-level import side effect (same constraint documented in
-// eventAttendanceRepository.test.ts). This mirrors the v39 migration's exact
-// SQL and the due-query predicate against a throwaway in-memory database.
+// scheduledEventPublishesRepository.ts can't be imported directly — it pulls in
+// src/db/index.ts, which opens the real data/bot.sqlite file as a top-level import side effect.
+// This runs the exact SQL and the due-query predicate against a real migrated schema.
 
 const MAX_ATTEMPTS = 3;
 
 function makeDb(): Database.Database {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE scheduled_event_publishes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      publish_at TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      published_event_id INTEGER,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      last_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_DUE_SQL = `

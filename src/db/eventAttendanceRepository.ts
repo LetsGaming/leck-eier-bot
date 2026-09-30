@@ -44,6 +44,7 @@ interface SignupRow {
   last_left_at: string | null;
   late_minutes: number | null;
   early_minutes: number | null;
+  choice_changed_at: string;
 }
 
 interface VoiceLogRow {
@@ -92,6 +93,7 @@ function rowToSignup(row: SignupRow): EventSignup {
     lastLeftAt: row.last_left_at,
     lateMinutes: row.late_minutes,
     earlyMinutes: row.early_minutes,
+    choiceChangedAt: row.choice_changed_at,
   };
 }
 
@@ -109,7 +111,7 @@ const EVENT_COLUMNS = `id, message_id, channel_id, title, description, starts_at
   configured_voice_channel_id, voice_channel_id, activated_at, completed_at, tracking_incomplete, reminded_at,
   use_font, created_at, updated_at, channel_cleared_at`;
 const SIGNUP_COLUMNS = `id, event_id, raw_name, normalized_name, choice, user_id, match_source, withdrawn_at,
-  attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes`;
+  attendance_status, first_joined_at, last_left_at, late_minutes, early_minutes, choice_changed_at`;
 const VOICE_LOG_COLUMNS = "id, event_id, user_id, action, at";
 
 /**
@@ -231,7 +233,7 @@ const deleteEventStmt = db.prepare<[number]>("DELETE FROM events WHERE id = ?");
 const selectSignupsByEventStmt = db.prepare<[number], SignupRow>(
   `SELECT ${SIGNUP_COLUMNS} FROM event_signups WHERE event_id = ?
    ORDER BY CASE choice WHEN 'accepted' THEN 0 WHEN 'tentative' THEN 1 WHEN 'declined' THEN 2 ELSE 3 END,
-            raw_name COLLATE NOCASE`,
+            choice_changed_at ASC, id ASC`,
 );
 const selectSignupByIdStmt = db.prepare<[number], SignupRow>(`SELECT ${SIGNUP_COLUMNS} FROM event_signups WHERE id = ?`);
 /**
@@ -244,6 +246,13 @@ const selectSignupByIdStmt = db.prepare<[number], SignupRow>(`SELECT ${SIGNUP_CO
  * comment for why it wasn't replaced outright. Always clears `withdrawn_at`
  * and stamps `match_source = 'button'`, since a native RSVP is always a
  * fresh, direct signal from the user.
+ *
+ * `choice_changed_at` drives the embed's name-list ordering (see
+ * `selectSignupsByEventStmt`): it's set on first signup, and on a later
+ * click only bumped when `choice` actually differs from the stored value —
+ * re-clicking the same RSVP doesn't reshuffle the list, but switching
+ * category does, moving the signup to the end of its new category at the
+ * time of the change.
  */
 const upsertSignupByUserStmt = db.prepare<{
   eventId: number;
@@ -251,12 +260,16 @@ const upsertSignupByUserStmt = db.prepare<{
   normalizedName: string;
   choice: string;
   userId: string;
+  changedAt: string;
 }>(
-  `INSERT INTO event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source)
-   VALUES (@eventId, @rawName, @normalizedName, @choice, @userId, 'button')
+  `INSERT INTO event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source, choice_changed_at)
+   VALUES (@eventId, @rawName, @normalizedName, @choice, @userId, 'button', @changedAt)
    ON CONFLICT(event_id, normalized_name) DO UPDATE SET
      raw_name = excluded.raw_name, choice = excluded.choice, user_id = excluded.user_id,
-     match_source = 'button', withdrawn_at = NULL`,
+     match_source = 'button', withdrawn_at = NULL,
+     choice_changed_at = CASE WHEN event_signups.choice != excluded.choice
+                               THEN excluded.choice_changed_at
+                               ELSE event_signups.choice_changed_at END`,
 );
 const linkSignupStmt = db.prepare<{ id: number; userId: string | null; matchSource: string }>(
   `UPDATE event_signups SET user_id = @userId, match_source = @matchSource WHERE id = @id`,
@@ -586,7 +599,14 @@ export function deleteEvent(id: number): void {
 
 /** RSVP button click — the sole write path for signup intent on a native event. See `upsertSignupByUserStmt`. */
 export function upsertSignupByUser(eventId: number, userId: string, displayName: string, choice: RsvpChoice): EventSignup {
-  upsertSignupByUserStmt.run({ eventId, rawName: displayName, normalizedName: `discord:${userId}`, choice, userId });
+  upsertSignupByUserStmt.run({
+    eventId,
+    rawName: displayName,
+    normalizedName: `discord:${userId}`,
+    choice,
+    userId,
+    changedAt: new Date().toISOString(),
+  });
   const row = db
     .prepare<[number, string], SignupRow>(`SELECT ${SIGNUP_COLUMNS} FROM event_signups WHERE event_id = ? AND user_id = ?`)
     .get(eventId, userId)!;

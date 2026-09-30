@@ -1,14 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// getBirthdayForUser()/listBirthdaysInNextDays() (src/db/birthdaysRepository.ts)
-// aren't exercised directly here: that module imports src/db/index.ts, which
-// opens the real data/bot.sqlite file as a top-level import side effect (see
-// commandPermissionGateMigration.test.ts's comment for the same constraint).
-// This instead mirrors, in isolation, the exact SQL and resolution logic
-// those two functions rest on — same convention as
-// memberRecordsArchive.test.ts's cutoff-SQL tests.
+// getBirthdayForUser()/listBirthdaysInNextDays() (src/db/birthdaysRepository.ts) aren't
+// exercised directly here: that module imports src/db/index.ts, which opens the real
+// data/bot.sqlite file as a top-level import side effect. This instead runs the same SQL and
+// resolution logic those two functions rest on against a real migrated schema (createTestDb()).
 
 interface BirthdayRow {
   id: number;
@@ -20,21 +18,7 @@ interface BirthdayRow {
 }
 
 function makeBirthdaysDb(): Database.Database {
-  const db = new Database(":memory:");
-  // Mirrors the `birthdays` table shape getBirthdayForUser()/
-  // listBirthdaysInNextDays() actually query (src/db/birthdaysRepository.ts).
-  db.exec(`
-    CREATE TABLE birthdays (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      mention TEXT NOT NULL,
-      user_id TEXT,
-      name TEXT,
-      source TEXT NOT NULL DEFAULT 'list'
-    );
-    CREATE UNIQUE INDEX idx_birthdays_user ON birthdays(user_id);
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_BY_USER_SQL = "SELECT id, date, mention, user_id, name, source FROM birthdays WHERE user_id = ?";

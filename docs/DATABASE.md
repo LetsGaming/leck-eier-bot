@@ -1,6 +1,6 @@
 # Database
 
-The bot persists all state in a single SQLite database via [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (synchronous, no ORM). There's still no external migration tool, but as of the reaction-roles/dashboard feature there is a minimal one built on SQLite's own `PRAGMA user_version`: it's safe to delete the database file to reset all state, but it's no longer just `CREATE TABLE IF NOT EXISTS` — see [Migrations](#migrations) below.
+The bot persists all state in a single SQLite database, accessed at runtime via [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (synchronous — every repository in `src/db/` still writes plain `db.prepare(...)` SQL, no query-builder). Schema and migrations are managed by [Drizzle](https://orm.drizzle.team/) — see [Migrations](#migrations) below. It's safe to delete the database file to reset all state; migrations re-run from scratch on next boot.
 
 ## Location
 
@@ -12,17 +12,25 @@ The `data/` directory (and therefore the whole database) is git-ignored and Dock
 
 ## Migrations
 
-`src/db/index.ts` holds an ordered array of migration functions, applied in order and tracked via `PRAGMA user_version` (an integer SQLite maintains for you — no separate tracking table needed):
+Schema and migrations are managed by [Drizzle](https://orm.drizzle.team/), following the same pattern as this org's other SQLite/better-sqlite3 projects (e.g. `liftr/packages/db`):
 
-```ts
-const MIGRATIONS: Array<(d: Database.Database) => void> = [ /* v1 */, /* v2 */, ... ];
-const current = db.pragma("user_version", { simple: true }) as number;
-for (let v = current; v < MIGRATIONS.length; v++) {
-  db.transaction(() => { MIGRATIONS[v]!(db); db.pragma(`user_version = ${v + 1}`); })();
-}
+- **`src/db/schema.ts`** is the single source of truth — every table, column, index, and check constraint, declared with `drizzle-orm/sqlite-core`. To change the schema, edit this file.
+- **`src/db/migrations/`** holds the generated, numbered `.sql` files (plus a `meta/` folder Drizzle uses to track what's been generated) — produced by `npm run db:generate` (`drizzle-kit generate`), which diffs `schema.ts` against the last generated state. **Never hand-edit anything under this folder** — it's a build artifact, not something to author directly.
+- **`src/db/migrations.ts`** (`runMigrations(db)`) is the small runner that applies pending migrations at boot, using `drizzle-orm/better-sqlite3/migrator`. It's idempotent and safe to call on every process start — a fully up-to-date database is a no-op.
+
+Workflow for a schema change:
+
+```bash
+# 1. edit src/db/schema.ts
+npm run db:generate         # writes a new src/db/migrations/000N_*.sql
+# 2. read the generated SQL before committing — check for unexpected
+#    DROP/table-recreates on tables holding real data
+npm test                    # tests/helpers/testDb.ts applies migrations fresh in-memory
 ```
 
-Each entry runs once, ever, per database file, in its own transaction. **Migrations already shipped are never edited** — once `v2` is in a released version, changing its SQL retroactively would desync deployed databases that already ran it; add a new entry instead. Currently: v1 is the original schema (`birthdays` + singleton `settings`), v2 adds the birthday-list/cron/leave-notification columns to `settings` plus `command_settings`, v3 adds the `reaction_role_*` tables, v4 adds `web_sessions`, v5 adds selection types (reactions/buttons/dropdown), plain-text-vs-embed messages, the allow-multiple/removable/allowed-roles/draft-until-sent columns to `reaction_role_panels` (data-migrating the old `mode`/`message_id` into them), and rebuilds `reaction_role_mappings` so `emoji_name` can be `null` (buttons/dropdown options don't require an emoji); v6 adds the required `name` column to `reaction_role_panels`, backfilled from `title` where one exists; v7 adds `source` to `birthdays` and `birthday_mod_channel_id` to `settings` for self-service birthday registration (see below); v8 adds `role` to `web_sessions` for dashboard RBAC (buggy — see v11); v9 adds the bot-managed-anchor-message columns to `settings` (see below); v10 adds the global `font_map` on `settings` plus each feature's own `*_use_font`/`use_font` opt-in column (see below); v11 backfills `role = 'bot-owner'` for pre-existing sessions with `is_owner = 1` that v8 had incorrectly left at the `role` column's `'admin'` default; v12 turns `birthday_self_registration_enabled` back off wherever `birthday_bot_manages_anchor` is off, now that the two are required to move together; v13 adds `member_records` for the dashboard's Member Audit page (see below); v14 drops the dead `web_sessions.is_owner` `NOT NULL` constraint that had been silently failing every fresh login since v8; v15 adds the register-gate-role columns to `settings`; v16 adds `birthday_anchor_intro`; v17 adds `birthday_anchor_messages` (see below), seeded from `birthday_list_message_id` where bot-managed mode was already active; v18 adds `months` to `birthday_anchor_messages`, letting each chunk stay pinned to the same months across syncs; v19 backfills `birthday_self_registration_enabled`/`birthday_bot_manages_anchor` to `1` now that both are the bot's only mode (the columns themselves are left in the schema, unread — see [Schema § settings](#settings)); v20 adds `rules_accepted_use_discord_screening`, defaulting to role-based detection; v21 replaces `reaction_role_mappings.role_id` with `role_ids` (a JSON array), so a Reactions-panel option can grant more than one role at once.
+There's no rollback tooling — treat schema changes as forward-only; if a mistake is generated, fix `schema.ts` and generate a corrective follow-up migration rather than editing or deleting the bad one once it has shipped.
+
+**Legacy bridge:** this migration system replaced an older hand-rolled one (an array of migration functions tracked via `PRAGMA user_version`, up through its v41). `src/db/migrations.ts`'s `LEGACY_BASELINES` map recognizes a pre-Drizzle database by that old `user_version` value and stamps the equivalent generated migrations as already-applied instead of re-running their SQL (which would fail — the tables already exist). A database older than that is refused at boot with a clear error, rather than silently corrupted.
 
 ## Schema
 
@@ -173,7 +181,7 @@ One row per live, bot-created temporary voice channel — the row is the only re
 
 Raw SQL lives in `src/db/`:
 
-- `src/db/index.ts` — opens the connection, runs migrations (see above).
+- `src/db/index.ts` — opens the connection, calls `runMigrations()` (see [Migrations](#migrations) above).
 - `src/db/birthdaysRepository.ts` — `getBirthdaysForDate(date)`, `getAllBirthdaysByDate()`, `insertBirthday(entry)`/`updateBirthdayEntry(id, entry)`/`deleteBirthday(id)` (the dashboard's admin CRUD, all `source = 'list'`), `upsertSelfBirthday(entry)` (insert/update a single `source = 'self'` row by `user_id`).
 - `src/db/birthdayAnchorMessagesRepository.ts` — `getAnchorMessageChunks()`/`setAnchorMessageChunks(chunks)` (transactional full replace of `birthday_anchor_messages`).
 - `src/db/settingsRepository.ts` — `getSettings()`/`updateSettings(patch)`, `getCommandOverride(name)`/`getAllCommandOverrides()`/`setCommandOverride(name, override)`.

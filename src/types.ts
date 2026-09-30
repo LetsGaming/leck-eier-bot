@@ -311,6 +311,8 @@ export interface EventSignup {
   lateMinutes: number | null;
   /** Minutes before `endsAt` this member's final departure was, only when they never returned. Null if they stayed until the end (or the event isn't finished/tracked). Independent of `lateMinutes`. */
   earlyMinutes: number | null;
+  /** ISO UTC — when `choice` was last set (first signup, or the most recent time it actually changed; re-submitting the same choice doesn't bump it). Drives the embed's name-list ordering within each category. */
+  choiceChangedAt: string;
 }
 
 /** One join/leave/snapshot row in the tracked voice channel for an active event — the source of truth `deriveAttendance()` replays. Logged for every non-bot member who touches the channel, not just signed-up ones, so a manual name-link made after the fact can still reconstruct real attendance. */

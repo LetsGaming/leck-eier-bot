@@ -17,7 +17,10 @@ src/
     index.ts                   Loads .env (via dotenv) + validates it, caches the result
 
   db/
-    index.ts                   Opens the SQLite connection, runs migrations (PRAGMA user_version)
+    index.ts                   Opens the SQLite connection, calls runMigrations() (see migrations.ts)
+    schema.ts                  Drizzle schema — source of truth for the DB schema
+    migrations.ts               Applies generated migrations at boot (drizzle-orm migrator)
+    migrations/                Generated .sql files + meta/ — never hand-edited (see DATABASE.md)
     birthdaysRepository.ts     Birthday CRUD (get by date, get all grouped by date, replace-all)
     settingsRepository.ts      Settings singleton-row CRUD, command_settings CRUD
     reactionRolesRepository.ts  Reaction-role panel/mapping CRUD

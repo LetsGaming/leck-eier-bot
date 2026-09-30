@@ -1,38 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { gzipSync, gunzipSync } from "node:zlib";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// archiveOldMemberRecords() itself isn't exercised directly here: it imports
-// src/db/index.ts, which opens the real data/bot.sqlite file as a top-level
-// import side effect (see commandPermissionGateMigration.test.ts's comment
-// for the same constraint) — not something a unit test should trigger. This
-// instead verifies, in isolation, the two things that function's correctness
-// actually rests on: the cutoff SQL selecting the right rows, and the
-// gzip+JSONL file format round-tripping the archived data losslessly.
+// archiveOldMemberRecords() itself isn't exercised directly here: it imports src/db/index.ts,
+// which opens the real data/bot.sqlite file as a top-level import side effect — not something a
+// unit test should trigger. This instead verifies, in isolation, the two things that function's
+// correctness actually rests on: the cutoff SQL selecting the right rows (against a real migrated
+// schema), and the gzip+JSONL file format round-tripping the archived data losslessly.
 
 function makeMemberRecordsDb(): Database.Database {
-  const db = new Database(":memory:");
-  // Mirrors the columns listArchivableMemberRecords()'s query reads from
-  // (src/db/memberRecordsRepository.ts) — left_at/in_guild are the only ones
-  // its WHERE clause touches.
-  db.exec(`
-    CREATE TABLE member_records (
-      user_id TEXT PRIMARY KEY,
-      username TEXT NOT NULL,
-      left_at TEXT,
-      in_guild INTEGER NOT NULL DEFAULT 1
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_ARCHIVABLE_SQL = `SELECT user_id FROM member_records WHERE left_at IS NOT NULL AND left_at <= ?`;
 
 test("archivable-records cutoff: a member who left before the cutoff is selected", () => {
   const db = makeMemberRecordsDb();
-  db.prepare("INSERT INTO member_records (user_id, username, left_at, in_guild) VALUES (?, ?, ?, 0)").run(
+  db.prepare("INSERT INTO member_records (user_id, username, display_name, left_at, in_guild) VALUES (?, ?, ?, ?, 0)").run(
     "old-leaver",
+    "OldLeaver",
     "OldLeaver",
     "2020-01-01T00:00:00.000Z",
   );
@@ -47,8 +35,9 @@ test("archivable-records cutoff: a member who left before the cutoff is selected
 
 test("archivable-records cutoff: a member who left after the cutoff is NOT selected", () => {
   const db = makeMemberRecordsDb();
-  db.prepare("INSERT INTO member_records (user_id, username, left_at, in_guild) VALUES (?, ?, ?, 0)").run(
+  db.prepare("INSERT INTO member_records (user_id, username, display_name, left_at, in_guild) VALUES (?, ?, ?, ?, 0)").run(
     "recent-leaver",
+    "RecentLeaver",
     "RecentLeaver",
     "2026-06-01T00:00:00.000Z",
   );
@@ -60,8 +49,9 @@ test("archivable-records cutoff: a member who left after the cutoff is NOT selec
 
 test("archivable-records cutoff: a current member (left_at NULL) is never selected regardless of cutoff", () => {
   const db = makeMemberRecordsDb();
-  db.prepare("INSERT INTO member_records (user_id, username, left_at, in_guild) VALUES (?, ?, NULL, 1)").run(
+  db.prepare("INSERT INTO member_records (user_id, username, display_name, left_at, in_guild) VALUES (?, ?, ?, NULL, 1)").run(
     "current-member",
+    "CurrentMember",
     "CurrentMember",
   );
 

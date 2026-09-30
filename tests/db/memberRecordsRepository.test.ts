@@ -1,28 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// listRecentMemberActivity() (src/db/memberRecordsRepository.ts) isn't
-// exercised directly here — that module imports src/db/index.ts, which opens
-// the real data/bot.sqlite file as a top-level import side effect (see
-// commandPermissionGateMigration.test.ts's comment for the same constraint).
-// This instead mirrors its exact SQL against a throwaway in-memory database —
-// same convention as memberRecordsArchive.test.ts's cutoff-SQL tests.
+// listRecentMemberActivity() (src/db/memberRecordsRepository.ts) isn't exercised directly here —
+// that module imports src/db/index.ts, which opens the real data/bot.sqlite file as a top-level
+// import side effect. This instead runs its exact SQL against a real migrated schema.
 
 function makeMemberRecordsDb(): Database.Database {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE member_records (
-      user_id TEXT PRIMARY KEY,
-      username TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      joined_at TEXT,
-      rules_accepted_at TEXT,
-      left_at TEXT,
-      in_guild INTEGER NOT NULL DEFAULT 1
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_RECENT_ACTIVITY_SQL = `

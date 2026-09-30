@@ -1,24 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// Same constraint as eventConflicts.test.ts: eventAttendanceRepository.ts
-// can't be imported directly here (it opens the real data/bot.sqlite as a
-// top-level side effect), so this mirrors the two new queries'/statement's
-// exact SQL against a throwaway in-memory database.
+// Same constraint as eventConflicts.test.ts: eventAttendanceRepository.ts can't be imported
+// directly here (it opens the real data/bot.sqlite as a top-level side effect), so this runs
+// the two queries' exact SQL against a real migrated schema instead.
 
 function makeEventsDb(): Database.Database {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'scheduled',
-      completed_at TEXT,
-      channel_cleared_at TEXT
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_DUE_FOR_CLEANUP_SQL = `
@@ -28,6 +18,8 @@ const SELECT_PROTECTED_IN_CHANNEL_SQL = `
   SELECT id FROM events WHERE channel_id = ? AND status IN ('scheduled', 'active')
 `;
 
+let nextMessageId = 1;
+
 function insert(
   db: Database.Database,
   overrides: Partial<{ channelId: string; status: string; completedAt: string | null; channelClearedAt: string | null }>,
@@ -35,9 +27,11 @@ function insert(
   return Number(
     db
       .prepare(
-        `INSERT INTO events (channel_id, status, completed_at, channel_cleared_at) VALUES (@channelId, @status, @completedAt, @channelClearedAt)`,
+        `INSERT INTO events (message_id, channel_id, title, starts_at, ends_at, status, completed_at, channel_cleared_at, created_at, updated_at)
+         VALUES (@messageId, @channelId, 'Test Event', '2026-01-01T00:00:00.000Z', '2026-01-01T02:00:00.000Z', @status, @completedAt, @channelClearedAt, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
       )
       .run({
+        messageId: `msg-${nextMessageId++}`,
         channelId: overrides.channelId ?? "chan-1",
         status: overrides.status ?? "completed",
         completedAt: overrides.completedAt ?? "2026-01-01T00:00:00.000Z",

@@ -1,40 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { createTestDb } from "../helpers/testDb.js";
 
-// listSignupsForUser() (src/db/eventAttendanceRepository.ts) isn't exercised
-// directly here — that module imports src/db/index.ts, which opens the real
-// data/bot.sqlite file as a top-level import side effect (see
-// commandPermissionGateMigration.test.ts's comment for the same constraint).
-// This instead mirrors its exact join SQL against a throwaway in-memory
-// database — same convention as memberRecordsArchive.test.ts's cutoff-SQL
-// tests.
+// listSignupsForUser() (src/db/eventAttendanceRepository.ts) isn't exercised directly here —
+// that module imports src/db/index.ts, which opens the real data/bot.sqlite file as a top-level
+// import side effect. This instead runs its exact join SQL against a real migrated schema.
 
 function makeEventsDb(): Database.Database {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      starts_at TEXT NOT NULL
-    );
-    CREATE TABLE event_signups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL,
-      raw_name TEXT NOT NULL,
-      normalized_name TEXT NOT NULL,
-      choice TEXT NOT NULL,
-      user_id TEXT,
-      match_source TEXT NOT NULL,
-      withdrawn_at TEXT,
-      attendance_status TEXT,
-      first_joined_at TEXT,
-      last_left_at TEXT,
-      late_minutes INTEGER,
-      early_minutes INTEGER
-    );
-  `);
-  return db;
+  return createTestDb();
 }
 
 const SELECT_SIGNUPS_FOR_USER_SQL = `
@@ -55,14 +29,24 @@ interface Row {
   event_starts_at: string;
 }
 
+let nextMessageId = 1;
+let nextNormalizedName = 1;
+
 function insertEvent(db: Database.Database, title: string, startsAt: string): number {
-  return Number(db.prepare("INSERT INTO events (title, starts_at) VALUES (?, ?)").run(title, startsAt).lastInsertRowid);
+  return Number(
+    db
+      .prepare(
+        `INSERT INTO events (message_id, channel_id, title, starts_at, ends_at, created_at, updated_at)
+         VALUES (@messageId, 'chan-1', @title, @startsAt, @startsAt, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      )
+      .run({ messageId: `msg-${nextMessageId++}`, title, startsAt }).lastInsertRowid,
+  );
 }
 
 function insertSignup(db: Database.Database, eventId: number, userId: string | null, choice = "accepted"): void {
   db.prepare(
-    "INSERT INTO event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source) VALUES (?, 'Name', 'name', ?, ?, 'manual')",
-  ).run(eventId, choice, userId);
+    "INSERT INTO event_signups (event_id, raw_name, normalized_name, choice, user_id, match_source) VALUES (?, 'Name', ?, ?, ?, 'manual')",
+  ).run(eventId, `name-${nextNormalizedName++}`, choice, userId);
 }
 
 test("listSignupsForUser SQL: returns only this user's signups, joined with event title/start", () => {
