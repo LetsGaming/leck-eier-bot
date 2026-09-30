@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v jq >/dev/null 2>&1 || exit 0; p=$(jq -r '.tool_input.file_path // empty'); [ -n \"$p\" ] || exit 0; case \"$p\" in *src[/\\\\]db[/\\\\]migrations[/\\\\]*) printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Migration files under src/db/migrations are generated via npm run db:generate (drizzle-kit) and should not be hand-edited. Edit src/db/schema.ts instead and regenerate — see .claude/skills/db-migration.\"}}' ;; esac",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
