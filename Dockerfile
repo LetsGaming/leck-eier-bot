@@ -10,7 +10,13 @@ RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
 COPY contracts ./contracts
 COPY src ./src
+COPY scripts/copy-migrations.mjs ./scripts/copy-migrations.mjs
 RUN npx tsc
+# tsc only emits .js for .ts inputs and silently drops the generated Drizzle
+# migration .sql/.json files — copy them into dist/db/migrations, same as
+# `npm run build` does outside Docker. Without this, runMigrations() can't
+# find its migrations folder and the app fails to start.
+RUN node scripts/copy-migrations.mjs
 
 # ---- Build: dashboard SPA (separate package.json, own deps/lockfile) ----
 FROM node:lts-slim AS build-web
