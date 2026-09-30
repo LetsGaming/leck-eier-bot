@@ -177,6 +177,12 @@ Backs `/voice-channel` — see [EVENT_ATTENDANCE.md § Temporary voice channels]
 
 One row per live, bot-created temporary voice channel — the row is the only record that a channel is bot-owned, so it's written immediately after each successful create, never batched. `channel_id` is the primary key (idempotent inserts, O(1) "is this a temp channel?" lookup — used to keep these channels out of every voice-channel picker and out of attendance tracking). `event_id` is the event the set is bound to, or `null` for an unbound set (cleared only by `/voice-channel clear`) — it deliberately carries **no foreign key**: with `foreign_keys = ON`, an `ON DELETE SET NULL` would silently turn a bound set into an unbound one the moment its event row was deleted, which is backwards (a vanished event should make its channels due for cleanup, not immortal). See `src/db/temporaryVoiceChannelsRepository.ts` and `src/services/temporaryVoiceChannels.ts`.
 
+### `pending_voice_channel_moves`
+
+Backs `/voice-channel move <time_m>` — see [EVENT_ATTENDANCE.md § Temporary voice channels](EVENT_ATTENDANCE.md#temporary-voice-channels-do-not-affect-attendance). Added in migration `0002_nappy_betty_brant`, the first table added purely through Drizzle (no legacy baseline).
+
+At most one row ever exists: scheduling a move-back always replaces any existing row rather than queuing alongside it (only one set of temporary voice channels can exist at a time, so there is never more than one pending schedule either). `due_at` is the ISO UTC timestamp the 30-second sweep (`sweepPendingVoiceChannelMoves()`) compares against; `idx_pending_voice_channel_moves_due` indexes it for that lookup. The row is dropped once its move-back runs, regardless of outcome — a permanently-failing move (event gone, channel gone) must not retry forever. See `src/db/pendingVoiceChannelMovesRepository.ts` and `src/services/temporaryVoiceChannels.ts`.
+
 ## Access pattern
 
 Raw SQL lives in `src/db/`:

@@ -28,14 +28,15 @@ Portal → your application → **Bot** page → **Privileged Gateway Intents**.
 | **Create Private Threads** | The private per-member thread the register-form flow posts its confirmation note in. **Requires the server to be at Boost Level 2** — without it, Discord rejects thread creation regardless of this permission being granted. | `events/registerWatcher.ts` |
 | **Send Messages in Threads** | Posting the confirmation note into that private thread. | `events/registerWatcher.ts` |
 | **Manage Channels** | Creating and deleting temporary group voice channels (`/voice-channel create`/`clear`). Without it, `/voice-channel` refuses to run rather than partially creating channels it can't clean up. | `commands/voice/voiceChannel.ts`, `services/temporaryVoiceChannels.ts` |
+| **Move Members** | Moving members out of temporary group voice channels back into the event's main channel (`/voice-channel move`), immediately or on a schedule. | `commands/voice/voiceChannel.ts`, `services/temporaryVoiceChannels.ts` |
 
-**Newly required as of the self-service registration feature:** Manage Nicknames, Create Private Threads, Send Messages in Threads. **Newly required as of the temporary group voice channels feature:** Manage Channels. If the bot was invited before either feature shipped, it won't have these yet — see below.
+**Newly required as of the self-service registration feature:** Manage Nicknames, Create Private Threads, Send Messages in Threads. **Newly required as of the temporary group voice channels feature:** Manage Channels, Move Members. If the bot was invited before either feature shipped, it won't have these yet — see below.
 
 ## Updating an already-invited bot
 
 Two ways to grant the new permissions to a bot already sitting in your server — either works, nothing needs re-inviting/kicking:
 
-- **Fastest:** Server Settings → Roles → the bot's own role → toggle on **Manage Nicknames**, **Create Private Threads**, **Send Messages in Threads**, **Manage Channels** (and anything else missing from the table above).
+- **Fastest:** Server Settings → Roles → the bot's own role → toggle on **Manage Nicknames**, **Create Private Threads**, **Send Messages in Threads**, **Manage Channels**, **Move Members** (and anything else missing from the table above).
 - **Via a fresh invite link:** generate a new URL below and open it — Discord recognizes the bot is already in the server and just prompts to update its permissions, it doesn't add a duplicate or reset any configuration.
 
 ## Invite link
@@ -43,7 +44,7 @@ Two ways to grant the new permissions to a bot already sitting in your server �
 Generate one in the Developer Portal (**OAuth2 → URL Generator**, scopes `bot` + `applications.commands`, then check the permissions from the table above), or use this pre-built one — replace `YOUR_CLIENT_ID` with `DISCORD_CLIENT_ID` from `.env`:
 
 ```
-https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=344000130128
+https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=344016907344
 ```
 
-`permissions=344000130128` is the full table above as a single Discord permissions integer.
+`permissions=344016907344` is the full table above as a single Discord permissions integer.

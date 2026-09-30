@@ -26,7 +26,7 @@ Every command declares a permission level in code (`src/constants.ts`'s `Command
 | [`/finduser`](#finduser) | Admin | yes | Search cached guild members by name (handles fancy/unicode names). |
 | [`/reactionroles`](#reactionroles) | Admin | yes | List reaction-role panels, or re-sync them with Discord. Full editing lives on the [dashboard](DASHBOARD.md). |
 | [`/event`](#event) | Admin | yes | Create/publish (or schedule) an event from a template, or list pending scheduled publishes. |
-| [`/voice-channel`](#voice-channel) | Admin | yes | Create/clear a set of temporary group voice channels for an event. |
+| [`/voice-channel`](#voice-channel) | Admin | yes | Create/clear a set of temporary group voice channels for an event, or move their members back to the event's main channel. |
 
 "Guild-only by default" means the command only works inside `guildId` unless overridden from the dashboard's Commands page.
 
@@ -114,7 +114,8 @@ Panels themselves (selection type, channel, allow-multiple/removable, `removeRea
 | --- | --- | --- |
 | `create` | `amount` (integer, 1 up to the dashboard-configured max, hard ceiling 25), `group_size` (integer, 1–99) | Creates `amount` temporary voice channels, each limited to `group_size` users. Binds the set to the currently active event, else the soonest upcoming scheduled event, else leaves it unbound. Rejected if a managed set already exists (`clear` it first), or if `amount`/`group_size` are out of range. |
 | `clear` | — | Immediately deletes every currently-managed temporary voice channel, regardless of binding. |
+| `move` | `time_m` (integer, 1–1440, optional) | Moves every member currently in a managed temporary voice channel back into the bound event's main voice channel. Omit `time_m` to move immediately; otherwise schedules the move for `time_m` minutes from now (a later call replaces any still-pending schedule rather than stacking). |
 
-These channels are throwaway event infrastructure, not permanent server configuration — see [EVENT_ATTENDANCE.md § Temporary voice channels](EVENT_ATTENDANCE.md#temporary-voice-channels-do-not-affect-attendance) for the lifecycle and isolation guarantees. Category, the dashboard-configurable channel-count ceiling, and the `{n}`/`{event}` naming format are set on the dashboard's Settings page (see [CONFIGURATION.md](CONFIGURATION.md)). Requires the bot to have **Manage Channels** — see [PERMISSIONS.md](PERMISSIONS.md).
+These channels are throwaway event infrastructure, not permanent server configuration — see [EVENT_ATTENDANCE.md § Temporary voice channels](EVENT_ATTENDANCE.md#temporary-voice-channels-do-not-affect-attendance) for the lifecycle and isolation guarantees. Category, the dashboard-configurable channel-count ceiling, and the `{n}`/`{event}` naming format are set on the dashboard's Settings page (see [CONFIGURATION.md](CONFIGURATION.md)). `create`/`clear` require the bot to have **Manage Channels**; `move` requires **Move Members** — see [PERMISSIONS.md](PERMISSIONS.md).
 
 A template with a recurring-time default ("always Wednesdays 19:00–21:00") prefills `create`'s start/end fields with the *next free* occurrence — skipping a date that already has a non-cancelled event or a still-pending scheduled publish, in favor of the following week's occurrence. If the date you enter (or the prefilled one) already has something else planned, the preview thread shows a non-blocking warning naming it — publishing/scheduling still works, it's a heads-up rather than a hard stop.
